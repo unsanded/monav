@@ -17,23 +17,23 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef COMPRESSEDGRAPHBUILDER_H
-#define COMPRESSEDGRAPHBUILDER_H
+#ifndef COMPRESSEDTURNGRAPHBUILDER_H
+#define COMPRESSEDTURNGRAPHBUILDER_H
 
 #include "interfaces/iimporter.h"
-#include "compressedgraph.h"
+#include "compressedturngraph.h"
 #include "utils/qthelpers.h"
 #include <limits>
 #include <QHash>
 #include <QtDebug>
 
-class CompressedGraphBuilder : public CompressedGraph {
+class CompressedTurnGraphBuilder : public CompressedTurnGraph {
 
 public:
 
 	typedef IImporter::RoutingEdge OriginalEdge;
 
-	CompressedGraphBuilder( unsigned blockSize, std::vector< IRouter::Node >& inputNodes, std::vector< Edge >& inputEdges, std::vector< OriginalEdge >& originalEdges, std::vector< IRouter::Node >& edgePaths )
+	CompressedTurnGraphBuilder( unsigned blockSize, std::vector< IRouter::Node >& inputNodes, std::vector< Edge >& inputEdges, std::vector< OriginalEdge >& originalEdges, std::vector< IRouter::Node >& edgePaths )
 	{
 		m_settings.blockSize = blockSize;
 		m_settings.numberOfNodes = inputNodes.size();
@@ -45,7 +45,7 @@ public:
 		m_blockBuffer = new unsigned char[blockSize];
 	}
 
-	~CompressedGraphBuilder()
+	~CompressedTurnGraphBuilder()
 	{
 		delete m_blockBuffer;
 	}
@@ -110,7 +110,7 @@ private:
 			memset( this, 0, sizeof( Statistics ) );
 		}
 
-		void print( const CompressedGraphBuilder& graph )
+		void print( const CompressedTurnGraphBuilder& graph )
 		{
 			qDebug() << "statistics:";
 
@@ -139,7 +139,7 @@ private:
 					<< "MB /" << ( graph.m_edges.size() - shortcuts - unpackedEdges ) * ( 32 + 32 + 32 ) / 8 / 1024 / 1024 << "MB";
 		}
 
-		void addBlock( const CompressedGraphBuilder& graph )
+		void addBlock( const CompressedTurnGraphBuilder& graph )
 		{
 			const BlockBuilder& block = graph.m_block;
 			adjacentBlocks += block.settings.adjacentBlockCount;
@@ -779,4 +779,4 @@ private:
 	Statistics m_statistics;
 };
 
-#endif // COMPRESSEDGRAPHBUILDER_H
+#endif // COMPRESSEDTURNGRAPHBUILDER_H

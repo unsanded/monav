@@ -17,40 +17,57 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef DYNAMICGRAPH_H_INCLUDED
-#define DYNAMICGRAPH_H_INCLUDED
+#ifndef DYNAMICTURNGRAPH_H_INCLUDED
+#define DYNAMICTURNGRAPH_H_INCLUDED
 
 #include <vector>
 #include <algorithm>
 #include <limits>
 #include "utils/bithelpers.h"
 
-template< typename EdgeData>
-class DynamicGraph {
+template< typename EdgeData, typename PenaltyData >
+class DynamicTurnGraph {
 	public:
 		typedef unsigned NodeIterator;
 		typedef unsigned EdgeIterator;
+
+		class InputNode {
+			public:
+				unsigned short inDegree;
+				unsigned short outDegree;
+		};
 
 		class InputEdge {
 			public:
 				NodeIterator source;
 				NodeIterator target;
+	            unsigned short originalEdgeSource; // uniquely identifies this edge among all outgoing edges adjacent to the source, at most degree( source ) - 1
+	            unsigned short originalEdgeTarget; // uniquely identifies this edge among all incoming edges adjacent to the target, at most degree( target ) - 1
 				EdgeData data;
 				bool operator<( const InputEdge& right ) const {
 					if ( source != right.source )
 						return source < right.source;
-					return target < right.target;
+					if ( originalEdgeSource != right.originalEdgeSource )
+						return originalEdgeSource < right.originalEdgeSource;
+					if ( target != right.target )
+						return target < right.target;
+					return originalEdgeTarget < right.originalEdgeTarget;
 				}
 		};
 
-		DynamicGraph( int nodes, const std::vector< InputEdge > &graph )
+		DynamicTurnGraph( const std::vector< InputNode > &nodes, const std::vector< InputEdge > &graph, const std::vector< PenaltyData > &penalties )
 		{
-			m_numNodes = nodes;
+			m_numNodes = nodes.size();
 			m_numEdges = ( EdgeIterator ) graph.size();
 			m_nodes.reserve( m_numNodes );
 			m_nodes.resize( m_numNodes );
+			m_penalties.reserve( penalties.size() + 2 * m_numNodes );
 			EdgeIterator edge = 0;
 			EdgeIterator position = 0;
+			EdgeIterator penaltyPosition = 0;
+			EdgeIterator sumInDegree = 0;
+			EdgeIterator sumOutDegree = 0;
+			EdgeIterator originalPosition = 0;
 			for ( NodeIterator node = 0; node < m_numNodes; ++node ) {
 				EdgeIterator lastEdge = edge;
 				while ( edge < m_numEdges && graph[edge].source == node ) {
@@ -58,11 +75,27 @@ class DynamicGraph {
 				}
 				m_nodes[node].firstEdge = position;
 				m_nodes[node].edges = edge - lastEdge;
-				position += m_nodes[node].edges;
+                position += m_nodes[node].edges;
+
+                m_nodes[node].firstOriginalEdge = originalPosition;
+				m_nodes[node].firstPenalty = m_penalties.size();
+				m_penalties.push_back( Penalty(nodes[node].inDegree) );
+				m_penalties.push_back( Penalty(nodes[node].outDegree) );
+				sumInDegree += nodes[node].inDegree;
+				sumOutDegree += nodes[node].outDegree;
+				// Summing up the indegree(outdegre) allows to compute a globally unique
+				// original-edge-id for incoming(outgoing) edges, max(in,out) allows to do both.
+				originalPosition += std::max( nodes[node].inDegree, nodes[node].outDegree );
+                EdgeIterator numNodePenalties = nodes[node].inDegree * nodes[node].outDegree;
+				for ( unsigned i = 0; i < numNodePenalties; ++i, ++penaltyPosition) {
+					m_penalties.push_back( Penalty(penalties[penaltyPosition]) );
+				}
 			}
+			m_numOriginalEdges = originalPosition;
 			m_edges.reserve( position * 1.2 );
 			m_edges.resize( position );
-			qDebug() << "Contraction Hiearchies: dynamic graph usage:" << m_numEdges << m_edges.size() << m_edges.capacity();
+			qDebug() << "Contraction Hiearchies Turn: dynamic graph usage:" << m_numEdges << m_edges.size() << m_edges.capacity();
+			qDebug("in %u, out, %u, inout %u", sumInDegree, sumOutDegree, originalPosition);
 			edge = 0;
 			for ( NodeIterator node = 0; node < m_numNodes; ++node ) {
 				for ( EdgeIterator i = m_nodes[node].firstEdge, e = m_nodes[node].firstEdge + m_nodes[node].edges; i != e; ++i ) {
@@ -73,9 +106,9 @@ class DynamicGraph {
 			}
 		}
 
-		~DynamicGraph()
+		~DynamicTurnGraph()
 		{
-			qDebug() << "Contraction Hiearchies: dynamic graph usage:" << m_numEdges << m_edges.size() << m_edges.capacity();
+			qDebug() << "Contraction Hiearchies Turn: dynamic graph usage:" << m_numEdges << m_edges.size() << m_edges.capacity();
 		}
 
 		unsigned GetNumberOfNodes() const
@@ -107,6 +140,25 @@ class DynamicGraph {
 		{
 			return m_edges[e].data;
 		}
+
+        unsigned GetOriginalInDegree( const NodeIterator &n ) const
+        {
+            return m_penalties[ m_nodes[source].firstPenalty ];
+        }
+
+        unsigned GetOriginalOutDegree( const NodeIterator &n ) const
+        {
+            return m_penalties[ m_nodes[source].firstPenalty + 1 ];
+        }
+
+
+        const PenaltyData &GetPenaltyData( const NodeIterator& source, unsigned short originalEdgeIn, unsigned short originalEdgeOut ) const
+        {
+            unsigned i = m_nodes[source].firstPenalty + 1;
+            unsigned originalOutDegree = m_penalties[ i++ ];
+            return m_penalties[ i + (originalEdgeIn * originalOutDegree) + originalEdgeOut ];
+        }
+
 
 		EdgeIterator BeginEdges( const NodeIterator &n ) const
 		{
@@ -215,18 +267,30 @@ class DynamicGraph {
 			EdgeIterator firstEdge;
 			//amount of edges
 			unsigned edges;
+			EdgeIterator firstOriginalEdge;
+			EdgeIterator firstPenalty;
 		};
 
 		struct Edge {
 			NodeIterator target;
+	        unsigned short originalEdgeSource; // uniquely identifies this edge among all outgoing edges adjacent to the source, at most degree( source ) - 1
+	        unsigned short originalEdgeTarget; // uniquely identifies this edge among all incoming edges adjacent to the target, at most degree( target ) - 1
 			EdgeData data;
+		};
+
+		struct Penalty
+		{
+			explicit Penalty( const PenaltyData &d ) : data(d) {}
+			PenaltyData data;
 		};
 
 		NodeIterator m_numNodes;
 		EdgeIterator m_numEdges;
+		EdgeIterator m_numOriginalEdges;
 
 		std::vector< Node > m_nodes;
 		std::vector< Edge > m_edges;
+		std::vector< Penalty > m_penalties;
 };
 
-#endif // DYNAMICGRAPH_H_INCLUDED
+#endif // DYNAMICTURNGRAPH_H_INCLUDED

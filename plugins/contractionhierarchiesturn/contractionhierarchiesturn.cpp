@@ -17,98 +17,102 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "contractionhierarchies.h"
-#include "compressedgraphbuilder.h"
-#include "contractor.h"
-#include "contractioncleanup.h"
+#include "contractionhierarchiesturn.h"
+#include "compressedturngraphbuilder.h"
+#include "turncontractor.h"
+#include "contractionturncleanup.h"
 #include "utils/qthelpers.h"
 
-ContractionHierarchies::ContractionHierarchies()
+ContractionHierarchiesTurn::ContractionHierarchiesTurn()
 {
 	m_settingsDialog = NULL;
 }
 
-ContractionHierarchies::~ContractionHierarchies()
+ContractionHierarchiesTurn::~ContractionHierarchiesTurn()
 {
 	if ( m_settingsDialog != NULL )
 		delete m_settingsDialog;
 }
 
-QString ContractionHierarchies::GetName()
+QString ContractionHierarchiesTurn::GetName()
 {
-	return "Contraction Hierarchies";
+	return "Contraction Hierarchies Turn";
 }
 
-bool ContractionHierarchies:: LoadSettings( QSettings* settings )
+bool ContractionHierarchiesTurn:: LoadSettings( QSettings* settings )
 {
 	if ( m_settingsDialog == NULL )
-		m_settingsDialog = new CHSettingsDialog();
+		m_settingsDialog = new CHTSettingsDialog();
 	return m_settingsDialog->loadSettings( settings );
 }
 
-bool ContractionHierarchies::SaveSettings( QSettings* settings )
+bool ContractionHierarchiesTurn::SaveSettings( QSettings* settings )
 {
 	if ( m_settingsDialog == NULL )
-		m_settingsDialog = new CHSettingsDialog();
+		m_settingsDialog = new CHTSettingsDialog();
 	return m_settingsDialog->saveSettings( settings );
 }
 
-int ContractionHierarchies::GetFileFormatVersion()
+int ContractionHierarchiesTurn::GetFileFormatVersion()
 {
 	return 1;
 }
 
-ContractionHierarchies::Type ContractionHierarchies::GetType()
+ContractionHierarchiesTurn::Type ContractionHierarchiesTurn::GetType()
 {
 	return Router;
 }
 
-QWidget* ContractionHierarchies::GetSettings()
+QWidget* ContractionHierarchiesTurn::GetSettings()
 {
 	if ( m_settingsDialog == NULL )
-		m_settingsDialog = new CHSettingsDialog();
+		m_settingsDialog = new CHTSettingsDialog();
 	return m_settingsDialog;
 }
 
-bool ContractionHierarchies::Preprocess( IImporter* importer, QString dir )
+bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 {
 	if ( m_settingsDialog == NULL )
-		m_settingsDialog = new CHSettingsDialog();
+		m_settingsDialog = new CHTSettingsDialog();
 	m_settingsDialog->getSettings( &m_settings );
 
-	QString filename = fileInDirectory( dir, "Contraction Hierarchies" );
+	QString filename = fileInDirectory( dir, "Contraction Hierarchies Turn" );
 
 	std::vector< IImporter::RoutingNode > inputNodes;
 	std::vector< IImporter::RoutingEdge > inputEdges;
+	std::vector< char > inDegree, outDegree;
+	std::vector< double > penalties;
 
 	if ( !importer->GetRoutingNodes( &inputNodes ) )
 		return false;
 	if ( !importer->GetRoutingEdges( &inputEdges ) )
 		return false;
+	if ( !importer->GetRoutingPenalties( &inDegree, &outDegree, &penalties ) )
+		return false;
 
 	unsigned numEdges = inputEdges.size();
 	unsigned numNodes = inputNodes.size();
 
-	Contractor* contractor = new Contractor( numNodes, inputEdges );
+	TurnContractor* contractor = new TurnContractor( numNodes, inputEdges, inDegree, outDegree, penalties );
 	std::vector< IImporter::RoutingEdge >().swap( inputEdges );
 	contractor->Run();
 
-	std::vector< Contractor::Witness > witnessList;
+	std::vector< TurnContractor::Witness > witnessList;
 	contractor->GetWitnessList( witnessList );
 
-	std::vector< ContractionCleanup::Edge > contractedEdges;
-	std::vector< ContractionCleanup::Edge > contractedLoops;
+	std::vector< ContractionTurnCleanup::Edge > contractedEdges;
+	std::vector< ContractionTurnCleanup::Edge > contractedLoops;
 	contractor->GetEdges( &contractedEdges );
 	contractor->GetLoops( &contractedLoops );
 	delete contractor;
 
-	ContractionCleanup* cleanup = new ContractionCleanup( inputNodes.size(), contractedEdges, contractedLoops, witnessList );
-	std::vector< ContractionCleanup::Edge >().swap( contractedEdges );
-	std::vector< ContractionCleanup::Edge >().swap( contractedLoops );
-	std::vector< Contractor::Witness >().swap( witnessList );
+	ContractionTurnCleanup* cleanup = new ContractionTurnCleanup( inputNodes.size(), contractedEdges, contractedLoops, witnessList );
+	std::vector< ContractionTurnCleanup::Edge >().swap( contractedEdges );
+	std::vector< ContractionTurnCleanup::Edge >().swap( contractedLoops );
+	std::vector< TurnContractor::Witness >().swap( witnessList );
 	cleanup->Run();
 
-	std::vector< CompressedGraph::Edge > edges;
+	std::vector< CompressedTurnGraph::Edge > edges;
 	std::vector< NodeID > map;
 	cleanup->GetData( &edges, &map );
 	delete cleanup;
@@ -205,7 +209,7 @@ bool ContractionHierarchies::Preprocess( IImporter* importer, QString dir )
 		i->target = map[i->target];
 	}
 
-	CompressedGraphBuilder* builder = new CompressedGraphBuilder( 1u << m_settings.blockSize, nodes, edges, inputEdges, pathNodes );
+	CompressedTurnGraphBuilder* builder = new CompressedTurnGraphBuilder( 1u << m_settings.blockSize, nodes, edges, inputEdges, pathNodes );
 	if ( !builder->run( filename, &map ) )
 		return false;
 	delete builder;
@@ -215,4 +219,4 @@ bool ContractionHierarchies::Preprocess( IImporter* importer, QString dir )
 	return true;
 }
 
-Q_EXPORT_PLUGIN2( contractionhierarchies, ContractionHierarchies )
+Q_EXPORT_PLUGIN2( contractionhierarchiesturn, ContractionHierarchiesTurn )

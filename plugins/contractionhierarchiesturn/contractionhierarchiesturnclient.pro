@@ -11,14 +11,14 @@ unix {
 HEADERS += \
     utils/coordinates.h \
     utils/config.h \
-    blockcache.h \
-    binaryheap.h \
+    ../contractionhierarchies/blockcache.h \
+    ../contractionhierarchies/binaryheap.h \
     interfaces/irouter.h \
-    contractionhierarchiesclient.h \
-    compressedgraph.h \
+    contractionhierarchiesturnclient.h \
+    compressedturngraph.h \
     interfaces/igpslookup.h \
     utils/bithelpers.h \
     utils/qthelpers.h
 
 SOURCES += \
-    contractionhierarchiesclient.cpp
+    contractionhierarchiesturnclient.cpp

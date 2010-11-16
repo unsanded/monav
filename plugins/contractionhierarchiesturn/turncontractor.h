@@ -17,17 +17,17 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef CONTRACTOR_H_INCLUDED
-#define CONTRACTOR_H_INCLUDED
+#ifndef TURNCONTRACTOR_H_INCLUDED
+#define TURNCONTRACTOR_H_INCLUDED
 #include <vector>
 #include <omp.h>
 #include <limits>
 #include "utils/qthelpers.h"
-#include "dynamicgraph.h"
-#include "binaryheap.h"
+#include "dynamicturngraph.h"
+#include "../contractionhierarchies/binaryheap.h"
 #include "utils/config.h"
 
-class Contractor {
+class TurnContractor {
 
 	public:
 
@@ -54,8 +54,13 @@ class Contractor {
 		struct _HeapData {
 		};
 
-		typedef DynamicGraph< _EdgeData > _DynamicGraph;
-		typedef BinaryHeap< NodeID, NodeID, unsigned, _HeapData > _Heap;
+        typedef unsigned char _PenaltyData;
+        static const _PenaltyData RESTRICTED_TURN = 255;
+        typedef short int GammaValue;
+        static const GammaValue RESTRICTED_NEIGHBOUR = SHRT_MIN;
+		typedef DynamicTurnGraph< _EdgeData, _PenaltyData > _DynamicGraph;
+		typedef BinaryHeap< NodeID, NodeID, int, _HeapData > _Heap;
+		typedef _DynamicGraph::InputNode _ImportNode;
 		typedef _DynamicGraph::InputEdge _ImportEdge;
 
 		struct _ThreadData {
@@ -161,8 +166,10 @@ class Contractor {
 
 	public:
 
-		template< class InputEdge >
-		Contractor( int nodes, const std::vector< InputEdge >& inputEdges ) {
+		template< class InputEdge, class DegreeType, class PenaltyType >
+		TurnContractor( NodeID numNodes, const std::vector< InputEdge >& inputEdges,
+				const std::vector< DegreeType >& inDegree, const std::vector< DegreeType >& outDegree,
+				const std::vector< PenaltyType >& inputPenalties ) {
 			std::vector< _ImportEdge > edges;
 			edges.reserve( 2 * inputEdges.size() );
 			int skippedLargeEdges = 0;
@@ -170,6 +177,8 @@ class Contractor {
 				_ImportEdge edge;
 				edge.source = i->source;
 				edge.target = i->target;
+				edge.originalEdgeSource = i->edgeIDAtSource;
+				edge.originalEdgeTarget = i->edgeIDAtTarget;
 				edge.data.distance = std::max( i->distance * 10.0 + 0.5, 1.0 );
 				if ( edge.data.distance > 24 * 60 * 60 * 10 ) {
 					skippedLargeEdges++;
@@ -187,7 +196,7 @@ class Contractor {
 
 				if ( edge.source == edge.target ) {
 					_loops.push_back( edge );
-					continue;
+					//continue;
 				}
 
 				edges.push_back( edge );
@@ -200,12 +209,29 @@ class Contractor {
 				qDebug( "Skipped %d edges with too large edge weight", skippedLargeEdges );
 			std::sort( edges.begin(), edges.end() );
 
-			_graph = new _DynamicGraph( nodes, edges );
+            std::vector< _ImportNode > nodes;
+			std::vector< _PenaltyData > penalties;
+			nodes.reserve( numNodes );
+			penalties.reserve( inputPenalties.size() );
+			for ( NodeID u = 0; u < numNodes; ++u ) {
+				_ImportNode node;
+				node.inDegree = inDegree[u];
+				node.outDegree = outDegree[u];
+				nodes.push_back( node );
+			}
+			for ( typename std::vector< PenaltyType >::const_iterator i = inputPenalties.begin(), e = inputPenalties.end(); i != e; ++i ) {
+				penalties.push_back(*i < 0 ? RESTRICTED_TURN : std::max(*i + 0.5, 1.0 ) * 10 );
+			}
 
-			std::vector< _ImportEdge >().swap( edges );
+			_graph = new _DynamicGraph( nodes, edges, penalties );
+
+			std::vector< _ImportNode >().swap( nodes );
+            std::vector< _ImportEdge >().swap( edges );
+            std::vector< _PenaltyData >().swap( penalties );
+
 		}
 
-		~Contractor() {
+		~TurnContractor() {
 			delete _graph;
 		}
 
@@ -235,7 +261,7 @@ class Contractor {
 			for ( int x = 0; x < ( int ) numberOfNodes; ++x )
 				nodeData[remainingNodes[x].first].bias = x;
 
-			qDebug( "Initialise Elimination PQ... " );
+			qDebug( "Initialise Node Priorities ... " );
 			_LogItem statistics0;
 			statistics0.updating = _Timestamp();
 			statistics0.iteration = 0;
@@ -299,7 +325,7 @@ class Contractor {
 				#pragma omp for schedule ( guided ) nowait
 					for ( int position = firstIndependent ; position < last; ++position ) {
 						NodeID x = remainingNodes[position].first;
-						_DeleteIncommingEdges( data, x );
+						_DeleteIncomingEdges( data, x );
 					}
 				}
 				statistics.removing += _Timestamp() - timeLast;
@@ -394,6 +420,67 @@ class Contractor {
 		}
 
 	private:
+
+		void _ComputeGammaTable()
+		{
+            _gammaIndex.reserver( _graph->GetNumberOfNodes() );
+            unsigned squareSumIn = 0;
+            unsigned squareSumOut = 0;
+            for ( NodeID u = 0; u < numNodes; ++u ) {
+            	unsigned in = _graph->GetOriginalInDegree(u);
+            	squareSumIn += in * in;
+            	unsigned out = _graph->GetOriginalOutDegree(u);
+            	squareSumOut += out * out;
+            }
+            _gamma.reserve( squareSumOut + squareSumIn );
+            {
+                for ( NodeID u = 0; u < numNodes; ++u ) {
+                    unsigned inDegree = _graph->GetOriginalInDegree(u);
+                    unsigned outDegree = _graph->GetOriginalOutDegree(u);
+
+                    _gammaIndex.push_back( make_pair( _gamma.size(), _gamma.size() + outDegree * outDegree ) );
+
+                    for ( unsigned out = 0; out < outDegree; ++out ) {
+                        for ( unsigned out2 = 0; out2 < outDegree; ++out2 ) {
+                            GammaValue v = 0;
+                            for ( unsigned in = 0; in < inDegree; ++in ) {
+                            	GammaValue penalty = _graph.GetPenaltyData(u, in, out);
+                            	GammaValue penalty2 = _graph.GetPenaltyData(u, in, out2);
+                                if (penalty != RESTRICTED_TURN && penalty2 == RESTRICTED_TURN) {
+                                    // 'u -> out2' not in 'alpha(u -> out)'
+                                    v = RESTRICTED_NEIGHBOUR;
+                                    break;
+                                }
+                                if (penalty != RESTRICTED_TURN && penalty2 != RESTRICTED_TURN) {
+                                    v = std::max( v, penalty2 - penalty );
+                                }
+                            }
+                            _gamma.push_back(v);
+                        }
+                    }
+                    Q_ASSERT( _gamma.size() == _gammaIndex.back().second );
+
+                    for ( unsigned in = 0; in < inDegree; ++in ) {
+                        for ( unsigned in2 = 0; in2 < inDegree; ++in2 ) {
+                            GammaValue v = 0;
+                            for ( unsigned out = 0; out < outDegree; ++out ) {
+                                GammaValue penalty = _graph.GetPenaltyData(u, in, out);
+                                GammaValue penalty2 = _graph.GetPenaltyData(u, in2, out);
+                                if (penalty != RESTRICTED_TURN && penalty2 == RESTRICTED_TURN) {
+                                    // 'in2 -> u' not in 'alpha(in -> u)'
+                                    v = RESTRICTED_NEIGHBOUR;
+                                    break;
+                                }
+                                if (penalty != RESTRICTED_TURN && penalty2 != RESTRICTED_TURN) {
+                                    v = std::max( v, penalty2 - penalty );
+                                }
+                            }
+                            _gamma.push_back(v);
+                        }
+                    }
+                }
+            }
+		}
 
 		double _Timestamp() {
 			static Timer timer;
@@ -560,7 +647,7 @@ class Contractor {
 			return true;
 		}
 
-		bool _DeleteIncommingEdges( _ThreadData* const data, NodeID node ) {
+		bool _DeleteIncomingEdges( _ThreadData* const data, NodeID node ) {
 			std::vector< NodeID >& neighbours = data->neighbours;
 			neighbours.clear();
 
@@ -654,6 +741,10 @@ class Contractor {
 		_DynamicGraph* _graph;
 		std::vector< Witness > _witnessList;
 		std::vector< _ImportEdge > _loops;
+
+		std::vector< pair< unsigned, unsigned > > _gammaIndex;
+		std::vector< GammaValue > _gamma;
+
 };
 
-#endif // CONTRACTOR_H_INCLUDED
+#endif // TURNCONTRACTOR_H_INCLUDED
