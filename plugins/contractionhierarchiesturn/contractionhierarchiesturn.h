@@ -17,19 +17,19 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef ContractionHierarchies_H
-#define ContractionHierarchies_H
+#ifndef ContractionHierarchiesTurn_H
+#define ContractionHierarchiesTurn_H
 
 #include <QObject>
 #include "interfaces/ipreprocessor.h"
-#include "chsettingsdialog.h"
+#include "chtsettingsdialog.h"
 
-class ContractionHierarchies : public QObject, public IPreprocessor
+class ContractionHierarchiesTurn : public QObject, public IPreprocessor
 {
 	Q_OBJECT
 	Q_INTERFACES( IPreprocessor )
 public:
-	ContractionHierarchies();
+	ContractionHierarchiesTurn();
 	virtual QString GetName();
 	virtual int GetFileFormatVersion();
 	virtual Type GetType();
@@ -37,11 +37,11 @@ public:
 	virtual bool LoadSettings( QSettings* settings );
 	virtual bool SaveSettings( QSettings* settings );
 	virtual bool Preprocess( IImporter* importer, QString dir );
-	virtual ~ContractionHierarchies();
+	virtual ~ContractionHierarchiesTurn();
 
 protected:
-	CHSettingsDialog* m_settingsDialog;
-	CHSettingsDialog::Settings m_settings;
+	CHTSettingsDialog* m_settingsDialog;
+	CHTSettingsDialog::Settings m_settings;
 };
 
-#endif // ContractionHierarchies_H
+#endif // ContractionHierarchiesTurn_H

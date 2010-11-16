@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "contractionhierarchiesclient.h"
+#include "contractionhierarchiesturnclient.h"
 #include "utils/qthelpers.h"
 #include <QtDebug>
 #include <stack>
@@ -28,36 +28,36 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 	#include <QMessageBox>
 #endif
 
-ContractionHierarchiesClient::ContractionHierarchiesClient()
+ContractionHierarchiesTurnClient::ContractionHierarchiesTurnClient()
 {
 	m_heapForward = NULL;
 	m_heapBackward = NULL;
 }
 
-ContractionHierarchiesClient::~ContractionHierarchiesClient()
+ContractionHierarchiesTurnClient::~ContractionHierarchiesTurnClient()
 {
 	unload();
 }
 
 
-QString ContractionHierarchiesClient::GetName()
+QString ContractionHierarchiesTurnClient::GetName()
 {
 	return "Contraction Hierarchies";
 }
 
-void ContractionHierarchiesClient::SetInputDirectory( const QString& dir )
+void ContractionHierarchiesTurnClient::SetInputDirectory( const QString& dir )
 {
 	m_directory = dir;
 }
 
-void ContractionHierarchiesClient::ShowSettings()
+void ContractionHierarchiesTurnClient::ShowSettings()
 {
 #ifndef NOGUI
 	QMessageBox::information( NULL, "Settings", "No settings available" );
 #endif
 }
 
-void ContractionHierarchiesClient::unload()
+void ContractionHierarchiesTurnClient::unload()
 {
 	if ( m_heapForward != NULL )
 		delete m_heapForward;
@@ -68,16 +68,16 @@ void ContractionHierarchiesClient::unload()
 	m_types.clear();
 }
 
-bool ContractionHierarchiesClient::IsCompatible( int fileFormatVersion )
+bool ContractionHierarchiesTurnClient::IsCompatible( int fileFormatVersion )
 {
 	if ( fileFormatVersion == 1 )
 		return true;
 	return false;
 }
 
-bool ContractionHierarchiesClient::LoadData()
+bool ContractionHierarchiesTurnClient::LoadData()
 {
-	QString filename = fileInDirectory( m_directory,"Contraction Hierarchies" );
+	QString filename = fileInDirectory( m_directory,"Contraction Hierarchies Turn" );
 	unload();
 
 	if ( !m_graph.loadGraph( filename, 1024 * 1024 * 4 ) )
@@ -105,7 +105,7 @@ bool ContractionHierarchiesClient::LoadData()
 	return true;
 }
 
-bool ContractionHierarchiesClient::GetRoute( double* distance, QVector< Node>* pathNodes, QVector< Edge >* pathEdges, const IGPSLookup::Result& source, const IGPSLookup::Result& target )
+bool ContractionHierarchiesTurnClient::GetRoute( double* distance, QVector< Node>* pathNodes, QVector< Edge >* pathEdges, const IGPSLookup::Result& source, const IGPSLookup::Result& target )
 {
 	m_heapForward->Clear();
 	m_heapBackward->Clear();
@@ -150,13 +150,13 @@ bool ContractionHierarchiesClient::GetRoute( double* distance, QVector< Node>* p
 	return true;
 }
 
-bool ContractionHierarchiesClient::GetName( QString* result, unsigned name )
+bool ContractionHierarchiesTurnClient::GetName( QString* result, unsigned name )
 {
 	*result =  QString::fromUtf8( m_names + name );
 	return true;
 }
 
-bool ContractionHierarchiesClient::GetNames( QVector< QString >* result, QVector< unsigned > names )
+bool ContractionHierarchiesTurnClient::GetNames( QVector< QString >* result, QVector< unsigned > names )
 {
 	result->resize( names.size() );
 	for ( int i = 0; i < names.size(); i++ )
@@ -164,13 +164,13 @@ bool ContractionHierarchiesClient::GetNames( QVector< QString >* result, QVector
 	return true;
 }
 
-bool ContractionHierarchiesClient::GetType( QString* result, unsigned type )
+bool ContractionHierarchiesTurnClient::GetType( QString* result, unsigned type )
 {
 	*result = m_types[type];
 	return true;
 }
 
-bool ContractionHierarchiesClient::GetTypes( QVector< QString >* result, QVector< unsigned > types )
+bool ContractionHierarchiesTurnClient::GetTypes( QVector< QString >* result, QVector< unsigned > types )
 {
 	result->resize( types.size() );
 	for ( int i = 0; i < types.size(); i++ )
@@ -179,7 +179,7 @@ bool ContractionHierarchiesClient::GetTypes( QVector< QString >* result, QVector
 }
 
 template< class EdgeAllowed, class StallEdgeAllowed >
-void ContractionHierarchiesClient::computeStep( Heap* heapForward, Heap* heapBackward, const EdgeAllowed& edgeAllowed, const StallEdgeAllowed& stallEdgeAllowed, NodeIterator* middle, int* targetDistance ) {
+void ContractionHierarchiesTurnClient::computeStep( Heap* heapForward, Heap* heapBackward, const EdgeAllowed& edgeAllowed, const StallEdgeAllowed& stallEdgeAllowed, NodeIterator* middle, int* targetDistance ) {
 
 	const NodeIterator node = heapForward->DeleteMin();
 	const int distance = heapForward->GetKey( node );
@@ -267,7 +267,7 @@ void ContractionHierarchiesClient::computeStep( Heap* heapForward, Heap* heapBac
 	}
 }
 
-int ContractionHierarchiesClient::computeRoute( const IGPSLookup::Result& source, const IGPSLookup::Result& target, QVector< Node>* pathNodes, QVector< Edge >* pathEdges ) {
+int ContractionHierarchiesTurnClient::computeRoute( const IGPSLookup::Result& source, const IGPSLookup::Result& target, QVector< Node>* pathNodes, QVector< Edge >* pathEdges ) {
 	EdgeIterator sourceEdge = m_graph.findEdge( source.source, source.target, source.edgeID );
 	unsigned sourceWeight = sourceEdge.distance();
 	EdgeIterator targetEdge = m_graph.findEdge( target.source, target.target, target.edgeID );
@@ -367,7 +367,7 @@ int ContractionHierarchiesClient::computeRoute( const IGPSLookup::Result& source
 	return targetDistance;
 }
 
-bool ContractionHierarchiesClient::unpackEdge( const NodeIterator source, const NodeIterator target, bool forward, QVector< Node >* pathNodes, QVector< Edge >* pathEdges ) {
+bool ContractionHierarchiesTurnClient::unpackEdge( const NodeIterator source, const NodeIterator target, bool forward, QVector< Node >* pathNodes, QVector< Edge >* pathEdges ) {
 	EdgeIterator shortestEdge;
 
 	unsigned distance = std::numeric_limits< unsigned >::max();
@@ -412,5 +412,5 @@ bool ContractionHierarchiesClient::unpackEdge( const NodeIterator source, const 
 	}
 }
 
-Q_EXPORT_PLUGIN2( contractionhierarchiesclient, ContractionHierarchiesClient )
+Q_EXPORT_PLUGIN2( contractionhierarchiesturnclient, ContractionHierarchiesTurnClient )
 

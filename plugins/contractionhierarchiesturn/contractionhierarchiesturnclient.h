@@ -17,23 +17,23 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef CONTRACTIONHIERARCHIESCLIENT_H
-#define CONTRACTIONHIERARCHIESCLIENT_H
+#ifndef CONTRACTIONHIERARCHIESTURNCLIENT_H
+#define CONTRACTIONHIERARCHIESTURNCLIENT_H
 
 #include <QObject>
 #include <QStringList>
 #include "interfaces/irouter.h"
-#include "binaryheap.h"
-#include "compressedgraph.h"
+#include "../contractionhierarchies/binaryheap.h"
+#include "compressedturngraph.h"
 #include <queue>
 
-class ContractionHierarchiesClient : public QObject, public IRouter
+class ContractionHierarchiesTurnClient : public QObject, public IRouter
 {
 	Q_OBJECT
 	Q_INTERFACES( IRouter )
 public:
-	ContractionHierarchiesClient();
-	virtual ~ContractionHierarchiesClient();
+	ContractionHierarchiesTurnClient();
+	virtual ~ContractionHierarchiesTurnClient();
 
 	virtual QString GetName();
 	virtual void SetInputDirectory( const QString& dir );
@@ -48,9 +48,9 @@ public:
 
 protected:
 	struct HeapData {
-		CompressedGraph::NodeIterator parent;
+		CompressedTurnGraph::NodeIterator parent;
 		bool stalled: 1;
-		HeapData( CompressedGraph::NodeIterator p ) {
+		HeapData( CompressedTurnGraph::NodeIterator p ) {
 			parent = p;
 			stalled = false;
 		}
@@ -70,11 +70,11 @@ protected:
 			}
 	};
 
-	typedef CompressedGraph::NodeIterator NodeIterator;
-	typedef CompressedGraph::EdgeIterator EdgeIterator;
+	typedef CompressedTurnGraph::NodeIterator NodeIterator;
+	typedef CompressedTurnGraph::EdgeIterator EdgeIterator;
 	typedef BinaryHeap< NodeIterator, int, int, HeapData, MapStorage< NodeIterator, unsigned > > Heap;
 
-	CompressedGraph m_graph;
+	CompressedTurnGraph m_graph;
 	const char* m_names;
 	QFile m_namesFile;
 	Heap* m_heapForward;
@@ -91,4 +91,4 @@ protected:
 
 };
 
-#endif // CONTRACTIONHIERARCHIESCLIENT_H
+#endif // CONTRACTIONHIERARCHIESTURNCLIENT_H

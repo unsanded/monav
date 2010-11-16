@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>CHSettingsDialog</class>
- <widget class="QWidget" name="CHSettingsDialog">
+ <class>CHTSettingsDialog</class>
+ <widget class="QWidget" name="CHTSettingsDialog">
   <property name="windowTitle">
-   <string>Contraction Hierarchies Settings</string>
+   <string>Contraction Hierarchies Turn Settings</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -24,7 +24,7 @@
          </sizepolicy>
         </property>
         <property name="text">
-         <string>Uses Contraction Hierarchies to speed up the route planning. Low overhead and very small query times. Needs some memory to preprocess.</string>
+         <string>Uses Contraction Hierarchies Turn to speed up the route planning. Low overhead and very small query times. Needs some memory to preprocess.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>

@@ -17,15 +17,15 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef CONTRACTIONCLEANUP_H_INCLUDED
-#define CONTRACTIONCLEANUP_H_INCLUDED
+#ifndef CONTRACTIONTURNCLEANUP_H_INCLUDED
+#define CONTRACTIONTURNCLEANUP_H_INCLUDED
 
 #include <QTime>
 #include <queue>
 #include <stack>
-#include "contractor.h"
+#include "turncontractor.h"
 
-class ContractionCleanup {
+class ContractionTurnCleanup {
 	private:
 
 		struct _HeapData {
@@ -124,7 +124,7 @@ class ContractionCleanup {
 		};
 
 
-		ContractionCleanup( int numNodes, const std::vector< Edge >& edges, const std::vector< Edge >& loops, const std::vector< Contractor::Witness >& witnessList ) {
+		ContractionTurnCleanup( int numNodes, const std::vector< Edge >& edges, const std::vector< Edge >& loops, const std::vector< TurnContractor::Witness >& witnessList ) {
 			_graph = edges;
 			_loops = loops;
 			_witnessList = witnessList;
@@ -133,7 +133,7 @@ class ContractionCleanup {
 			_heapBackward = new _Heap( numNodes );
 		}
 
-		~ContractionCleanup() {
+		~ContractionTurnCleanup() {
 
 		}
 
@@ -274,7 +274,7 @@ class ContractionCleanup {
 					if ( result < _graph[i].data.distance ) {
 						numUseless++;
 						_graph[i].data.forward = false;
-						//Contractor::Witness temp;
+						//TurnContractor::Witness temp;
 						//temp.source = _graph[i].source;
 						//temp.target = _graph[i].target;
 						//temp.middle = _graph[i].data.middle;
@@ -287,7 +287,7 @@ class ContractionCleanup {
 					if ( result < _graph[i].data.distance ) {
 						numUseless++;
 						_graph[i].data.backward = false;
-						//Contractor::Witness temp;
+						//TurnContractor::Witness temp;
 						//temp.source = _graph[i].target;
 						//temp.target = _graph[i].source;
 						//temp.middle = _graph[i].data.middle;
@@ -503,7 +503,7 @@ class ContractionCleanup {
 
 				path.clear();
 			}
-			std::vector< Contractor::Witness >().swap( _witnessList );
+			std::vector< TurnContractor::Witness >().swap( _witnessList );
 
 			RemoveDuplicatedWitnesses();
 
@@ -657,11 +657,11 @@ class ContractionCleanup {
 		std::vector< Edge > _loops;
 		std::vector< unsigned > _firstEdge;
 		std::vector< _Node > _remap;
-		std::vector< Contractor::Witness > _witnessList;
+		std::vector< TurnContractor::Witness > _witnessList;
 		std::vector< _Witness > _distributedWitnessData;
 		std::vector< unsigned > _witnessIndex;
 		_Heap* _heapForward;
 		_Heap* _heapBackward;
 };
 
-#endif // CONTRACTIONCLEANUP_H_INCLUDED
+#endif // CONTRACTIONTURNCLEANUP_H_INCLUDED

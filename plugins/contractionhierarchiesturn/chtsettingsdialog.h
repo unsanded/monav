@@ -17,25 +17,25 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef CHSettingsDialog_H
-#define CHSettingsDialog_H
+#ifndef CHTSettingsDialog_H
+#define CHTSettingsDialog_H
 
 #include <QWidget>
 
 class QSettings;
 
 namespace Ui {
-	 class CHSettingsDialog;
+	 class CHTSettingsDialog;
 }
 
-class CHSettingsDialog : public QWidget {
+class CHTSettingsDialog : public QWidget {
 
 	 Q_OBJECT
 
 public:
 
-	 CHSettingsDialog( QWidget *parent = 0 );
-	 ~CHSettingsDialog();
+	 CHTSettingsDialog( QWidget *parent = 0 );
+	 ~CHTSettingsDialog();
 
 	struct Settings
 	{
@@ -48,7 +48,7 @@ public:
 
 protected:
 
-	 Ui::CHSettingsDialog *m_ui;
+	 Ui::CHTSettingsDialog *m_ui;
 };
 
-#endif // CHSettingsDialog_H
+#endif // CHTSettingsDialog_H

@@ -1,5 +1,5 @@
 TEMPLATE = lib
-CONFIG += plugin static
+CONFIG += plugin
 DESTDIR = ../../bin/plugins_preprocessor
 unix {
 	QMAKE_CXXFLAGS_RELEASE -= -O2
@@ -11,21 +11,21 @@ unix {
 		 -fopenmp
 }
 LIBS += -fopenmp
-HEADERS += contractionhierarchies.h \
-	 dynamicgraph.h \
-	 contractioncleanup.h \
-	 blockcache.h \
-	 binaryheap.h \
-	 contractor.h \
+HEADERS += contractionhierarchiesturn.h \
+	 dynamicturngraph.h \
+	 contractionturncleanup.h \
+	 ../contractionhierarchies/blockcache.h \
+	 ../contractionhierarchies/binaryheap.h \
+	 turncontractor.h \
     interfaces/ipreprocessor.h \
     utils/coordinates.h \
     utils/config.h \
-    chsettingsdialog.h \
-    compressedgraph.h \
-    compressedgraphbuilder.h \
+    chtsettingsdialog.h \
+    compressedturngraph.h \
+    compressedturngraphbuilder.h \
     utils/bithelpers.h \
     utils/qthelpers.h \
     interfaces/irouter.h
-SOURCES += contractionhierarchies.cpp \
-    chsettingsdialog.cpp
-FORMS += chsettingsdialog.ui
+SOURCES += contractionhierarchiesturn.cpp \
+    chtsettingsdialog.cpp
+FORMS += chtsettingsdialog.ui

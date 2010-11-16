@@ -17,19 +17,19 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef COMPRESSEDGRAPH_H
-#define COMPRESSEDGRAPH_H
+#ifndef COMPRESSEDTURNGRAPH_H
+#define COMPRESSEDTURNGRAPH_H
 
 #include "interfaces/irouter.h"
 #include "utils/coordinates.h"
 #include "utils/bithelpers.h"
-#include "blockcache.h"
+#include "../contractionhierarchies/blockcache.h"
 #include <QString>
 #include <QFile>
 #include <algorithm>
 #include <vector>
 
-class CompressedGraph {
+class CompressedTurnGraph {
 
 public :
 
@@ -82,7 +82,7 @@ protected:
 
 		void load( unsigned id, const unsigned char* buffer )
 		{
-			CompressedGraph::loadBlock( this, id, buffer );
+			CompressedTurnGraph::loadBlock( this, id, buffer );
 		}
 	};
 
@@ -152,7 +152,7 @@ protected:
 
 		void load( unsigned id, const unsigned char* buffer )
 		{
-			CompressedGraph::loadPathBlock( this, id, buffer );
+			CompressedTurnGraph::loadPathBlock( this, id, buffer );
 		}
 	};
 
@@ -193,7 +193,7 @@ public:
 
 	class EdgeIterator {
 
-		friend class CompressedGraph;
+		friend class CompressedTurnGraph;
 
 	public:
 
@@ -250,12 +250,12 @@ public:
 
 	// FUNCTIONS
 
-	CompressedGraph()
+	CompressedTurnGraph()
 	{
 		m_loaded = false;
 	}
 
-	~CompressedGraph()
+	~CompressedTurnGraph()
 	{
 		if ( m_loaded )
 			unloadGraph();
@@ -597,4 +597,4 @@ protected:
 	bool m_loaded;
 };
 
-#endif // COMPRESSEDGRAPH_H
+#endif // COMPRESSEDTURNGRAPH_H
