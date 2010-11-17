@@ -31,7 +31,7 @@ class ArrayStorage {
 	public:
 
 		ArrayStorage( size_t size ) :
-				positions( new Key[size] )
+				positions( new Key[size] ), size( size )
 		{
 		}
 
@@ -42,6 +42,7 @@ class ArrayStorage {
 
 		Key &operator[]( NodeID node )
 		{
+			Q_ASSERT( node < size );
 			return positions[node];
 		}
 
@@ -49,6 +50,7 @@ class ArrayStorage {
 
 	private:
 		Key* positions;
+		size_t size;
 };
 
 template< typename NodeID, typename Key >
@@ -194,6 +196,7 @@ class BinaryHeap {
 		IndexStorage nodeIndex;
 
 		void Downheap( Key key ) {
+			Q_ASSERT( key < heap.size() );
 			const Key droppingIndex = heap[key].index;
 			const Weight weight = heap[key].weight;
 			Key nextKey = key << 1;
@@ -207,28 +210,35 @@ class BinaryHeap {
 					break;
 
 				heap[key] = heap[nextKey];
+				Q_ASSERT( heap[key].index < insertedNodes.size() );
 				insertedNodes[heap[key].index].key = key;
 				key = nextKey;
 				nextKey <<= 1;
 			}
 			heap[key].index = droppingIndex;
 			heap[key].weight = weight;
+			Q_ASSERT( droppingIndex < insertedNodes.size() );
 			insertedNodes[droppingIndex].key = key;
 		}
 
 		void Upheap( Key key ) {
+			Q_ASSERT( key < heap.size() );
 			const Key risingIndex = heap[key].index;
 			const Weight weight = heap[key].weight;
 			Key nextKey = key >> 1;
+			Q_ASSERT( nextKey < heap.size() );
 			while ( heap[nextKey].weight > weight ) {
 				assert( nextKey != 0 );
+				Q_ASSERT( nextKey < heap.size() );
 				heap[key] = heap[nextKey];
+				Q_ASSERT( heap[key].index < insertedNodes.size() );
 				insertedNodes[heap[key].index].key = key;
 				key = nextKey;
 				nextKey >>= 1;
 			}
 			heap[key].index = risingIndex;
 			heap[key].weight = weight;
+			Q_ASSERT( risingIndex < insertedNodes.size() );
 			insertedNodes[risingIndex].key = key;
 		}
 		

@@ -112,6 +112,9 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 	std::vector< TurnContractor::Witness >().swap( witnessList );
 	cleanup->Run();
 
+	qDebug() << "Contraction finished.";
+    exit(1);
+
 	std::vector< CompressedTurnGraph::Edge > edges;
 	std::vector< NodeID > map;
 	cleanup->GetData( &edges, &map );

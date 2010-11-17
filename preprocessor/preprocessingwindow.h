@@ -42,6 +42,7 @@ public slots:
 
 	bool preprocessAll();
 	bool preprocessDaemon();
+	bool preprocessRouter();
 
 protected slots:
 

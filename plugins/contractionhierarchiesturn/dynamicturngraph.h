@@ -23,18 +23,26 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <vector>
 #include <algorithm>
 #include <limits>
+#include <sstream>
 #include "utils/bithelpers.h"
 
-template< typename EdgeData, typename PenaltyData >
+template< typename _EdgeData, typename _PenaltyData >
 class DynamicTurnGraph {
 	public:
 		typedef unsigned NodeIterator;
 		typedef unsigned EdgeIterator;
+		typedef _EdgeData EdgeData;
+		typedef _PenaltyData PenaltyData;
 
 		class InputNode {
 			public:
 				unsigned short inDegree;
 				unsigned short outDegree;
+				std::string DebugString() const {
+					std::stringstream ss;
+					ss << "inDegree: " << inDegree << ", outDegree: " << outDegree;
+					return ss.str();
+				}
 		};
 
 		class InputEdge {
@@ -52,6 +60,11 @@ class DynamicTurnGraph {
 					if ( target != right.target )
 						return target < right.target;
 					return originalEdgeTarget < right.originalEdgeTarget;
+				}
+				std::string DebugString() const {
+					std::stringstream ss;
+					ss << source << " <- " << originalEdgeSource << " --- " << originalEdgeTarget << " -> " << target << ": " << data.DebugString();
+					return ss.str();
 				}
 		};
 
@@ -88,6 +101,7 @@ class DynamicTurnGraph {
 				originalPosition += std::max( nodes[node].inDegree, nodes[node].outDegree );
                 EdgeIterator numNodePenalties = nodes[node].inDegree * nodes[node].outDegree;
 				for ( unsigned i = 0; i < numNodePenalties; ++i, ++penaltyPosition) {
+					//if (penalties[penaltyPosition] == 255 && nodes[node].inDegree + nodes[node].outDegree >= 9) qDebug() << "forbidden at" << node << nodes[node].inDegree << nodes[node].outDegree;
 					m_penalties.push_back( Penalty(penalties[penaltyPosition]) );
 				}
 			}
@@ -100,6 +114,8 @@ class DynamicTurnGraph {
 			for ( NodeIterator node = 0; node < m_numNodes; ++node ) {
 				for ( EdgeIterator i = m_nodes[node].firstEdge, e = m_nodes[node].firstEdge + m_nodes[node].edges; i != e; ++i ) {
 					m_edges[i].target = graph[edge].target;
+					m_edges[i].originalEdgeSource = graph[edge].originalEdgeSource;
+					m_edges[i].originalEdgeTarget = graph[edge].originalEdgeTarget;
 					m_edges[i].data = graph[edge].data;
 					edge++;
 				}
@@ -121,44 +137,76 @@ class DynamicTurnGraph {
 			return m_numEdges;
 		}
 
+		unsigned GetNumberOfOriginalEdges() const
+		{
+			return m_numOriginalEdges;
+		}
+
 		unsigned GetOutDegree( const NodeIterator &n ) const
 		{
+			assert( n < m_nodes.size() );
 			return m_nodes[n].edges;
 		}
 
 		NodeIterator GetTarget( const EdgeIterator &e ) const
 		{
+			assert( e < m_edges.size() );
 			return NodeIterator( m_edges[e].target );
+		}
+
+		unsigned GetOriginalEdgeSource( const EdgeIterator &e ) const
+        {
+			assert( e < m_edges.size() );
+            return m_edges[e].originalEdgeSource;
+        }
+        unsigned GetOriginalEdgeTarget( const EdgeIterator &e ) const
+        {
+        	assert( e < m_edges.size() );
+            return m_edges[e].originalEdgeTarget;
+        }
+
+		unsigned GetFirstOriginalEdge( const NodeIterator &n ) const
+		{
+			assert( n < m_nodes.size() );
+			return m_nodes[n].firstOriginalEdge;
 		}
 
 		EdgeData &GetEdgeData( const EdgeIterator &e )
 		{
+			assert( e < m_edges.size() );
 			return m_edges[e].data;
 		}
 
 		const EdgeData &GetEdgeData( const EdgeIterator &e ) const
 		{
+			assert( e < m_edges.size() );
 			return m_edges[e].data;
 		}
 
         unsigned GetOriginalInDegree( const NodeIterator &n ) const
         {
-            return m_penalties[ m_nodes[source].firstPenalty ];
+        	assert( n < m_nodes.size() );
+        	assert( m_nodes[n].firstPenalty < m_penalties.size() );
+            return m_penalties[ m_nodes[n].firstPenalty ].data;
         }
 
         unsigned GetOriginalOutDegree( const NodeIterator &n ) const
         {
-            return m_penalties[ m_nodes[source].firstPenalty + 1 ];
+        	assert( n < m_nodes.size() );
+        	assert( m_nodes[n].firstPenalty + 1 < m_penalties.size() );
+            return m_penalties[ m_nodes[n].firstPenalty + 1 ].data;
         }
 
 
-        const PenaltyData &GetPenaltyData( const NodeIterator& source, unsigned short originalEdgeIn, unsigned short originalEdgeOut ) const
+        const PenaltyData &GetPenaltyData( const NodeIterator& n, unsigned short originalEdgeIn, unsigned short originalEdgeOut ) const
         {
-            unsigned i = m_nodes[source].firstPenalty + 1;
-            unsigned originalOutDegree = m_penalties[ i++ ];
-            return m_penalties[ i + (originalEdgeIn * originalOutDegree) + originalEdgeOut ];
+        	assert( n < m_nodes.size() );
+            unsigned i = m_nodes[n].firstPenalty + 1;
+        	assert( i < m_penalties.size() );
+            unsigned originalOutDegree = m_penalties[ i++ ].data;
+            assert( i + (originalEdgeIn * originalOutDegree) + originalEdgeOut < m_penalties.size() );
+            return m_penalties[ i + (originalEdgeIn * originalOutDegree) + originalEdgeOut ].data;
         }
-
 
 		EdgeIterator BeginEdges( const NodeIterator &n ) const
 		{
@@ -172,9 +220,11 @@ class DynamicTurnGraph {
 		}
 
 		//adds an edge. Invalidates edge iterators for the source node
-		EdgeIterator InsertEdge( const NodeIterator &from, const NodeIterator &to, const EdgeData &data )
+		EdgeIterator InsertEdge( const InputEdge& newEdge )
 		{
-			Node &node = m_nodes[from];
+			assert( newEdge.source < m_nodes.size() );
+			assert( newEdge.target < m_nodes.size() );
+			Node &node = m_nodes[newEdge.source];
 			EdgeIterator newFirstEdge = node.edges + node.firstEdge;
 			if ( newFirstEdge >= m_edges.size() || !isDummy( newFirstEdge ) ) {
 				if ( node.firstEdge != 0 && isDummy( node.firstEdge - 1 ) ) {
@@ -200,8 +250,10 @@ class DynamicTurnGraph {
 				}
 			}
 			Edge &edge = m_edges[node.firstEdge + node.edges];
-			edge.target = to;
-			edge.data = data;
+			edge.target = newEdge.target;
+			edge.originalEdgeSource = newEdge.originalEdgeSource;
+			edge.originalEdgeTarget = newEdge.originalEdgeTarget;
+			edge.data = newEdge.data;
 			m_numEdges++;
 			node.edges++;
 			return EdgeIterator( node.firstEdge + node.edges );
@@ -240,15 +292,51 @@ class DynamicTurnGraph {
 		}
 
 		//searches for a specific edge
-		EdgeIterator FindEdge( const NodeIterator &from, const NodeIterator &to ) const
+		EdgeIterator FindEdge( const NodeIterator &from, const NodeIterator &to, const unsigned originalEdgeSource, const unsigned originalEdgeTarget ) const
 		{
 			for ( EdgeIterator i = BeginEdges( from ), iend = EndEdges( from ); i != iend; ++i ) {
-				if ( m_edges[i].target == to ) {
+				const Edge& edge = m_edges[i];
+				if ( edge.target == to
+						&& edge.originalEdgeSource == originalEdgeSource
+						&& edge.originalEdgeTarget == originalEdgeTarget ) {
 					return i;
 				}
 			}
 			return EndEdges( from );
 		}
+
+        std::string DebugStringPenaltyData( const NodeIterator& n ) const {
+        	std::stringstream ss;
+        	unsigned inDegree = GetOriginalInDegree( n );
+        	unsigned outDegree = GetOriginalOutDegree( n );
+        	for ( unsigned out = 0; out < outDegree; ++out ) {
+        		ss << "\t" << out;
+        	}
+        	ss << "\n";
+            unsigned delta = m_nodes[n].firstPenalty + 2;
+        	for ( unsigned in = 0; in < inDegree; ++in )
+        	{
+        		ss << in;
+        		for ( unsigned out = 0; out < outDegree; ++out ) {
+        			ss << "\t" << (int)m_penalties[ delta + (in * outDegree) + out ].data;
+        		}
+        		ss << "\n";
+        	}
+        	return ss.str();
+        }
+
+        std::string DebugStringEdge( const EdgeIterator& e ) const {
+        	return m_edges[ e ].DebugString();
+        }
+        std::string DebugStringEdgesOf( const NodeIterator& n ) const {
+        	std::stringstream ss;
+        	ss << "edges of node " << n << ":\n";
+        	for ( EdgeIterator edge =  BeginEdges( n ); edge != EndEdges( n ); ++edge ) {
+        		ss << DebugStringEdge(edge) << "\n";
+        	}
+        	return ss.str();
+        }
+
 
 	protected:
 
@@ -276,6 +364,11 @@ class DynamicTurnGraph {
 	        unsigned short originalEdgeSource; // uniquely identifies this edge among all outgoing edges adjacent to the source, at most degree( source ) - 1
 	        unsigned short originalEdgeTarget; // uniquely identifies this edge among all incoming edges adjacent to the target, at most degree( target ) - 1
 			EdgeData data;
+			std::string DebugString() const {
+				std::stringstream ss;
+				ss << "- " << originalEdgeSource << " --- " << originalEdgeTarget << " -> " << target << ": " << data.DebugString();
+				return ss.str();
+			}
 		};
 
 		struct Penalty
