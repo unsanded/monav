@@ -539,6 +539,21 @@ bool PreprocessingWindow::preprocessDaemon()
 	return true;
 }
 
+bool PreprocessingWindow::preprocessRouter()
+{
+    if ( !QFile::exists( m_ui->output->text() ) ) {
+        qCritical() << "Output Directory Does Not Exist";
+        return false;
+    }
+    qDebug() << "===Router===";
+    if ( !routerPreprocessing() ) {
+        m_ui->buildAllLabel->setPixmap( QPixmap( ":/images/notok.png" ) );
+        return false;
+    }
+    return true;
+}
+
+
 bool PreprocessingWindow::writeConfig()
 {
 	QSettings pluginSettings( fileInDirectory( m_ui->output->text(), "MoNav.ini" ), QSettings::IniFormat );
