@@ -42,7 +42,7 @@ class ArrayStorage {
 
 		Key &operator[]( NodeID node )
 		{
-			Q_ASSERT( node < size );
+			assert( (std::size_t)node < size );
 			return positions[node];
 		}
 
@@ -50,7 +50,7 @@ class ArrayStorage {
 
 	private:
 		Key* positions;
-		size_t size;
+		std::size_t size;
 };
 
 template< typename NodeID, typename Key >
@@ -141,6 +141,11 @@ class BinaryHeap {
 			return insertedNodes[heap[1].index].node;
 		}
 
+		const Weight& MinKey() const {
+			assert( heap.size() > 1 );
+			return insertedNodes[heap[1].index].weight;
+		}
+
 		NodeID DeleteMin() {
 			assert( heap.size() > 1 );
 			const Key removedIndex = heap[1].index;
@@ -196,7 +201,7 @@ class BinaryHeap {
 		IndexStorage nodeIndex;
 
 		void Downheap( Key key ) {
-			Q_ASSERT( key < heap.size() );
+			assert( (std::size_t)key < heap.size() );
 			const Key droppingIndex = heap[key].index;
 			const Weight weight = heap[key].weight;
 			Key nextKey = key << 1;
@@ -210,35 +215,35 @@ class BinaryHeap {
 					break;
 
 				heap[key] = heap[nextKey];
-				Q_ASSERT( heap[key].index < insertedNodes.size() );
+				assert( (std::size_t)heap[key].index < insertedNodes.size() );
 				insertedNodes[heap[key].index].key = key;
 				key = nextKey;
 				nextKey <<= 1;
 			}
 			heap[key].index = droppingIndex;
 			heap[key].weight = weight;
-			Q_ASSERT( droppingIndex < insertedNodes.size() );
+			assert( (std::size_t)droppingIndex < insertedNodes.size() );
 			insertedNodes[droppingIndex].key = key;
 		}
 
 		void Upheap( Key key ) {
-			Q_ASSERT( key < heap.size() );
+			assert( (std::size_t)key < heap.size() );
 			const Key risingIndex = heap[key].index;
 			const Weight weight = heap[key].weight;
 			Key nextKey = key >> 1;
-			Q_ASSERT( nextKey < heap.size() );
+			assert( (std::size_t)nextKey < heap.size() );
 			while ( heap[nextKey].weight > weight ) {
 				assert( nextKey != 0 );
-				Q_ASSERT( nextKey < heap.size() );
+				assert( (std::size_t)nextKey < heap.size() );
 				heap[key] = heap[nextKey];
-				Q_ASSERT( heap[key].index < insertedNodes.size() );
+				assert( (std::size_t)heap[key].index < insertedNodes.size() );
 				insertedNodes[heap[key].index].key = key;
 				key = nextKey;
 				nextKey >>= 1;
 			}
 			heap[key].index = risingIndex;
 			heap[key].weight = weight;
-			Q_ASSERT( risingIndex < insertedNodes.size() );
+			assert( (std::size_t)risingIndex < insertedNodes.size() );
 			insertedNodes[risingIndex].key = key;
 		}
 		

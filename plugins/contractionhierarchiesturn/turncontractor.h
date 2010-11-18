@@ -76,7 +76,7 @@ class TurnContractor {
         static const _PenaltyData RESTRICTED_TURN = 255;
         typedef short int GammaValue;
         static const GammaValue RESTRICTED_NEIGHBOUR = SHRT_MIN;
-        static const NodeID SPECIAL_NODE = -1;
+        static const NodeID SPECIAL_NODE = 42161;
 		typedef DynamicTurnGraph< _EdgeData, _PenaltyData > _DynamicGraph;
 		typedef BinaryHeap< NodeID, NodeID, int, _HeapData > _Heap;
 		typedef _DynamicGraph::InputNode _ImportNode;
@@ -87,6 +87,7 @@ class TurnContractor {
 			std::vector< _ImportEdge > insertedEdges;
 			std::vector< Witness > witnessList;
 			std::vector< NodeID > neighbours;
+			int deletedEdges;
 			_ThreadData( NodeID numOriginalEdges ): heap( numOriginalEdges ) {
 			}
 		};
@@ -123,6 +124,8 @@ class TurnContractor {
 			double inserting;
 			double removing;
 			double updating;
+			unsigned remainingNodes;
+			unsigned remainingEdges;
 
 			_LogItem() {
 				iteration = nodes = contraction = independent = inserting = removing = updating = 0;
@@ -133,7 +136,10 @@ class TurnContractor {
 			}
 
 			void PrintStatistics() const {
-				qDebug( "%d\t%d\t%lf\t%lf\t%lf\t%lf\t%lf", iteration, nodes, independent, contraction, inserting, removing, updating );
+				double remainingDegree = 0;
+				if (remainingNodes > 0)
+					remainingDegree = (double)remainingEdges/remainingNodes;
+				qDebug( "%d\t%d\t%lf\t%lf\t%lf\t%lf\t%lf\t%d\t%d\t%lf", iteration, nodes, independent, contraction, inserting, removing, updating, remainingNodes, remainingEdges, remainingDegree );
 			}
 		};
 
@@ -181,7 +187,7 @@ class TurnContractor {
 				}
 
 				void PrintHeader() const {
-					qDebug( "Iteration\tNodes\tIndependent\tContraction\tInserting\tRemoving\tUpdating" );
+					qDebug( "Iteration\tNodes\tIndependent\tContraction\tInserting\tRemoving\tUpdating\tRNodes\tREdges\tRDegree" );
 				}
 
 				void PrintSummary() const {
@@ -247,10 +253,9 @@ class TurnContractor {
 					//continue;
 				}
 
-				if (edge.target == SPECIAL_NODE) {
+				if (edge.target == SPECIAL_NODE || edge.source == SPECIAL_NODE) {
 					qDebug() << edge.DebugString().c_str();
 				}
-
 
 				edges.push_back( edge );
 				std::swap( edge.source, edge.target );
@@ -267,10 +272,13 @@ class TurnContractor {
 			std::vector< _PenaltyData > penalties;
 			nodes.reserve( numNodes );
 			penalties.reserve( inputPenalties.size() );
+			unsigned penaltyPosition = 0;
 			for ( NodeID u = 0; u < numNodes; ++u ) {
 				_ImportNode node;
 				node.inDegree = inDegree[u];
 				node.outDegree = outDegree[u];
+				node.firstPenalty = penaltyPosition;
+				penaltyPosition += node.inDegree * node.outDegree;
 //				if (node.inDegree + node.outDegree > 15) qDebug() << u << node.inDegree << node.outDegree;
 				nodes.push_back( node );
 			}
@@ -299,6 +307,7 @@ class TurnContractor {
 			for ( typename std::vector< PenaltyType >::const_iterator i = inputPenalties.begin(), e = inputPenalties.end(); i != e; ++i ) {
 				penalties.push_back(*i < 0 ? RESTRICTED_TURN : (int)( *i + 0.5 ) * 10 );
 			}
+			assert( penalties.size() == penaltyPosition );
 
 			_graph = new _DynamicGraph( nodes, edges, penalties );
 
@@ -316,7 +325,7 @@ class TurnContractor {
 			const NodeID numberOfNodes = _graph->GetNumberOfNodes();
 			_LogData log;
 
-			omp_set_num_threads(16);
+			omp_set_num_threads(1);
 			int maxThreads = omp_get_max_threads();
 			std::vector < _ThreadData* > threadData;
 			for ( int threadNum = 0; threadNum < maxThreads; ++threadNum ) {
@@ -337,7 +346,12 @@ class TurnContractor {
 			#pragma omp parallel for schedule ( guided )
 			for ( int x = 0; x < ( int ) numberOfNodes; ++x )
 				remainingNodes[x].first = x;
-			std::random_shuffle( remainingNodes.begin(), remainingNodes.end() );
+			{
+				srand48(698176);
+				RandomShuffleGenerator gen;
+				std::random_shuffle( remainingNodes.begin(), remainingNodes.end(), gen );
+			}
+
 			for ( int x = 0; x < ( int ) numberOfNodes; ++x )
 				nodeData[remainingNodes[x].first].bias = x;
 
@@ -345,17 +359,23 @@ class TurnContractor {
 			_LogItem statistics0;
 			statistics0.updating = _Timestamp();
 			statistics0.iteration = 0;
+
+			int numRemainingEdges = _graph->GetNumberOfEdges();
+//			_CheckRemainingEdges(remainingNodes, numberOfNodes, numRemainingEdges);
 			#pragma omp parallel
 			{
 				_ThreadData* data = threadData[omp_get_thread_num()];
 				#pragma omp for schedule ( guided )
 				for ( int x = 0; x < ( int ) numberOfNodes; ++x ) {
+//					qDebug() << "node" << x;
 					nodePriority[x] = _Evaluate( data, &nodeData[x], x );
 				}
 			}
 			qDebug( "done" );
 
 			statistics0.updating = _Timestamp() - statistics0.updating;
+			statistics0.remainingNodes = numberOfNodes;
+			statistics0.remainingEdges = numRemainingEdges;
 			log.Insert( statistics0 );
 
 			log.PrintHeader();
@@ -392,8 +412,14 @@ class TurnContractor {
 					#pragma omp for schedule ( guided ) nowait
 					for ( int position = firstIndependent ; position < last; ++position ) {
 						NodeID x = remainingNodes[position].first;
-//						qDebug() << "contract" << x;
+//						if ( _graph->GetOutDegree(x) > 20 ) {
+//							qDebug() << "contract" << x;
+//							qDebug() << _graph->DebugStringEdgesOf(x).c_str();
+//							exit(1);
+//						}
 						_Contract< false > ( data, x );
+						if (x == SPECIAL_NODE)
+							qDebug() << "contracted " << x;
 						nodePriority[x] = -1;
 					}
 					std::sort( data->insertedEdges.begin(), data->insertedEdges.end() );
@@ -404,10 +430,12 @@ class TurnContractor {
 				#pragma omp parallel
 				{
 					_ThreadData* const data = threadData[omp_get_thread_num()];
+					data->deletedEdges = 0;
 					#pragma omp for schedule ( guided ) nowait
 					for ( int position = firstIndependent ; position < last; ++position ) {
 						NodeID x = remainingNodes[position].first;
-						_DeleteIncomingEdges( data, x );
+						data->deletedEdges += _graph->GetOutDegree( x );
+						data->deletedEdges += _DeleteIncomingEdges( data, x );
 					}
 				}
 				statistics.removing += _Timestamp() - timeLast;
@@ -417,6 +445,9 @@ class TurnContractor {
 				qDebug() << "insert new edges";
 				for ( int threadNum = 0; threadNum < maxThreads; ++threadNum ) {
 					_ThreadData& data = *threadData[threadNum];
+					numRemainingEdges -= data.deletedEdges;
+					assert( numRemainingEdges >= 0 );
+					numRemainingEdges += data.insertedEdges.size();
 					for ( int i = 0; i < ( int ) data.insertedEdges.size(); ++i ) {
 						const _ImportEdge& edge = data.insertedEdges[i];
 						// Do not insert edges to already contracted nodes.
@@ -428,6 +459,8 @@ class TurnContractor {
 				}
 				statistics.inserting += _Timestamp() - timeLast;
 				timeLast = _Timestamp();
+
+//				_CheckRemainingEdges(remainingNodes, firstIndependent, numRemainingEdges);
 
 				//update priorities
 				qDebug() << "update priorities";
@@ -442,6 +475,9 @@ class TurnContractor {
 				}
 				statistics.updating += _Timestamp() - timeLast;
 				timeLast = _Timestamp();
+
+				statistics.remainingNodes = firstIndependent;
+				statistics.remainingEdges = numRemainingEdges;
 
 				//output some statistics
 				statistics.PrintStatistics();
@@ -572,9 +608,9 @@ class TurnContractor {
 			if ( !data.open( QIODevice::ReadOnly ) )
 				return NULL;
 
-			vector< _ImportNode > nodes;
-			vector< _ImportEdge > edges;
-			vector< _PenaltyData > penalties;
+			std::vector< _ImportNode > nodes;
+			std::vector< _ImportEdge > edges;
+			std::vector< _PenaltyData > penalties;
 
 			unsigned numNodes;
 			unsigned numEdges;
@@ -624,9 +660,18 @@ class TurnContractor {
 				penalties.push_back( penalty );
 			}
 			_DynamicGraph* graph = new _DynamicGraph( nodes, edges, penalties );
+			return graph;
 		}
 
 	private:
+
+        struct RandomShuffleGenerator
+        {
+            size_t operator()(size_t n) const
+            {
+                return lrand48() % n;
+            }
+        };
 
 		void _ComputeGammaTable()
 		{
@@ -813,9 +858,10 @@ class TurnContractor {
 				// Prepare witness search.
                 // -----------------------
                 heap.Clear();
-                NodeID numOnlyViaContracted = 0;
-                const unsigned inOut = _graph->GetOriginalEdgeSource( inEdge );
+                int numOnlyViaContracted = 0;
+                const unsigned inOut = _graph->GetOriginalEdgeTarget( inEdge );
                 const unsigned sourceOutDegree = _graph->GetOriginalOutDegree( source );
+                assert( inOut < sourceOutDegree );
                 {
 					const unsigned gammaIndexDelta = _gammaIndex[source].forward + sourceOutDegree * inOut;
 					for ( _DynamicGraph::EdgeIterator sourceEdge = _graph->BeginEdges( source ), endSourceEdges = _graph->EndEdges( source ); sourceEdge != endSourceEdges; ++sourceEdge ) {
@@ -823,15 +869,13 @@ class TurnContractor {
 						if ( !sourceData.forward )
 							continue;
 
-						GammaValue g = _gamma[ gammaIndexDelta + _graph->GetOriginalEdgeSource( sourceEdge ) ];
+						const unsigned sourceOut = _graph->GetOriginalEdgeSource( sourceEdge );
+						GammaValue g = _gamma[ gammaIndexDelta + sourceOut ];
 						if (g == RESTRICTED_NEIGHBOUR)
 							continue;
 
 						const NodeID sourceTarget = _graph->GetTarget( sourceEdge );
-						const bool isViaNode = sourceTarget == node;
-						if ( _graph->GetOriginalEdgeTarget( sourceEdge ) >= _graph->GetOriginalInDegree( sourceTarget ) ) {
-							qDebug() << source << sourceTarget;
-						}
+						const bool isViaNode = (sourceTarget == node && sourceOut == inOut);
 
 						assert( _graph->GetOriginalEdgeTarget( sourceEdge ) < _graph->GetOriginalInDegree( sourceTarget ) );
 						const unsigned sourceOriginalTarget = _graph->GetFirstOriginalEdge( sourceTarget ) + _graph->GetOriginalEdgeTarget( sourceEdge );
@@ -847,8 +891,10 @@ class TurnContractor {
 						}
 						else if ( pathDistance < heap.GetKey( sourceOriginalTarget ) ) {
 							heap.DecreaseKey( sourceOriginalTarget, pathDistance );
-							assert( heap.GetData( sourceOriginalTarget ).onlyViaContracted == isViaNode );
-							heap.GetData( sourceOriginalTarget ) = heapData;
+							_HeapData& existingData = heap.GetData( sourceOriginalTarget );
+							numOnlyViaContracted -= existingData.onlyViaContracted;
+							numOnlyViaContracted += isViaNode;
+							existingData = heapData;
 						}
 					}
                 }
@@ -921,7 +967,7 @@ class TurnContractor {
 					}
 
 					if ( needShortcut ) {
-						if (node == SPECIAL_NODE) qDebug() << "shortcut necessary" << shortcutDistance;
+						if (node == SPECIAL_NODE) qDebug() << "shortcut necessary" << source << "<-" << inOut << "---" << shortcutDistance << "---" << outIn << "->" << target;
 						const unsigned shortcutOriginalEdges = heap.GetData( originalEdgeTarget ).numOriginalEdges;
 						if ( Simulate ) {
 							assert( stats != NULL );
@@ -983,7 +1029,7 @@ class TurnContractor {
 			return true;
 		}
 
-		bool _DeleteIncomingEdges( _ThreadData* const data, NodeID node ) {
+		int _DeleteIncomingEdges( _ThreadData* const data, NodeID node ) {
 			std::vector< NodeID >& neighbours = data->neighbours;
 			neighbours.clear();
 
@@ -998,12 +1044,13 @@ class TurnContractor {
 			std::sort( neighbours.begin(), neighbours.end() );
 			neighbours.resize( std::unique( neighbours.begin(), neighbours.end() ) - neighbours.begin() );
 
+			int deleted = 0;
 			for ( int i = 0, e = ( int ) neighbours.size(); i < e; ++i ) {
 				const NodeID u = neighbours[i];
-				_graph->DeleteEdgesTo( u, node );
+				deleted += _graph->DeleteEdgesTo( u, node );
 			}
 
-			return true;
+			return deleted;
 		}
 
 		bool _UpdateNeighbours( std::vector< double >* priorities, std::vector< _PriorityData >* const nodeData, _ThreadData* const data, NodeID node ) {
@@ -1072,6 +1119,21 @@ class TurnContractor {
 			}
 
 			return true;
+		}
+
+		void _CheckRemainingEdges( const std::vector< std::pair< NodeID, bool > >& remainingNodes, unsigned firstIndependent, int numRemainingEdges ) const
+		{
+			int sum = 0;
+			for (unsigned i = 0; i < firstIndependent; ++i)
+			{
+				NodeID x = remainingNodes[i].first;
+				sum += _graph->GetOutDegree(x);
+			}
+			if (sum != numRemainingEdges)
+			{
+				qDebug() << sum << "!=" << numRemainingEdges;
+				exit(1);
+			}
 		}
 
 		std::string _DebugStringGammaForward( NodeID n ) const {

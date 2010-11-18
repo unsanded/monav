@@ -69,15 +69,14 @@ class DynamicTurnGraph {
 				}
 		};
 
-		DynamicTurnGraph( const std::vector< InputNode > &nodes, const std::vector< InputEdge > &graph, const std::vector< PenaltyData > &penalties )
-		{
+		DynamicTurnGraph( const std::vector< InputNode > &nodes, const std::vector< InputEdge > &graph,
+				const std::vector< PenaltyData > &penalties ) {
 			m_numNodes = nodes.size();
 			m_numEdges = ( EdgeIterator ) graph.size();
 			m_nodes.reserve( m_numNodes );
 			m_nodes.resize( m_numNodes );
 			EdgeIterator edge = 0;
 			EdgeIterator position = 0;
-			EdgeIterator penaltyPosition = 0;
 			EdgeIterator sumInDegree = 0;
 			EdgeIterator sumOutDegree = 0;
 			EdgeIterator originalPosition = 0;
@@ -100,6 +99,7 @@ class DynamicTurnGraph {
 				// original-edge-id for incoming(outgoing) edges, max(in,out) allows to do both.
 				originalPosition += std::max( nodes[node].inDegree, nodes[node].outDegree );
 			}
+			assert( m_numEdges == position );
 			m_numOriginalEdges = originalPosition;
 			m_edges.reserve( position * 1.2 );
 			m_edges.resize( position );
@@ -201,11 +201,16 @@ class DynamicTurnGraph {
         	assert( n < m_nodes.size() );
             unsigned first = m_nodes[n].firstPenalty;
             unsigned originalOutDegree = m_nodes[n].outDegree;
+            assert( originalEdgeIn < m_nodes[n].inDegree );
+            if ( originalEdgeOut >= originalOutDegree ) {
+            	qDebug() << n << originalEdgeOut << originalOutDegree;
+            }
+            assert( originalEdgeOut < originalOutDegree );
             assert( first + (originalEdgeIn * originalOutDegree) + originalEdgeOut < m_penalties.size() );
             return m_penalties[ first + (originalEdgeIn * originalOutDegree) + originalEdgeOut ].data;
         }
 
-        const unsigned GetFirstPenalty( const NodeIterator& n ) const {
+        unsigned GetFirstPenalty( const NodeIterator& n ) const {
         	assert( n < m_nodes.size() );
             return m_nodes[n].firstPenalty;
         }
@@ -216,7 +221,7 @@ class DynamicTurnGraph {
 
         const PenaltyData &GetPenaltyDataWithIndex( unsigned i ) const {
         	assert ( i < m_penalties.size() );
-        	return m_penalties[i];
+        	return m_penalties[i].data;
         }
 
 		EdgeIterator BeginEdges( const NodeIterator &n ) const
@@ -238,7 +243,7 @@ class DynamicTurnGraph {
 			Node &node = m_nodes[newEdge.source];
 			EdgeIterator newFirstEdge = node.edges + node.firstEdge;
 			if ( newFirstEdge >= m_edges.size() || !isDummy( newFirstEdge ) ) {
-				if ( node.firstEdge != 0 && isDummy( node.firstEdge - 1 ) ) {
+				if ( false && node.firstEdge != 0 && isDummy( node.firstEdge - 1 ) ) {
 					node.firstEdge--;
 					m_edges[node.firstEdge] = m_edges[node.firstEdge + node.edges];
 				} else {
@@ -316,6 +321,23 @@ class DynamicTurnGraph {
 			return EndEdges( from );
 		}
 
+		//searches for a specific edge
+		EdgeIterator FindOriginalEdge( const NodeIterator &from, const unsigned originalEdgeSource, bool forward ) const
+		{
+
+			for ( EdgeIterator i = BeginEdges( from ), iend = EndEdges( from ); i != iend; ++i ) {
+				const Edge& edge = m_edges[i];
+				if ( edge.originalEdgeSource == originalEdgeSource ) {
+					if ( forward && edge.data.forward )
+						return i;
+					if ( !forward && edge.data.backward )
+						return i;
+				}
+			}
+			return EndEdges( from );
+		}
+
+
         std::string DebugStringPenaltyData( const NodeIterator& n ) const {
         	std::stringstream ss;
         	unsigned inDegree = GetOriginalInDegree( n );
@@ -324,12 +346,14 @@ class DynamicTurnGraph {
         		ss << "\t" << out;
         	}
         	ss << "\n";
-            unsigned delta = m_nodes[n].firstPenalty + 2;
+            unsigned delta = m_nodes[n].firstPenalty;
         	for ( unsigned in = 0; in < inDegree; ++in )
         	{
         		ss << in;
         		for ( unsigned out = 0; out < outDegree; ++out ) {
-        			ss << "\t" << (int)m_penalties[ delta + (in * outDegree) + out ].data;
+        			int penalty = m_penalties[ delta + (in * outDegree) + out ].data;
+        			assert( penalty == (int)GetPenaltyData( n, in, out ) );
+        			ss << "\t" << penalty;
         		}
         		ss << "\n";
         	}
@@ -367,7 +391,7 @@ class DynamicTurnGraph {
 			unsigned short edges;
 			unsigned char inDegree;
 			unsigned char outDegree;
-			EdgeIterator firstPenalty;
+			unsigned firstPenalty;
 			EdgeIterator firstOriginalEdge;
 		};
 

@@ -85,7 +85,6 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 	bool doContract = args.indexOf("--cht-contract") != -1;
 	bool doPlainQuery = args.indexOf("--cht-plain-query") != -1;
 	typedef TurnContractor::DynamicGraph Graph;
-	unsigned numQueries = 1000;
 
 	if ( doContract || doPlainQuery ) {
 
@@ -101,7 +100,6 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 		if ( !importer->GetRoutingPenalties( &inDegree, &outDegree, &penalties ) )
 			return false;
 
-		unsigned numEdges = inputEdges.size();
 		unsigned numNodes = inputNodes.size();
 
 		TurnContractor* contractor = new TurnContractor( numNodes, inputEdges, inDegree, outDegree, penalties );
@@ -126,7 +124,7 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 
 	if (args.indexOf("--cht-query") != -1) {
 		TurnExperiments experiments;
-		experiments.chtQuery( dir );
+		experiments.chtQuery( importer, dir );
 	}
 
 
