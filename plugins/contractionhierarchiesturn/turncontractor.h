@@ -203,6 +203,8 @@ class TurnContractor {
 
 	public:
 
+		typedef _DynamicGraph DynamicGraph;
+
 		template< class InputEdge, class DegreeType, class PenaltyType >
 		TurnContractor( NodeID numNodes, const std::vector< InputEdge >& inputEdges,
 				const std::vector< DegreeType >& inDegree, const std::vector< DegreeType >& outDegree,
@@ -503,6 +505,125 @@ class TurnContractor {
 
 		void GetWitnessList( std::vector< Witness >& list ) {
 			list = _witnessList;
+		}
+
+		const DynamicGraph& graph() const {
+			return *_graph;
+		}
+
+		bool WriteGraphToFile( QString filename ) const {
+
+			FileStream data( filename );
+
+			if ( !data.open( QIODevice::WriteOnly ) )
+				return false;
+
+			unsigned numNodes = _graph->GetNumberOfNodes();
+			unsigned numEdges = _graph->GetNumberOfEdges();
+			unsigned numPenalties = _graph->GetNumberOfPenalties();
+			data << numNodes << numEdges << numPenalties;
+
+			for ( NodeID u = 0; u < _graph->GetNumberOfNodes(); ++u )
+			{
+				qint8 inDegree = _graph->GetOriginalInDegree( u );
+				qint8 outDegree = _graph->GetOriginalOutDegree( u );
+				unsigned firstPenalty = _graph->GetFirstPenalty( u );
+				data << inDegree << outDegree << firstPenalty;
+			}
+
+			for ( unsigned source = 0; source < _graph->GetNumberOfNodes(); ++source )
+			{
+				std::vector< _ImportEdge > edges;
+				for ( _DynamicGraph::EdgeIterator e = _graph->BeginEdges( source ), ee = _graph->EndEdges( source ); e != ee; ++e ) {
+					_ImportEdge edge;
+					edge.target = _graph->GetTarget( e );
+					edge.originalEdgeSource = _graph->GetOriginalEdgeSource( e );
+					edge.originalEdgeTarget = _graph->GetOriginalEdgeTarget( e );
+					edge.data = _graph->GetEdgeData( e );
+					edges.push_back( edge );
+				}
+				std::sort( edges.begin(), edges.end() );
+				for ( unsigned i = 0; i < edges.size(); ++i )
+				{
+					const _ImportEdge& edge = edges[i];
+					unsigned target = edge.target;
+					qint8 originalEdgeSource = edge.originalEdgeSource;
+					qint8 originalEdgeTarget = edge.originalEdgeTarget;
+
+					unsigned distance = edge.data.distance;
+					bool shortcut = edge.data.shortcut;
+					bool forward = edge.data.forward;
+					bool backward = edge.data.backward;
+					unsigned middle_id = edge.data.id;
+					data << source << target << originalEdgeSource << originalEdgeTarget;
+					data << distance << shortcut << forward << backward << middle_id;
+				}
+			}
+			for ( unsigned i = 0; i < _graph->GetNumberOfPenalties(); ++i ) {
+				int penalty = _graph->GetPenaltyDataWithIndex( i );
+				data << penalty;
+			}
+			return true;
+		}
+
+		static _DynamicGraph* ReadGraphFromFile( QString filename ) {
+			FileStream data( filename );
+
+			if ( !data.open( QIODevice::ReadOnly ) )
+				return NULL;
+
+			vector< _ImportNode > nodes;
+			vector< _ImportEdge > edges;
+			vector< _PenaltyData > penalties;
+
+			unsigned numNodes;
+			unsigned numEdges;
+			unsigned numPenalties;
+			data >> numNodes >> numEdges >> numPenalties;
+			nodes.reserve( numNodes );
+			edges.reserve( numEdges );
+			penalties.reserve( numPenalties );
+
+			for ( NodeID u = 0; u < numNodes; ++u )
+			{
+				qint8 inDegree, outDegree;
+				unsigned firstPenalty;
+				data >> inDegree >> outDegree >> firstPenalty;
+				_ImportNode node;
+				node.inDegree = inDegree;
+				node.outDegree = outDegree;
+				node.firstPenalty = firstPenalty;
+				nodes.push_back( node );
+			}
+
+			for ( unsigned i = 0; i < numEdges; ++i ) {
+				unsigned source, target;
+				qint8 originalEdgeSource, originalEdgeTarget;
+				unsigned distance;
+				bool shortcut;
+				bool forward;
+				bool backward;
+				unsigned middle_id;
+				data >> source >> target >> originalEdgeSource >> originalEdgeTarget;
+				data >> distance >> shortcut >> forward >> backward >> middle_id;
+				_ImportEdge edge;
+				edge.source = source;
+				edge.target = target;
+				edge.originalEdgeSource = originalEdgeSource;
+				edge.originalEdgeTarget = originalEdgeTarget;
+				edge.data.distance = distance;
+				edge.data.shortcut = shortcut;
+				edge.data.forward = forward;
+				edge.data.backward = backward;
+				edge.data.id = middle_id;
+				edges.push_back( edge );
+			}
+			for ( unsigned i = 0; i < numPenalties; ++i ) {
+				int penalty;
+				data >> penalty;
+				penalties.push_back( penalty );
+			}
+			_DynamicGraph* graph = new _DynamicGraph( nodes, edges, penalties );
 		}
 
 	private:
