@@ -38,9 +38,10 @@ class DynamicTurnGraph {
 			public:
 				unsigned short inDegree;
 				unsigned short outDegree;
+				unsigned firstPenalty;
 				std::string DebugString() const {
 					std::stringstream ss;
-					ss << "inDegree: " << inDegree << ", outDegree: " << outDegree;
+					ss << "inDegree: " << inDegree << ", outDegree: " << outDegree << ", firstPenalty: " << firstPenalty;
 					return ss.str();
 				}
 		};
@@ -74,7 +75,6 @@ class DynamicTurnGraph {
 			m_numEdges = ( EdgeIterator ) graph.size();
 			m_nodes.reserve( m_numNodes );
 			m_nodes.resize( m_numNodes );
-			m_penalties.reserve( penalties.size() + 2 * m_numNodes );
 			EdgeIterator edge = 0;
 			EdgeIterator position = 0;
 			EdgeIterator penaltyPosition = 0;
@@ -90,20 +90,15 @@ class DynamicTurnGraph {
 				m_nodes[node].edges = edge - lastEdge;
                 position += m_nodes[node].edges;
 
+				m_nodes[node].inDegree = nodes[node].inDegree;
+				m_nodes[node].outDegree = nodes[node].outDegree;
+				m_nodes[node].firstPenalty = nodes[node].firstPenalty;
                 m_nodes[node].firstOriginalEdge = originalPosition;
-				m_nodes[node].firstPenalty = m_penalties.size();
-				m_penalties.push_back( Penalty(nodes[node].inDegree) );
-				m_penalties.push_back( Penalty(nodes[node].outDegree) );
 				sumInDegree += nodes[node].inDegree;
 				sumOutDegree += nodes[node].outDegree;
 				// Summing up the indegree(outdegre) allows to compute a globally unique
 				// original-edge-id for incoming(outgoing) edges, max(in,out) allows to do both.
 				originalPosition += std::max( nodes[node].inDegree, nodes[node].outDegree );
-                EdgeIterator numNodePenalties = nodes[node].inDegree * nodes[node].outDegree;
-				for ( unsigned i = 0; i < numNodePenalties; ++i, ++penaltyPosition) {
-					//if (penalties[penaltyPosition] == 255 && nodes[node].inDegree + nodes[node].outDegree >= 9) qDebug() << "forbidden at" << node << nodes[node].inDegree << nodes[node].outDegree;
-					m_penalties.push_back( Penalty(penalties[penaltyPosition]) );
-				}
 			}
 			m_numOriginalEdges = originalPosition;
 			m_edges.reserve( position * 1.2 );
@@ -119,6 +114,11 @@ class DynamicTurnGraph {
 					m_edges[i].data = graph[edge].data;
 					edge++;
 				}
+			}
+			m_penalties.reserve( penalties.size() );
+			for ( size_t i = 0; i < penalties.size(); ++i )
+			{
+				m_penalties.push_back( Penalty( penalties[i] ) );
 			}
 		}
 
@@ -186,26 +186,37 @@ class DynamicTurnGraph {
         unsigned GetOriginalInDegree( const NodeIterator &n ) const
         {
         	assert( n < m_nodes.size() );
-        	assert( m_nodes[n].firstPenalty < m_penalties.size() );
-            return m_penalties[ m_nodes[n].firstPenalty ].data;
+        	return m_nodes[n].inDegree;
         }
 
         unsigned GetOriginalOutDegree( const NodeIterator &n ) const
         {
         	assert( n < m_nodes.size() );
-        	assert( m_nodes[n].firstPenalty + 1 < m_penalties.size() );
-            return m_penalties[ m_nodes[n].firstPenalty + 1 ].data;
+        	return m_nodes[n].outDegree;
         }
 
 
         const PenaltyData &GetPenaltyData( const NodeIterator& n, unsigned short originalEdgeIn, unsigned short originalEdgeOut ) const
         {
         	assert( n < m_nodes.size() );
-            unsigned i = m_nodes[n].firstPenalty + 1;
-        	assert( i < m_penalties.size() );
-            unsigned originalOutDegree = m_penalties[ i++ ].data;
-            assert( i + (originalEdgeIn * originalOutDegree) + originalEdgeOut < m_penalties.size() );
-            return m_penalties[ i + (originalEdgeIn * originalOutDegree) + originalEdgeOut ].data;
+            unsigned first = m_nodes[n].firstPenalty;
+            unsigned originalOutDegree = m_nodes[n].outDegree;
+            assert( first + (originalEdgeIn * originalOutDegree) + originalEdgeOut < m_penalties.size() );
+            return m_penalties[ first + (originalEdgeIn * originalOutDegree) + originalEdgeOut ].data;
+        }
+
+        const unsigned GetFirstPenalty( const NodeIterator& n ) const {
+        	assert( n < m_nodes.size() );
+            return m_nodes[n].firstPenalty;
+        }
+
+        unsigned GetNumberOfPenalties() const {
+        	return m_penalties.size();
+        }
+
+        const PenaltyData &GetPenaltyDataWithIndex( unsigned i ) const {
+        	assert ( i < m_penalties.size() );
+        	return m_penalties[i];
         }
 
 		EdgeIterator BeginEdges( const NodeIterator &n ) const
@@ -337,7 +348,6 @@ class DynamicTurnGraph {
         	return ss.str();
         }
 
-
 	protected:
 
 		bool isDummy( EdgeIterator edge ) const
@@ -354,9 +364,11 @@ class DynamicTurnGraph {
 			//index of the first edge
 			EdgeIterator firstEdge;
 			//amount of edges
-			unsigned edges;
-			EdgeIterator firstOriginalEdge;
+			unsigned short edges;
+			unsigned char inDegree;
+			unsigned char outDegree;
 			EdgeIterator firstPenalty;
+			EdgeIterator firstOriginalEdge;
 		};
 
 		struct Edge {
