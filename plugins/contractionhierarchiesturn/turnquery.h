@@ -24,10 +24,28 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <limits.h>
 #include <limits>
 #include <sstream>
+#include <queue>
 #include "utils/qthelpers.h"
 #include "dynamicturngraph.h"
 #include "../contractionhierarchies/binaryheap.h"
 #include "utils/config.h"
+
+	struct TurnQueryEdge {
+		unsigned source;
+		unsigned target;
+		unsigned edgeID;
+		TurnQueryEdge() : source(-1), target(-1), edgeID(-1) {}
+		TurnQueryEdge(unsigned s, unsigned t, unsigned i) : source(s), target(t), edgeID(i) {}
+		bool operator==(const TurnQueryEdge& right) const {
+			return source == right.source && target == right.target && edgeID == right.edgeID;
+		}
+		std::string DebugString() const {
+			std::stringstream ss;
+			ss << source << " -[orig=" << edgeID << "]-> " << target;
+			return ss.str();
+		}
+	};
+
 
 template <typename Graph, bool StallOnDemand = true >
 class TurnQuery {
@@ -122,50 +140,42 @@ public:
 		}
 	};
 
-
-
 	template <class EdgeAllowed>
-	void initHeap( Heap* heap, const NodeIterator node, const NodeIterator node2, const EdgeAllowed& edgeAllowed ) {
+	void initHeap( Heap* heap, const NodeIterator node, const NodeIterator node2, const unsigned edgeID, const EdgeAllowed& edgeAllowed ) {
 //		qDebug() << m_graph.DebugStringEdgesOf( node ).c_str();
+		bool success = false;
 		for ( EdgeIterator edge = m_graph.BeginEdges( node ), edgeEnd = m_graph.EndEdges( node ); edge < edgeEnd; ++edge ) {
 			const EdgeData& edgeData = m_graph.GetEdgeData( edge );
-			const NodeIterator edgeTarget = m_graph.GetTarget( edge );
-			if ( !edgeAllowed(edgeData.forward, edgeData.backward) || edgeData.shortcut || edgeTarget != node2 )
+			if ( !edgeAllowed(edgeData.forward, edgeData.backward) || edgeData.shortcut || edgeData.id != edgeID  )
 				continue;
+			assert( node2 ==  m_graph.GetTarget( edge ) );
 
 			const unsigned originalEdgeLocal = m_graph.GetOriginalEdgeTarget( edge );
 			const unsigned originalEdge = m_graph.GetFirstOriginalEdge( node2 ) + originalEdgeLocal;
-			HeapData data(-1, edge, node2, originalEdgeLocal);
+			if ( heap->WasInserted( originalEdge ) ) {
+				qDebug() << "size" << heap->Size();
+				qDebug() << "oe" << originalEdge;
+				qDebug() << node << node2 << edgeID;
+				qDebug() << m_graph.DebugStringEdgesOf( node ).c_str();
+			}
+			assert( !heap->WasInserted( originalEdge ) );
 //			qDebug() << "edge orig =" << edgeData.id << "originalEdge" << originalEdge;
-			if ( !heap->WasInserted( originalEdge ) ) {
-//				qDebug() << "  insert";
-				heap->Insert( originalEdge, edgeData.distance, data );
-			}
-			else if ( (int)edgeData.distance < heap->GetKey( originalEdge ) ) {
-//				qDebug() << "  decrease";
-				heap->DecreaseKey( originalEdge, edgeData.distance );
-				heap->GetData( originalEdge ) = data;
-			}
+			heap->Insert( originalEdge, edgeData.distance, HeapData(-1, edge, node2, originalEdgeLocal) );
+			success = true;
 		}
 //		qDebug() << m_graph.DebugStringEdgesOf( node2 ).c_str();
-		for ( EdgeIterator edge = m_graph.BeginEdges( node2 ), edgeEnd = m_graph.EndEdges( node2 ); edge < edgeEnd; ++edge ) {
-			const EdgeData& edgeData = m_graph.GetEdgeData( edge );
-			const NodeIterator edgeTarget = m_graph.GetTarget( edge );
-			if ( !edgeAllowed(edgeData.backward, edgeData.forward) || edgeData.shortcut || edgeTarget != node )
-				continue;
+		if (!success) {
+			for ( EdgeIterator edge = m_graph.BeginEdges( node2 ), edgeEnd = m_graph.EndEdges( node2 ); edge < edgeEnd; ++edge ) {
+				const EdgeData& edgeData = m_graph.GetEdgeData( edge );
+				if ( !edgeAllowed(edgeData.backward, edgeData.forward) || edgeData.shortcut || edgeData.id != edgeID )
+					continue;
+				assert( node == m_graph.GetTarget( edge ) );
 
-			const unsigned originalEdgeLocal = m_graph.GetOriginalEdgeSource( edge );
-			const unsigned originalEdge = m_graph.GetFirstOriginalEdge( node2 ) + originalEdgeLocal;
-			HeapData data(-1, edge, node2, originalEdgeLocal);
-//			qDebug() << "edge orig =" << edgeData.id << "originalEdge" << originalEdge;
-			if ( !heap->WasInserted( originalEdge ) ) {
-//				qDebug() << "  insert";
-				heap->Insert( originalEdge, edgeData.distance, data );
-			}
-			else if ( (int)edgeData.distance < heap->GetKey( originalEdge ) ) {
-//				qDebug() << "  decrease";
-				heap->DecreaseKey( originalEdge, edgeData.distance );
-				heap->GetData( originalEdge ) = data;
+				const unsigned originalEdgeLocal = m_graph.GetOriginalEdgeSource( edge );
+				const unsigned originalEdge = m_graph.GetFirstOriginalEdge( node2 ) + originalEdgeLocal;
+				assert( !heap->WasInserted( originalEdge ) );
+//			    qDebug() << "edge orig =" << edgeData.id << "originalEdge" << originalEdge;
+				heap->Insert( originalEdge, edgeData.distance, HeapData(-1, edge, node2, originalEdgeLocal) );
 			}
 		}
 	}
@@ -310,29 +320,27 @@ public:
 	}
 
 public:
-	int BidirSearch( const NodeIterator source, const NodeIterator source2, const NodeIterator target, const NodeIterator target2 ) {
-		assert( source < m_graph.GetNumberOfNodes() );
-		assert( source2 < m_graph.GetNumberOfNodes() );
-		assert( target < m_graph.GetNumberOfNodes() );
-		assert( target2 < m_graph.GetNumberOfNodes() );
+	int BidirSearch( const TurnQueryEdge& source, const TurnQueryEdge& target ) {
+		assert( source.source < m_graph.GetNumberOfNodes() );
+		assert( source.target < m_graph.GetNumberOfNodes() );
+		assert( target.source < m_graph.GetNumberOfNodes() );
+		assert( target.target < m_graph.GetNumberOfNodes() );
 
-		qDebug() << source << "->" << source2 << "---" << target2 << "->" << target;
+		qDebug() << source.DebugString().c_str() << "..." << target.DebugString().c_str();
 
 
 		AllowForwardEdge forward;
 		AllowBackwardEdge backward;
-		initHeap( &m_heapForward, source, source2, forward );
-		initHeap( &m_heapBackward, target, target2, backward );
+		initHeap( &m_heapForward, source.source, source.target, source.edgeID, forward );
+		initHeap( &m_heapBackward, target.target, target.source, target.edgeID, backward );
 
 		int targetDistance = std::numeric_limits< int >::max();
 		if (m_heapBackward.Size() == 0 || m_heapForward.Size() == 0)
 			return targetDistance;
-		if (source == target2 && source2 == target) {
+		if ( source == target ) {
 			assert( m_heapBackward.MinKey() == m_heapForward.MinKey() );
 			return m_heapForward.MinKey();
 		}
-
-
 
 		ComputePenaltyForward penaltyForward;
 		ComputePenaltyBackward penaltyBackward;
@@ -355,24 +363,26 @@ public:
 		return targetDistance;
 	}
 
-	int UnidirSearch( const NodeIterator source, const NodeIterator source2, const NodeIterator target, const NodeIterator target2 ) {
-		assert( source < m_graph.GetNumberOfNodes() );
-		assert( source2 < m_graph.GetNumberOfNodes() );
-		assert( target < m_graph.GetNumberOfNodes() );
-		assert( target2 < m_graph.GetNumberOfNodes() );
+	int UnidirSearch( const TurnQueryEdge& source, const TurnQueryEdge& target ) {
+		assert( source.source < m_graph.GetNumberOfNodes() );
+		assert( source.target < m_graph.GetNumberOfNodes() );
+		assert( target.source < m_graph.GetNumberOfNodes() );
+		assert( target.target < m_graph.GetNumberOfNodes() );
+		assert ( m_heapForward.Size() == 0 );
+		assert ( m_heapBackward.Size() == 0 );
 
+//		qDebug() << source.DebugString().c_str() << "..." << target.DebugString().c_str();
 
-//		qDebug() << source << "->" << source2 << "---" << target2 << "->" << target;
 
 		AllowForwardEdge forward;
 		AllowBackwardEdge backward;
-		initHeap( &m_heapForward, source, source2, forward );
-		initHeap( &m_heapBackward, target, target2, backward );
+		initHeap( &m_heapForward, source.source, source.target, source.edgeID, forward );
+		initHeap( &m_heapBackward, target.target, target.source, target.edgeID, backward );
 
 		int targetDistance = std::numeric_limits< int >::max();
-		if (m_heapBackward.Size() == 0 || m_heapForward.Size() == 0)
+		if ( m_heapBackward.Size() == 0 || m_heapForward.Size() == 0 )
 			return targetDistance;
-		if (source == target2 && source2 == target) {
+		if ( source == target ) {
 			assert( m_heapForward.MinKey() == m_heapBackward.MinKey() );
 			return m_heapForward.MinKey();
 		}
@@ -422,6 +432,42 @@ public:
 				origDown = data.parentOrig;
 			} while ( origDown != (unsigned)-1 );
 		}
+	}
+
+	std::string DebugStringPath() {
+		std::stringstream ss;
+
+		ss << "up\n";
+		{
+			unsigned origUp = m_middle.in;
+			do {
+				assert( m_heapForward.WasInserted( origUp ) );
+				const HeapData& heapData = m_heapForward.GetData( origUp );
+				EdgeIterator edge = heapData.parentEdge;
+
+				ss << "\t" << m_heapForward.GetKey( origUp ) << "\t" << m_graph.DebugStringEdge(edge);
+				ss << "\n";
+
+				origUp = heapData.parentOrig;
+			} while ( origUp != (unsigned)-1 );
+		}
+		ss << "\n";
+
+		ss << "down\n";
+		{
+			unsigned origDown = m_middle.out;
+			do {
+				assert( m_heapBackward.WasInserted( origDown ) );
+				const HeapData& heapData = m_heapBackward.GetData( origDown );
+				EdgeIterator edge = heapData.parentEdge;
+
+				ss << "\t" << m_heapBackward.GetKey( origDown ) << "\t" << m_graph.DebugStringEdge(edge);
+				ss << "\n";
+
+				origDown = heapData.parentOrig;
+			} while ( origDown != (unsigned)-1 );
+		}
+		return ss.str();
 	}
 
 	void Clear() {
