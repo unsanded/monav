@@ -33,15 +33,14 @@ class DynamicTurnGraph {
 		typedef unsigned EdgeIterator;
 		typedef _EdgeData EdgeData;
 		typedef _PenaltyData PenaltyData;
+		typedef DynamicTurnGraph< EdgeData, PenaltyData > Self;
 
 		class InputNode {
 			public:
-				unsigned short inDegree;
-				unsigned short outDegree;
 				unsigned firstPenalty;
 				std::string DebugString() const {
 					std::stringstream ss;
-					ss << "inDegree: " << inDegree << ", outDegree: " << outDegree << ", firstPenalty: " << firstPenalty;
+					ss << "firstPenalty: " << firstPenalty;
 					return ss.str();
 				}
 		};
@@ -69,10 +68,44 @@ class DynamicTurnGraph {
 				}
 		};
 
+		class InputPenalty {
+			public:
+				char inDegree;
+				char outDegree;
+				std::vector< PenaltyData > data;
+		};
+
 		DynamicTurnGraph( const std::vector< InputNode > &nodes, const std::vector< InputEdge > &graph,
-				const std::vector< PenaltyData > &penalties ) {
+				const std::vector< InputPenalty > &penalties ) {
 			m_numNodes = nodes.size();
 			m_numEdges = ( EdgeIterator ) graph.size();
+			m_numPenaltyTables = penalties.size();
+
+			std::vector< unsigned > penaltyMap;
+			penaltyMap.reserve( penalties.size() );
+			unsigned penaltySize = 0;
+			for ( unsigned i = 0; i < penalties.size(); ++i )
+			{
+				penaltyMap.push_back(penaltySize);
+				penaltySize += 2 + (unsigned)penalties[i].inDegree * (unsigned)penalties[i].outDegree;
+			}
+			m_penalties.reserve( penaltySize );
+			for ( unsigned i = 0; i < penalties.size(); ++i )
+			{
+				Penalty penalty;
+				const InputPenalty& input = penalties[i];
+				penalty.degree = input.inDegree;
+				m_penalties.push_back( penalty );
+				penalty.degree = input.outDegree;
+				m_penalties.push_back( penalty );
+				assert( input.data.size() == (unsigned)input.inDegree * (unsigned)input.outDegree );
+				for ( unsigned j = 0; j < input.data.size(); ++j ) {
+					penalty.data = input.data[j];
+					m_penalties.push_back( penalty );
+				}
+			}
+
+
 			m_nodes.reserve( m_numNodes );
 			m_nodes.resize( m_numNodes );
 			EdgeIterator edge = 0;
@@ -89,15 +122,16 @@ class DynamicTurnGraph {
 				m_nodes[node].edges = edge - lastEdge;
                 position += m_nodes[node].edges;
 
-				m_nodes[node].inDegree = nodes[node].inDegree;
-				m_nodes[node].outDegree = nodes[node].outDegree;
-				m_nodes[node].firstPenalty = nodes[node].firstPenalty;
+                assert( nodes[node].firstPenalty < penaltyMap.size() );
+				m_nodes[node].firstPenalty = penaltyMap[nodes[node].firstPenalty];
                 m_nodes[node].firstOriginalEdge = originalPosition;
-				sumInDegree += nodes[node].inDegree;
-				sumOutDegree += nodes[node].outDegree;
+                unsigned inDegree = penalties[ nodes[node].firstPenalty ].inDegree;
+                unsigned outDegree = penalties[ nodes[node].firstPenalty ].outDegree;
+				sumInDegree += inDegree;
+				sumOutDegree += outDegree;
 				// Summing up the indegree(outdegre) allows to compute a globally unique
 				// original-edge-id for incoming(outgoing) edges, max(in,out) allows to do both.
-				originalPosition += std::max( nodes[node].inDegree, nodes[node].outDegree );
+				originalPosition += std::max( inDegree, outDegree );
 			}
 			assert( m_numEdges == position );
 			m_numOriginalEdges = originalPosition;
@@ -114,11 +148,6 @@ class DynamicTurnGraph {
 					m_edges[i].data = graph[edge].data;
 					edge++;
 				}
-			}
-			m_penalties.reserve( penalties.size() );
-			for ( size_t i = 0; i < penalties.size(); ++i )
-			{
-				m_penalties.push_back( Penalty( penalties[i] ) );
 			}
 		}
 
@@ -186,42 +215,95 @@ class DynamicTurnGraph {
         unsigned GetOriginalInDegree( const NodeIterator &n ) const
         {
         	assert( n < m_nodes.size() );
-        	return m_nodes[n].inDegree;
+        	unsigned i = m_nodes[n].firstPenalty;
+        	assert ( i < m_penalties.size() );
+        	return m_penalties[i].degree;
         }
 
         unsigned GetOriginalOutDegree( const NodeIterator &n ) const
         {
         	assert( n < m_nodes.size() );
-        	return m_nodes[n].outDegree;
-        }
-
-
-        const PenaltyData &GetPenaltyData( const NodeIterator& n, unsigned short originalEdgeIn, unsigned short originalEdgeOut ) const
-        {
-        	assert( n < m_nodes.size() );
-            unsigned first = m_nodes[n].firstPenalty;
-            unsigned originalOutDegree = m_nodes[n].outDegree;
-            assert( originalEdgeIn < m_nodes[n].inDegree );
-            if ( originalEdgeOut >= originalOutDegree ) {
-            	qDebug() << n << originalEdgeOut << originalOutDegree;
-            }
-            assert( originalEdgeOut < originalOutDegree );
-            assert( first + (originalEdgeIn * originalOutDegree) + originalEdgeOut < m_penalties.size() );
-            return m_penalties[ first + (originalEdgeIn * originalOutDegree) + originalEdgeOut ].data;
-        }
-
-        unsigned GetFirstPenalty( const NodeIterator& n ) const {
-        	assert( n < m_nodes.size() );
-            return m_nodes[n].firstPenalty;
-        }
-
-        unsigned GetNumberOfPenalties() const {
-        	return m_penalties.size();
-        }
-
-        const PenaltyData &GetPenaltyDataWithIndex( unsigned i ) const {
+        	unsigned i = m_nodes[n].firstPenalty + 1;
         	assert ( i < m_penalties.size() );
-        	return m_penalties[i].data;
+        	return m_penalties[i].degree;
+        }
+
+protected:
+		struct Penalty
+		{
+			union {
+				PenaltyData data;  // penalty data
+				char degree; // degree
+			};
+		};
+public:
+
+        class PenaltyTable {
+        	friend class DynamicTurnGraph;
+        private:
+        	unsigned inDegree;
+        	unsigned outDegree;
+        	typename std::vector< Penalty >::const_iterator table;
+        public:
+        	PenaltyTable( const typename std::vector< Penalty >::const_iterator& it ) {
+        		table = it;
+        		inDegree = table++->data;
+        		outDegree = table++->data;
+        	}
+        	unsigned GetInDegree() const {
+        		return inDegree;
+        	}
+        	unsigned GetOutDegree() const {
+        		return outDegree;
+        	}
+        	const PenaltyData &GetData(unsigned in, unsigned out) const {
+        		assert( in < inDegree );
+        		assert( out < outDegree );
+        		return ( table + in * outDegree + out )->data;
+        	}
+
+            std::string DebugString() const {
+            	std::stringstream ss;
+            	for ( unsigned out = 0; out < outDegree; ++out ) {
+            		ss << "\t" << out;
+            	}
+            	ss << "\n";
+            	for ( unsigned in = 0; in < inDegree; ++in )
+            	{
+            		ss << in;
+            		for ( unsigned out = 0; out < outDegree; ++out ) {
+            			ss << "\t" << (int)GetData( in, out );
+            		}
+            		ss << "\n";
+            	}
+            	return ss.str();
+            }
+
+
+
+        };
+
+//        const PenaltyData &GetPenaltyData( const NodeIterator& n, unsigned short originalEdgeIn, unsigned short originalEdgeOut ) const
+//        {
+//        	assert( n < m_nodes.size() );
+//            unsigned first = m_nodes[n].firstPenalty + 1;
+//            unsigned originalOutDegree = m_penalties[ first++ ].degree;
+//            if ( originalEdgeIn >= m_penalties[ m_nodes[n].firstPenalty ].degree ) {
+//            	qDebug() << n << originalEdgeIn << m_nodes[n].inDegree;
+//            }
+//            assert( originalEdgeIn < m_penalties[ m_nodes[n].firstPenalty ].degree );
+//            if ( originalEdgeOut >= originalOutDegree ) {
+//            	qDebug() << n << originalEdgeOut << originalOutDegree;
+//            }
+//            assert( originalEdgeOut < originalOutDegree );
+//            assert( first + (originalEdgeIn * originalOutDegree) + originalEdgeOut < m_penalties.size() );
+//            return m_penalties[ first + (originalEdgeIn * originalOutDegree) + originalEdgeOut ].data;
+//        }
+
+        PenaltyTable GetPenaltyTable( const NodeIterator& n ) const {
+        	assert( n < m_nodes.size() );
+
+        	return PenaltyTable( m_penalties.begin() + m_nodes[n].firstPenalty );
         }
 
 		EdgeIterator BeginEdges( const NodeIterator &n ) const
@@ -321,6 +403,143 @@ class DynamicTurnGraph {
 			return EndEdges( from );
 		}
 
+		bool WriteToFile( QString filename ) const {
+
+			FileStream data( filename );
+
+			if ( !data.open( QIODevice::WriteOnly ) )
+				return false;
+
+			unsigned numNodes = m_numNodes;
+			unsigned numEdges = m_numEdges;
+			unsigned numPenaltyTables = m_numPenaltyTables;
+			data << numNodes << numEdges << numPenaltyTables;
+
+			QHash< unsigned, unsigned > penaltyMap;
+			unsigned tableCounter = 0;
+			for ( typename std::vector< Penalty >::const_iterator it = m_penalties.begin(); it != m_penalties.end(); ) {
+				penaltyMap.insert( it - m_penalties.begin(), tableCounter++ );
+				unsigned inDegree = it->degree;
+				++it;
+				unsigned outDegree = it->degree;
+				++it;
+				unsigned size = inDegree * outDegree;
+				data << qint8(inDegree) << qint8(outDegree);
+				for ( unsigned i = 0; i < size; ++i, ++it ) {
+					data << qint16( it->data );
+				}
+			}
+
+
+			for ( NodeID u = 0; u < GetNumberOfNodes(); ++u )
+			{
+				const Node& node = m_nodes[u];
+				QHash< unsigned, unsigned >::iterator it = penaltyMap.find( node.firstPenalty );
+				if ( it == penaltyMap.end() ) {
+					qFatal( "Data corruption." );
+					exit(-1);
+				}
+				unsigned firstPenalty = it.value();
+				data << firstPenalty;
+			}
+
+			for ( unsigned source = 0; source < GetNumberOfNodes(); ++source )
+			{
+				std::vector< InputEdge > edges;
+				for ( EdgeIterator e = BeginEdges( source ), ee = EndEdges( source ); e != ee; ++e ) {
+					InputEdge edge;
+					edge.target = GetTarget( e );
+					edge.originalEdgeSource = GetOriginalEdgeSource( e );
+					edge.originalEdgeTarget = GetOriginalEdgeTarget( e );
+					edge.data = GetEdgeData( e );
+					edges.push_back( edge );
+				}
+				std::sort( edges.begin(), edges.end() );
+				for ( unsigned i = 0; i < edges.size(); ++i )
+				{
+					const InputEdge& edge = edges[i];
+					unsigned target = edge.target;
+					qint8 originalEdgeSource = edge.originalEdgeSource;
+					qint8 originalEdgeTarget = edge.originalEdgeTarget;
+
+					data << source << target << originalEdgeSource << originalEdgeTarget;
+					edge.data.Serialize( &data );
+				}
+			}
+			return true;
+		}
+
+		static Self* ReadFromFile( QString filename ) {
+			FileStream data( filename );
+
+			if ( !data.open( QIODevice::ReadOnly ) )
+				return NULL;
+
+			unsigned numNodes;
+			unsigned numEdges;
+			unsigned numPenaltyTables;
+			data >> numNodes >> numEdges >> numPenaltyTables;
+
+			if ( data.status() == QDataStream::ReadPastEnd ) {
+				qCritical() << "TurnContractor::ReadGraphFromFile(): Corrupted Graph Data";
+				exit(1);
+			}
+
+			std::vector< InputNode > nodes;
+			std::vector< InputEdge > edges;
+			std::vector< InputPenalty > penalties;
+
+			nodes.reserve( numNodes );
+			edges.reserve( numEdges );
+			penalties.reserve( numPenaltyTables );
+			penalties.resize( numPenaltyTables );
+			for ( unsigned i = 0; i < numPenaltyTables; ++i )
+			{
+				qint8 inDegree, outDegree;
+				data >> inDegree >> outDegree;
+				penalties[i].inDegree = inDegree;
+				penalties[i].outDegree = outDegree;
+				unsigned size = inDegree * outDegree;
+				penalties[i].data.reserve( size );
+				for ( unsigned j = 0; j < size; ++j ) {
+					qint16 penalty;
+					data >> penalty;
+					penalties[i].data.push_back( penalty );
+				}
+			}
+
+			for ( NodeID u = 0; u < numNodes; ++u )
+			{
+				unsigned firstPenalty;
+				data >> firstPenalty;
+				InputNode node;
+				node.firstPenalty = firstPenalty;
+				nodes.push_back( node );
+			}
+
+
+			for ( unsigned i = 0; i < numEdges; ++i ) {
+				unsigned source, target;
+				qint8 originalEdgeSource, originalEdgeTarget;
+				data >> source >> target >> originalEdgeSource >> originalEdgeTarget;
+
+				InputEdge edge;
+				edge.source = source;
+				edge.target = target;
+				edge.originalEdgeSource = originalEdgeSource;
+				edge.originalEdgeTarget = originalEdgeTarget;
+				edge.data.Deserialize( &data );
+
+				if ( data.status() == QDataStream::ReadPastEnd ) {
+					qCritical() << "TurnContractor::ReadGraphFromFile(): Corrupted Graph Data";
+					exit(1);
+				}
+				edges.push_back( edge );
+			}
+			Self* graph = new Self( nodes, edges, penalties );
+			return graph;
+		}
+
 		//searches for a specific edge
 		EdgeIterator FindOriginalEdge( const NodeIterator &from, const unsigned originalEdgeSource, bool forward ) const
 		{
@@ -338,26 +557,9 @@ class DynamicTurnGraph {
 		}
 
 
-        std::string DebugStringPenaltyData( const NodeIterator& n ) const {
-        	std::stringstream ss;
-        	unsigned inDegree = GetOriginalInDegree( n );
-        	unsigned outDegree = GetOriginalOutDegree( n );
-        	for ( unsigned out = 0; out < outDegree; ++out ) {
-        		ss << "\t" << out;
-        	}
-        	ss << "\n";
-            unsigned delta = m_nodes[n].firstPenalty;
-        	for ( unsigned in = 0; in < inDegree; ++in )
-        	{
-        		ss << in;
-        		for ( unsigned out = 0; out < outDegree; ++out ) {
-        			int penalty = m_penalties[ delta + (in * outDegree) + out ].data;
-        			assert( penalty == (int)GetPenaltyData( n, in, out ) );
-        			ss << "\t" << penalty;
-        		}
-        		ss << "\n";
-        	}
-        	return ss.str();
+        std::string DebugStringPenaltyTable( const NodeIterator& n ) const {
+        	PenaltyTable table = GetPenaltyTable( n );
+        	return table.DebugString();
         }
 
         std::string DebugStringEdge( const EdgeIterator& e ) const {
@@ -367,7 +569,7 @@ class DynamicTurnGraph {
         	std::stringstream ss;
         	ss << "edges of node " << n << ":\n";
         	for ( EdgeIterator edge =  BeginEdges( n ); edge != EndEdges( n ); ++edge ) {
-        		ss << DebugStringEdge(edge) << "\n";
+        		ss << "[" << edge << "] " << DebugStringEdge(edge) << "\n";
         	}
         	return ss.str();
         }
@@ -388,9 +590,7 @@ class DynamicTurnGraph {
 			//index of the first edge
 			EdgeIterator firstEdge;
 			//amount of edges
-			unsigned short edges;
-			unsigned char inDegree;
-			unsigned char outDegree;
+			unsigned edges;
 			unsigned firstPenalty;
 			EdgeIterator firstOriginalEdge;
 		};
@@ -407,15 +607,10 @@ class DynamicTurnGraph {
 			}
 		};
 
-		struct Penalty
-		{
-			explicit Penalty( const PenaltyData &d ) : data(d) {}
-			PenaltyData data;
-		};
-
 		NodeIterator m_numNodes;
 		EdgeIterator m_numEdges;
 		EdgeIterator m_numOriginalEdges;
+		unsigned m_numPenaltyTables;
 
 		std::vector< Node > m_nodes;
 		std::vector< Edge > m_edges;

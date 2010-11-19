@@ -54,6 +54,7 @@ public:
 	typedef typename Graph::EdgeIterator EdgeIterator;
 	typedef typename Graph::EdgeData EdgeData;
 	typedef typename Graph::PenaltyData PenaltyData;
+	typedef typename Graph::PenaltyTable PenaltyTable;
 
 	TurnQuery(const Graph& graph) : m_graph( graph ), m_heapForward( graph.GetNumberOfOriginalEdges() ),
 			m_heapBackward( graph.GetNumberOfOriginalEdges() ) {}
@@ -93,15 +94,27 @@ public:
 
 	class ComputePenaltyForward {
 		public:
-			PenaltyData operator()( const Graph& g, const NodeIterator& n, unsigned short o1, unsigned short o2 ) const {
-				return g.GetPenaltyData( n, o1, o2 );
+			PenaltyData operator()( const PenaltyTable& t, unsigned o1, unsigned o2 ) const {
+				return t.GetData( o1, o2 );
+			}
+			unsigned GetInDegree( const PenaltyTable& t ) const {
+				return t.GetInDegree();
+			}
+			unsigned GetOutDegree( const PenaltyTable& t ) const {
+				return t.GetOutDegree();
 			}
 	};
 	class ComputePenaltyBackward {
 		public:
-			PenaltyData operator()( const Graph& g, const NodeIterator& n, unsigned short o1, unsigned short o2 ) const {
-				return g.GetPenaltyData( n, o2, o1 );
-			}
+		PenaltyData operator()( const PenaltyTable& t, unsigned o1, unsigned o2 ) const {
+			return t.GetData( o2, o1 );
+		}
+		unsigned GetInDegree( const PenaltyTable& t ) const {
+			return t.GetOutDegree();
+		}
+		unsigned GetOutDegree( const PenaltyTable& t ) const {
+			return t.GetInDegree();
+		}
 	};
 
 
@@ -141,7 +154,8 @@ public:
 	};
 
 	template <class EdgeAllowed>
-	void initHeap( Heap* heap, const NodeIterator node, const NodeIterator node2, const unsigned edgeID, const EdgeAllowed& edgeAllowed ) {
+	void initHeap( Heap* heap, const NodeIterator node, const NodeIterator node2, const unsigned edgeID,
+			const EdgeAllowed& edgeAllowed ) {
 //		qDebug() << m_graph.DebugStringEdgesOf( node ).c_str();
 		bool success = false;
 		for ( EdgeIterator edge = m_graph.BeginEdges( node ), edgeEnd = m_graph.EndEdges( node ); edge < edgeEnd; ++edge ) {
@@ -183,7 +197,6 @@ public:
 	template< class EdgeAllowed, class StallEdgeAllowed, class PenaltyFunction, class MiddleFunction >
 	unsigned computeStep( Heap* heapForward, Heap* heapBackward, const EdgeAllowed& edgeAllowed,
 		const StallEdgeAllowed& stallEdgeAllowed,
-		unsigned (Graph::*degIn)( const NodeIterator &n )const, unsigned (Graph::*degOut)( const NodeIterator &n )const,
 		const PenaltyFunction& penaltyFunction, const MiddleFunction& middleFunction,  int* targetDistance ) {
 
 		const unsigned originalEdge = heapForward->DeleteMin();
@@ -194,14 +207,16 @@ public:
 		if ( StallOnDemand && data.stalled )
 			return originalEdge;
 
+		PenaltyTable penaltyTable = m_graph.GetPenaltyTable( data.node );
+
 		{
 //			qDebug() << "check meeting";
-			unsigned deg = (m_graph.*degOut)( data.node );
+			unsigned deg = penaltyFunction.GetOutDegree( penaltyTable );
 			unsigned firstOriginal = m_graph.GetFirstOriginalEdge( data.node );
 			for ( unsigned out = 0; out < deg; ++out ) {
 				const unsigned orig = firstOriginal + out;
 				if ( heapBackward->WasInserted( orig ) && !heapBackward->GetData( orig ).stalled ) {
-					PenaltyData penalty = penaltyFunction(m_graph, data.node, data.originalEdge, out);
+					PenaltyData penalty = penaltyFunction(penaltyTable, data.originalEdge, out);
 					if (penalty == RESTRICTED_TURN)
 						continue;
 					const int newDistance = heapBackward->GetKey( orig ) + penalty + distance;
@@ -221,7 +236,7 @@ public:
 
 //		qDebug() << "orig in" << m_graph.GetOriginalInDegree( data.node ) << "out" << m_graph.GetOriginalOutDegree( data.node );
 //		qDebug() << m_graph.DebugStringEdgesOf( data.node ).c_str();
-//		qDebug() << m_graph.DebugStringPenaltyData( data.node ).c_str();
+//		qDebug() << m_graph.DebugStringPenaltyTable( data.node ).c_str();
 
 		for ( EdgeIterator edge = m_graph.BeginEdges( data.node ), edgeEnd = m_graph.EndEdges( data.node ); edge < edgeEnd; ++edge ) {
 			const EdgeData& edgeData = m_graph.GetEdgeData( edge );
@@ -232,11 +247,13 @@ public:
 
 			if ( StallOnDemand && stallEdgeAllowed( edgeData.forward, edgeData.backward ) ) {
 				int shorterDistance = std::numeric_limits<int>::max();
-				unsigned deg = (m_graph.*degIn)( to );
+				PenaltyTable toPenaltyTable = m_graph.GetPenaltyTable( to );
+
+				unsigned deg = penaltyFunction.GetInDegree( toPenaltyTable );
 				for ( unsigned in = 0; in < deg; ++in ) {
 					const unsigned orig = firstOriginalTo + in;
 					if ( heapForward->WasInserted( orig ) ) {
-						PenaltyData penalty = penaltyFunction( m_graph, to, in, originalEdgeLocalTo );
+						PenaltyData penalty = penaltyFunction( toPenaltyTable, in, originalEdgeLocalTo );
 						if ( penalty == RESTRICTED_TURN ) continue;
 						shorterDistance = std::min( shorterDistance, heapForward->GetKey( orig ) + (int)penalty + (int)edgeData.distance );
 					}
@@ -254,6 +271,7 @@ public:
 						const StallQueueItem& stallItem = m_stallQueue.front();
 						m_stallQueue.pop();
 						const int stallDistance = stallItem.distance;
+						PenaltyTable stallPenaltyTable = m_graph.GetPenaltyTable( stallItem.node );
 
 						//iterate over outgoing edges
 						for ( EdgeIterator stallEdge = m_graph.BeginEdges( stallItem.node ), stallEdgeEnd = m_graph.EndEdges( stallItem.node ); stallEdge < stallEdgeEnd; ++stallEdge ) {
@@ -267,7 +285,7 @@ public:
 								continue;
 							if ( heapForward->GetData( stallOrig ).stalled == true )
 								continue;
-							PenaltyData penalty = penaltyFunction( m_graph, stallItem.node, stallItem.originalEdge, m_graph.GetOriginalEdgeSource( stallEdge ) );
+							PenaltyData penalty = penaltyFunction( stallPenaltyTable, stallItem.originalEdge, m_graph.GetOriginalEdgeSource( stallEdge ) );
 							if ( penalty == RESTRICTED_TURN )
 								continue;
 
@@ -291,7 +309,7 @@ public:
 
 			if ( edgeAllowed( edgeData.forward, edgeData.backward ) ) {
 //				qDebug() << "edge allowed" << m_graph.DebugStringEdge( edge ).c_str() << "||" << data.node << data.originalEdge << m_graph.GetOriginalEdgeSource( edge );
-				PenaltyData penalty = penaltyFunction( m_graph, data.node, data.originalEdge, m_graph.GetOriginalEdgeSource( edge ) );
+				PenaltyData penalty = penaltyFunction( penaltyTable, data.originalEdge, m_graph.GetOriginalEdgeSource( edge ) );
 //				qDebug() << "penalty" << penalty;
 				if ( penalty == RESTRICTED_TURN )
 					continue;
@@ -326,7 +344,9 @@ public:
 		assert( target.source < m_graph.GetNumberOfNodes() );
 		assert( target.target < m_graph.GetNumberOfNodes() );
 
+		#ifndef NDEBUG
 		qDebug() << source.DebugString().c_str() << "..." << target.DebugString().c_str();
+		#endif
 
 
 		AllowForwardEdge forward;
@@ -350,12 +370,10 @@ public:
 
 			if ( m_heapForward.Size() > 0 )
 				computeStep( &m_heapForward, &m_heapBackward, forward, backward,
-					&Graph::GetOriginalInDegree, &Graph::GetOriginalOutDegree,
 					penaltyForward, middleForward, &targetDistance );
 
 			if ( m_heapBackward.Size() > 0 )
 				computeStep( &m_heapBackward, &m_heapForward, backward, forward,
-					&Graph::GetOriginalOutDegree, &Graph::GetOriginalInDegree,
 					penaltyBackward, middleBackward, &targetDistance );
 
 		}
@@ -393,8 +411,7 @@ public:
 		while ( m_heapForward.Size() > 0 ) {
 			++numSettled;
 			computeStep( &m_heapForward, &m_heapBackward, forward, backward,
-				&Graph::GetOriginalInDegree, &Graph::GetOriginalOutDegree, penaltyForward,
-				middleForward, &targetDistance );
+				penaltyForward, middleForward, &targetDistance );
 		}
 //		qDebug() << "dist" << targetDistance;
 //		exit(1);

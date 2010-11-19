@@ -117,7 +117,7 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 		if ( doContract ) {
 			contractor->Run();
 			qDebug() << "Writing graph to file ...";
-			contractor->WriteGraphToFile( fileInDirectory( dir, "CHT Dynamic Graph") );
+			contractor->GetGraph().WriteToFile( fileInDirectory( dir, "CHT Dynamic Graph") );
 		}
 		delete contractor;
 	}
