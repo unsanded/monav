@@ -59,7 +59,7 @@ protected:
 public:
 
 	bool plainDijkstra(QString dir, const TurnContractor& contractor) {
-		const Graph& graph = contractor.graph();
+		const Graph& graph = contractor.GetGraph();
 		unsigned numNodes = graph.GetNumberOfNodes();
 
 		unsigned numQueries = 1000;
@@ -150,7 +150,7 @@ public:
 	}
 
 	bool chtQuery(IImporter* importer, QString dir) {
-		const Graph* graph = TurnContractor::ReadGraphFromFile( fileInDirectory( dir, "CHT Dynamic Graph") );
+		const Graph* graph = Graph::ReadFromFile( fileInDirectory( dir, "CHT Dynamic Graph") );
 
 //		if ( false ) {
 //			std::vector< IImporter::RoutingNode > inputNodes;
@@ -172,7 +172,7 @@ public:
 //			std::vector< char >().swap( inDegree );
 //			std::vector< char >().swap( outDegree );
 //			std::vector< double >().swap( penalties );
-//			const Graph& plainGraph = contractor->graph();
+//			const Graph& plainGraph = contractor->GetGraph();
 //			TurnQuery<Graph, false> plainQuery(plainGraph);
 //
 //			qDebug() << "check shortcuts";
@@ -250,6 +250,12 @@ public:
 				return false;
 
 			data >> numQueries;
+
+			if ( data.status() == QDataStream::ReadPastEnd ) {
+				qCritical() << "TurnExperiments::cthQuery(): Corrupted Demands Data";
+				return false;
+			}
+
 			qDebug() << numQueries << "queries";
 			demands.reserve( numQueries );
 
@@ -259,7 +265,15 @@ public:
 				data >> demand.source.source >> demand.source.target >> demand.source.edgeID;
 				data >> demand.target.source >> demand.target.target >> demand.target.edgeID;
 				data >> demand.distance;
+
+				if ( data.status() == QDataStream::ReadPastEnd ) {
+					qCritical() << "TurnExperiments::cthQuery(): Corrupted Demands Data";
+					return false;
+				}
+
 				demands.push_back( demand );
+
+
 			}
 		}
 //		if ( false ) {
@@ -303,7 +317,7 @@ public:
 				qDebug() << demand.source.DebugString().c_str() << "..." << demand.target.DebugString().c_str()
 						<< ": CHT" << distance << "plain" << demand.distance;
 
-
+#ifndef NDEBUG
 				std::vector< IImporter::RoutingNode > inputNodes;
 				std::vector< IImporter::RoutingEdge > inputEdges;
 				std::vector< char > inDegree, outDegree;
@@ -325,9 +339,9 @@ public:
 				std::vector< char >().swap( inDegree );
 				std::vector< char >().swap( outDegree );
 				std::vector< double >().swap( penalties );
-				const Graph& plainGraph = contractor->graph();
+				const Graph& plainGraph = contractor->GetGraph();
 				qDebug() << plainGraph.DebugStringEdgesOf( demand.target.target ).c_str();
-				qDebug() << plainGraph.DebugStringPenaltyData( demand.target.target ).c_str();
+				qDebug() << plainGraph.DebugStringPenaltyTable( demand.target.target ).c_str();
 				TurnQuery<Graph, false> plainQuery(plainGraph);
 				int plainDistanceUnidir = plainQuery.UnidirSearch( demand.source, demand.target );
 				qDebug() << plainQuery.DebugStringPath().c_str();
@@ -388,6 +402,7 @@ public:
 
 
 				delete contractor;
+#endif
 				exit(1);
 			}
 			query.Clear();

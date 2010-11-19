@@ -28,6 +28,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include "dynamicturngraph.h"
 #include "../contractionhierarchies/binaryheap.h"
 #include "utils/config.h"
+#include "utils/bithelpers.h"
 #include "turnquery.h"
 
 class TurnContractor {
@@ -62,6 +63,24 @@ class TurnContractor {
 				else ss << " orig=" << id;
 				return ss.str();
 			}
+
+			void Serialize( FileStream *data ) const {
+				unsigned t1; bool t2;
+				t1 = distance;  *data << t1;
+				t2 = shortcut;  *data << t2;
+				t2 = forward;   *data << t2;
+				t2 = backward;  *data << t2;
+				t1 = id;        *data << t1;
+			}
+			void Deserialize( FileStream *data ) {
+				unsigned t1; bool t2;
+				*data >> t1;  distance = t1;
+				*data >> t2;  shortcut = t2;
+				*data >> t2;  forward = t2;
+				*data >> t2;  backward = t2;
+				*data >> t1;  id = t1;
+			}
+
 		} data;
 
 		struct _HeapData {
@@ -77,11 +96,12 @@ class TurnContractor {
         static const _PenaltyData RESTRICTED_TURN = 255;
         typedef short int GammaValue;
         static const GammaValue RESTRICTED_NEIGHBOUR = SHRT_MIN;
-        static const NodeID SPECIAL_NODE = -1;
+        static const unsigned SPECIAL_NODE = 1;
 		typedef DynamicTurnGraph< _EdgeData, _PenaltyData > _DynamicGraph;
 		typedef BinaryHeap< NodeID, NodeID, int, _HeapData > _Heap;
 		typedef _DynamicGraph::InputNode _ImportNode;
 		typedef _DynamicGraph::InputEdge _ImportEdge;
+		typedef _DynamicGraph::InputPenalty _ImportPenalty;
 
 		struct _ThreadData {
 			_Heap heap;
@@ -273,51 +293,82 @@ class TurnContractor {
 			std::sort( edges.begin(), edges.end() );
 
             std::vector< _ImportNode > nodes;
-			std::vector< _PenaltyData > penalties;
+			std::vector< _ImportPenalty > penalties;
 			nodes.reserve( numNodes );
-			penalties.reserve( inputPenalties.size() );
-			unsigned penaltyPosition = 0;
+			penalties.reserve( numNodes );
+			penalties.resize( numNodes );
+
+			PenaltyType minPenalty = std::numeric_limits<PenaltyType>::max();
+			PenaltyType maxPenalty = std::numeric_limits<PenaltyType>::min();
+			for ( typename std::vector< PenaltyType >::const_iterator it = inputPenalties.begin(), end = inputPenalties.end(); it != end; ++it ) {
+				if (*it < 0) continue;
+				minPenalty = std::min( minPenalty, *it );
+				maxPenalty = std::max( maxPenalty, *it );
+			}
+
+			std::vector< int > penaltyEncoderTable;
+			penaltyEncoderTable.push_back( ( minPenalty * 10 ) + 0.5 );
+			compute_encoder_table( &penaltyEncoderTable, ( maxPenalty * 10 ) + 0.5, 0.2 /* 20% error */ );
+			qDebug() << "Penalty encoder table size:" << penaltyEncoderTable.size();
+
+
+			typename std::vector< PenaltyType >::const_iterator penaltyIter = inputPenalties.begin();
 			for ( NodeID u = 0; u < numNodes; ++u ) {
 				_ImportNode node;
-				node.inDegree = inDegree[u];
-				node.outDegree = outDegree[u];
-				node.firstPenalty = penaltyPosition;
-				penaltyPosition += node.inDegree * node.outDegree;
+				node.firstPenalty = u;
+				penalties[u].inDegree = inDegree[u];
+				penalties[u].outDegree = outDegree[u];
+				unsigned penaltySize = (unsigned)inDegree[u] * (unsigned)outDegree[u];
+				penalties[u].data.reserve( penaltySize );
+				for ( unsigned i = 0; i < penaltySize; ++i, ++penaltyIter ) {
+					assert( penaltyIter != inputPenalties.end() );
+					_PenaltyData p;
+					if (*penaltyIter < 0) {
+						p = RESTRICTED_TURN;
+					} else {
+						p = table_encode( ( *penaltyIter * 10 ) + 0.5, penaltyEncoderTable );
+						if (u == SPECIAL_NODE) qDebug() << p << *penaltyIter;
+					}
+					penalties[u].data.push_back( p );
+				}
+
 //				if (node.inDegree + node.outDegree > 15) qDebug() << u << node.inDegree << node.outDegree;
 				nodes.push_back( node );
 			}
+			assert( penaltyIter == inputPenalties.end() );
 
-//			{
-//				unsigned n = SPECIAL_NODE;
-//				unsigned begin = 0;
-//				for ( unsigned u = 0; u < n; ++u ) {
-//					begin += inDegree[u] * outDegree[u];
-//				}
-//				std::stringstream ss;
-//				for ( unsigned out = 0; out < outDegree[n]; ++out ) {
-//					ss << "\t" << out;
-//				}
-//				ss << "\n";
-//				for ( unsigned in = 0; in < inDegree[n]; ++in ) {
-//					ss << in;
-//					for ( unsigned out = 0; out < outDegree[n]; ++out ) {
-//						ss << "\t" << inputPenalties[ begin + in * outDegree[n] + out ];
-//					}
-//					ss << "\n";
-//				}
-//				qDebug() << ss.str().c_str();
-//			}
-
-			for ( typename std::vector< PenaltyType >::const_iterator i = inputPenalties.begin(), e = inputPenalties.end(); i != e; ++i ) {
-				penalties.push_back(*i < 0 ? RESTRICTED_TURN : (int)( *i + 0.5 ) * 10 );
+			if ( SPECIAL_NODE >= 0 ) {
+				unsigned n = SPECIAL_NODE;
+				unsigned begin = 0;
+				for ( unsigned u = 0; u < n; ++u ) {
+					begin += inDegree[u] * outDegree[u];
+				}
+				std::stringstream ss;
+				for ( int out = 0; out < outDegree[n]; ++out ) {
+					ss << "\t" << out;
+				}
+				ss << "\n";
+				for ( int in = 0; in < inDegree[n]; ++in ) {
+					ss << in;
+					for ( int out = 0; out < outDegree[n]; ++out ) {
+						ss << "\t" << inputPenalties[ begin + in * outDegree[n] + out ];
+					}
+					ss << "\n";
+				}
+				qDebug() << ss.str().c_str();
 			}
-			assert( penalties.size() == penaltyPosition );
+
+			assert( penalties.size() == numNodes );
 
 			_graph = new _DynamicGraph( nodes, edges, penalties );
 
+			if ( SPECIAL_NODE >= 0 ) {
+				qDebug() << _graph->DebugStringPenaltyTable( SPECIAL_NODE ).c_str();
+			}
+
 			std::vector< _ImportNode >().swap( nodes );
             std::vector< _ImportEdge >().swap( edges );
-            std::vector< _PenaltyData >().swap( penalties );
+            std::vector< _ImportPenalty >().swap( penalties );
 
 			_ComputeGammaTable();
 
@@ -331,7 +382,7 @@ class TurnContractor {
 			const NodeID numberOfNodes = _graph->GetNumberOfNodes();
 			_LogData log;
 
-			omp_set_num_threads(1);
+//			omp_set_num_threads(2);
 			int maxThreads = omp_get_max_threads();
 			std::vector < _ThreadData* > threadData;
 			for ( int threadNum = 0; threadNum < maxThreads; ++threadNum ) {
@@ -601,124 +652,8 @@ class TurnContractor {
 			list = _witnessList;
 		}
 
-		const DynamicGraph& graph() const {
+		const DynamicGraph& GetGraph() const {
 			return *_graph;
-		}
-
-		bool WriteGraphToFile( QString filename ) const {
-
-			FileStream data( filename );
-
-			if ( !data.open( QIODevice::WriteOnly ) )
-				return false;
-
-			unsigned numNodes = _graph->GetNumberOfNodes();
-			unsigned numEdges = _graph->GetNumberOfEdges();
-			unsigned numPenalties = _graph->GetNumberOfPenalties();
-			data << numNodes << numEdges << numPenalties;
-
-			for ( NodeID u = 0; u < _graph->GetNumberOfNodes(); ++u )
-			{
-				qint8 inDegree = _graph->GetOriginalInDegree( u );
-				qint8 outDegree = _graph->GetOriginalOutDegree( u );
-				unsigned firstPenalty = _graph->GetFirstPenalty( u );
-				data << inDegree << outDegree << firstPenalty;
-			}
-
-			for ( unsigned source = 0; source < _graph->GetNumberOfNodes(); ++source )
-			{
-				std::vector< _ImportEdge > edges;
-				for ( _DynamicGraph::EdgeIterator e = _graph->BeginEdges( source ), ee = _graph->EndEdges( source ); e != ee; ++e ) {
-					_ImportEdge edge;
-					edge.target = _graph->GetTarget( e );
-					edge.originalEdgeSource = _graph->GetOriginalEdgeSource( e );
-					edge.originalEdgeTarget = _graph->GetOriginalEdgeTarget( e );
-					edge.data = _graph->GetEdgeData( e );
-					edges.push_back( edge );
-				}
-				std::sort( edges.begin(), edges.end() );
-				for ( unsigned i = 0; i < edges.size(); ++i )
-				{
-					const _ImportEdge& edge = edges[i];
-					unsigned target = edge.target;
-					qint8 originalEdgeSource = edge.originalEdgeSource;
-					qint8 originalEdgeTarget = edge.originalEdgeTarget;
-
-					unsigned distance = edge.data.distance;
-					bool shortcut = edge.data.shortcut;
-					bool forward = edge.data.forward;
-					bool backward = edge.data.backward;
-					unsigned middle_id = edge.data.id;
-					data << source << target << originalEdgeSource << originalEdgeTarget;
-					data << distance << shortcut << forward << backward << middle_id;
-				}
-			}
-			for ( unsigned i = 0; i < _graph->GetNumberOfPenalties(); ++i ) {
-				int penalty = _graph->GetPenaltyDataWithIndex( i );
-				data << penalty;
-			}
-			return true;
-		}
-
-		static _DynamicGraph* ReadGraphFromFile( QString filename ) {
-			FileStream data( filename );
-
-			if ( !data.open( QIODevice::ReadOnly ) )
-				return NULL;
-
-			std::vector< _ImportNode > nodes;
-			std::vector< _ImportEdge > edges;
-			std::vector< _PenaltyData > penalties;
-
-			unsigned numNodes;
-			unsigned numEdges;
-			unsigned numPenalties;
-			data >> numNodes >> numEdges >> numPenalties;
-			nodes.reserve( numNodes );
-			edges.reserve( numEdges );
-			penalties.reserve( numPenalties );
-
-			for ( NodeID u = 0; u < numNodes; ++u )
-			{
-				qint8 inDegree, outDegree;
-				unsigned firstPenalty;
-				data >> inDegree >> outDegree >> firstPenalty;
-				_ImportNode node;
-				node.inDegree = inDegree;
-				node.outDegree = outDegree;
-				node.firstPenalty = firstPenalty;
-				nodes.push_back( node );
-			}
-
-			for ( unsigned i = 0; i < numEdges; ++i ) {
-				unsigned source, target;
-				qint8 originalEdgeSource, originalEdgeTarget;
-				unsigned distance;
-				bool shortcut;
-				bool forward;
-				bool backward;
-				unsigned middle_id;
-				data >> source >> target >> originalEdgeSource >> originalEdgeTarget;
-				data >> distance >> shortcut >> forward >> backward >> middle_id;
-				_ImportEdge edge;
-				edge.source = source;
-				edge.target = target;
-				edge.originalEdgeSource = originalEdgeSource;
-				edge.originalEdgeTarget = originalEdgeTarget;
-				edge.data.distance = distance;
-				edge.data.shortcut = shortcut;
-				edge.data.forward = forward;
-				edge.data.backward = backward;
-				edge.data.id = middle_id;
-				edges.push_back( edge );
-			}
-			for ( unsigned i = 0; i < numPenalties; ++i ) {
-				int penalty;
-				data >> penalty;
-				penalties.push_back( penalty );
-			}
-			_DynamicGraph* graph = new _DynamicGraph( nodes, edges, penalties );
-			return graph;
 		}
 
 	private:
@@ -748,8 +683,9 @@ class TurnContractor {
             _gamma.reserve( squareSumOut + squareSumIn );
             {
                 for ( NodeID u = 0; u < numNodes; ++u ) {
-                    unsigned inDegree = _graph->GetOriginalInDegree(u);
-                    unsigned outDegree = _graph->GetOriginalOutDegree(u);
+                    _DynamicGraph::PenaltyTable penaltyTable = _graph->GetPenaltyTable( u );
+                    unsigned inDegree = penaltyTable.GetInDegree();
+                    unsigned outDegree = penaltyTable.GetOutDegree();
 
                     _gammaIndex.push_back( GammaIndexItem( _gamma.size(), _gamma.size() + outDegree * outDegree ) );
 
@@ -757,8 +693,8 @@ class TurnContractor {
                         for ( unsigned out2 = 0; out2 < outDegree; ++out2 ) {
                             GammaValue g = 0;
                             for ( unsigned in = 0; in < inDegree; ++in ) {
-                            	GammaValue penalty = _graph->GetPenaltyData(u, in, out);
-                            	GammaValue penalty2 = _graph->GetPenaltyData(u, in, out2);
+                            	GammaValue penalty = penaltyTable.GetData( in, out );
+                            	GammaValue penalty2 = penaltyTable.GetData( in, out2);
                                 if (penalty != RESTRICTED_TURN && penalty2 == RESTRICTED_TURN) {
                                     // 'u -> out2' not in 'alpha(u -> out)'
                                     g = RESTRICTED_NEIGHBOUR;
@@ -777,8 +713,8 @@ class TurnContractor {
                         for ( unsigned in2 = 0; in2 < inDegree; ++in2 ) {
                             GammaValue g = 0;
                             for ( unsigned out = 0; out < outDegree; ++out ) {
-                                GammaValue penalty = _graph->GetPenaltyData(u, in, out);
-                                GammaValue penalty2 = _graph->GetPenaltyData(u, in2, out);
+                                GammaValue penalty = penaltyTable.GetData( in, out);
+                                GammaValue penalty2 = penaltyTable.GetData( in2, out);
                                 if (penalty != RESTRICTED_TURN && penalty2 == RESTRICTED_TURN) {
                                     // 'in2 -> u' not in 'alpha(in -> u)'
                                     g = RESTRICTED_NEIGHBOUR;
@@ -794,7 +730,7 @@ class TurnContractor {
 
 //                    if ( u == SPECIAL_NODE )
 //                    {
-//						qDebug() << _graph->DebugStringPenaltyData( u ).c_str();
+//						qDebug() << _graph->DebugStringPenaltyTable( u ).c_str();
 //						qDebug() << _DebugStringGammaForward( u ).c_str();
 //						qDebug() << _DebugStringGammaBackward( u ).c_str();
 //						exit( 1 );
@@ -831,8 +767,10 @@ class TurnContractor {
 				if ( numOnlyViaContracted == 0 && data.node != contracted )
 					return;
 
+				_DynamicGraph::PenaltyTable penaltyTable = _graph->GetPenaltyTable( data.node );
+
 				//qDebug() << _graph->DebugStringEdgesOf(data.node).c_str();
-				//qDebug() << _graph->DebugStringPenaltyData(data.node).c_str();
+				//qDebug() << _graph->DebugStringPenaltyTable(data.node).c_str();
 
 				//iterate over all edges of data.node
 				for ( _DynamicGraph::EdgeIterator edge = _graph->BeginEdges( data.node ), endEdges = _graph->EndEdges( data.node ); edge != endEdges; ++edge ) {
@@ -843,7 +781,13 @@ class TurnContractor {
 					// After settling 'maxNodes', we only look for potential shortcuts.
 					if ( nodes > maxNodes && to != contracted )
 						continue;
-					const _PenaltyData penalty =_graph->GetPenaltyData( data.node, data.originalEdge, _graph->GetOriginalEdgeSource( edge ) );
+					assert( data.originalEdge < penaltyTable.GetInDegree() );
+					if ( _graph->GetOriginalEdgeSource( edge ) >= _graph->GetOriginalOutDegree( data.node ) ) {
+						qDebug() << data.node << edge << _graph->GetOriginalEdgeSource( edge ) << penaltyTable.GetOutDegree();
+						qDebug() << _graph->DebugStringEdgesOf( data.node ).c_str();
+					}
+					assert( _graph->GetOriginalEdgeSource( edge ) < penaltyTable.GetOutDegree() );
+					const _PenaltyData penalty = penaltyTable.GetData( data.originalEdge, _graph->GetOriginalEdgeSource( edge ) );
 					if (penalty == RESTRICTED_TURN)
 						continue;
 					const int toDistance = distance + penalty + edgeData.distance;
@@ -909,7 +853,7 @@ class TurnContractor {
 				if (node == SPECIAL_NODE) {
 					qDebug() << "in " << _graph->DebugStringEdge(inEdge).c_str();
 					qDebug() << _graph->DebugStringEdgesOf( source ).c_str();
-					qDebug() << _graph->DebugStringPenaltyData( source ).c_str();
+					qDebug() << _graph->DebugStringPenaltyTable( source ).c_str();
 					qDebug() << _DebugStringGammaForward( source ).c_str();
 				}
 
@@ -976,7 +920,7 @@ class TurnContractor {
 					if (node == SPECIAL_NODE) {
 						qDebug() << "out " << _graph->DebugStringEdge(outEdge).c_str();
 						qDebug() << _graph->DebugStringEdgesOf( target ).c_str();
-						qDebug() << _graph->DebugStringPenaltyData( target ).c_str();
+						qDebug() << _graph->DebugStringPenaltyTable( target ).c_str();
 						qDebug() << _DebugStringGammaBackward( target ).c_str();
 					}
 
@@ -1011,11 +955,14 @@ class TurnContractor {
 					if ( needShortcut && source == target ) {
 						needShortcut = false;
 						// Decide locally whether the loop makes sense.
+						_DynamicGraph::PenaltyTable penaltyTable = _graph->GetPenaltyTable( source );
+						assert( sourceOutDegree == penaltyTable.GetOutDegree() );
+						assert( targetInDegree == penaltyTable.GetInDegree() );
 						for ( unsigned in = 0; in < targetInDegree && !needShortcut; ++in ) {
 							for ( unsigned out = 0; out < sourceOutDegree && !needShortcut; ++out ) {
-								_PenaltyData turn = _graph->GetPenaltyData( source, in, out );
-								_PenaltyData turn1 = _graph->GetPenaltyData( source, in, inOut );
-								_PenaltyData turn2 = _graph->GetPenaltyData( source, outIn, out );
+								_PenaltyData turn = penaltyTable.GetData( in, out );
+								_PenaltyData turn1 = penaltyTable.GetData( in, inOut );
+								_PenaltyData turn2 = penaltyTable.GetData( outIn, out );
 								// Check whether 'turn' is worse than 'turn1' followed by 'turn2'.
 								if ( ( turn == RESTRICTED_TURN && turn1 != RESTRICTED_TURN && turn2 != RESTRICTED_TURN ) ||
 										turn1 + shortcutDistance + turn2 < turn ) {
@@ -1079,8 +1026,13 @@ class TurnContractor {
 						found = true;
 						break;
 					}
-					if ( !found )
+					if ( !found ) {
+						assert( !insertedEdges[i].data.forward || insertedEdges[i].originalEdgeSource < _graph->GetOriginalOutDegree( insertedEdges[i].source ) );
+						assert( !insertedEdges[i].data.forward || insertedEdges[i].originalEdgeTarget < _graph->GetOriginalInDegree( insertedEdges[i].target ) );
+						assert( !insertedEdges[i].data.backward || insertedEdges[i].originalEdgeSource < _graph->GetOriginalInDegree( insertedEdges[i].source ) );
+						assert( !insertedEdges[i].data.backward || insertedEdges[i].originalEdgeTarget < _graph->GetOriginalOutDegree( insertedEdges[i].target ) );
 						insertedEdges[insertedEdgesSize++] = insertedEdges[i];
+					}
 				}
 				insertedEdges.resize( insertedEdgesSize );
 			}
@@ -1243,5 +1195,9 @@ class TurnContractor {
 		std::vector< GammaValue > _gamma;
 
 };
+
+const unsigned TurnContractor::SPECIAL_NODE;
+const TurnContractor::_PenaltyData TurnContractor::RESTRICTED_TURN;
+const TurnContractor::GammaValue TurnContractor::RESTRICTED_NEIGHBOUR;
 
 #endif // TURNCONTRACTOR_H_INCLUDED
