@@ -28,6 +28,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include "dynamicturngraph.h"
 #include "../contractionhierarchies/binaryheap.h"
 #include "utils/config.h"
+#include "turnquery.h"
 
 class TurnContractor {
 
@@ -76,7 +77,7 @@ class TurnContractor {
         static const _PenaltyData RESTRICTED_TURN = 255;
         typedef short int GammaValue;
         static const GammaValue RESTRICTED_NEIGHBOUR = SHRT_MIN;
-        static const NodeID SPECIAL_NODE = 42161;
+        static const NodeID SPECIAL_NODE = -1;
 		typedef DynamicTurnGraph< _EdgeData, _PenaltyData > _DynamicGraph;
 		typedef BinaryHeap< NodeID, NodeID, int, _HeapData > _Heap;
 		typedef _DynamicGraph::InputNode _ImportNode;
@@ -258,11 +259,14 @@ class TurnContractor {
 				}
 
 				edges.push_back( edge );
-				std::swap( edge.source, edge.target );
-				std::swap( edge.originalEdgeSource, edge.originalEdgeTarget );
-				edge.data.forward = i->bidirectional;
-				edge.data.backward = true;
-				edges.push_back( edge );
+				// Add reverse edge, unless it is a bidirectional loop.
+				if ( edge.source != edge.target || !edge.data.backward ) {
+					std::swap( edge.source, edge.target );
+					std::swap( edge.originalEdgeSource, edge.originalEdgeTarget );
+					edge.data.forward = i->bidirectional;
+					edge.data.backward = true;
+					edges.push_back( edge );
+				}
 			}
 			if ( skippedLargeEdges != 0 )
 				qDebug( "Skipped %d edges with too large edge weight", skippedLargeEdges );
@@ -315,6 +319,8 @@ class TurnContractor {
             std::vector< _ImportEdge >().swap( edges );
             std::vector< _PenaltyData >().swap( penalties );
 
+			_ComputeGammaTable();
+
 		}
 
 		~TurnContractor() {
@@ -339,8 +345,6 @@ class TurnContractor {
 			std::vector< std::pair< NodeID, bool > > remainingNodes( numberOfNodes );
 			std::vector< double > nodePriority( numberOfNodes );
 			std::vector< _PriorityData > nodeData( numberOfNodes );
-
-			_ComputeGammaTable();
 
 			//initialize the variables
 			#pragma omp parallel for schedule ( guided )
@@ -381,7 +385,62 @@ class TurnContractor {
 			log.PrintHeader();
 			statistics0.PrintStatistics();
 
+//			typedef TurnQuery<_DynamicGraph, false /*stall on demand*/> TestQuery;
+//			TestQuery testQuery( *_graph );
+
+
 			while ( levelID < numberOfNodes ) {
+
+//				if (false) {
+//					//int dist = testQuery.BidirSearch(35715, 9657, 292, 40);
+//					//int dist = testQuery.BidirSearch(35715, 9657, 50167, 50166);
+//					int dist = testQuery.BidirSearch(47, 40076, 35, 50167);
+//					TestQuery::Path path;
+//
+//					qDebug() << "up";
+//					{
+//						unsigned origUp = testQuery.m_middle.in;
+//						do {
+//							std::stringstream ss;
+//							assert( testQuery.m_heapForward.WasInserted( origUp ) );
+//							const TestQuery::HeapData& heapData = testQuery.m_heapForward.GetData( origUp );
+//							_DynamicGraph::EdgeIterator edge = heapData.parentEdge;
+//
+//							ss << "\t" << testQuery.m_heapForward.GetKey( origUp ) << "\t" << _graph->DebugStringEdge(edge);
+//							qDebug() << ss.str().c_str();
+//
+//							origUp = heapData.parentOrig;
+//						} while ( origUp != (unsigned)-1 );
+//					}
+//					qDebug();
+//
+//					qDebug() << "down";
+//					{
+//						unsigned origDown = testQuery.m_middle.out;
+//						do {
+//							std::stringstream ss;
+//							assert( testQuery.m_heapBackward.WasInserted( origDown ) );
+//							const TestQuery::HeapData& heapData = testQuery.m_heapBackward.GetData( origDown );
+//							_DynamicGraph::EdgeIterator edge = heapData.parentEdge;
+//
+//							ss << "\t" << testQuery.m_heapBackward.GetKey( origDown ) << "\t" << _graph->DebugStringEdge(edge);
+//							qDebug() << ss.str().c_str();
+//
+//							origDown = heapData.parentOrig;
+//						} while ( origDown != (unsigned)-1 );
+//					}
+//					qDebug();
+//
+//
+//
+//					qDebug() << "dist" << dist;
+//					if (dist != 756) {
+//						qDebug() << "dist wrong" << dist;
+//						exit(1);
+//					}
+//					testQuery.Clear();
+//				}
+
 				_LogItem statistics;
 				statistics.iteration = iteration++;
 				const int last = ( int ) remainingNodes.size();
@@ -482,7 +541,6 @@ class TurnContractor {
 				//output some statistics
 				statistics.PrintStatistics();
 				//qDebug( wxT( "Printed" ) );
-				qDebug() << "remaining nodes:" << firstIndependent;
 
 				//remove contracted nodes from the pool
 				levelID += last - firstIndependent;
@@ -919,13 +977,13 @@ class TurnContractor {
 						qDebug() << "out " << _graph->DebugStringEdge(outEdge).c_str();
 						qDebug() << _graph->DebugStringEdgesOf( target ).c_str();
 						qDebug() << _graph->DebugStringPenaltyData( target ).c_str();
-						qDebug() << _DebugStringGammaForward( target ).c_str();
+						qDebug() << _DebugStringGammaBackward( target ).c_str();
 					}
 
                     const unsigned outIn = _graph->GetOriginalEdgeTarget( outEdge );
 					const unsigned targetInDegree = _graph->GetOriginalInDegree( target );
 					const unsigned targetFirstOriginal = _graph->GetFirstOriginalEdge( target );
-					const unsigned gammaIndexDelta = _gammaIndex[source].backward + targetInDegree * outIn;
+					const unsigned gammaIndexDelta = _gammaIndex[target].backward + targetInDegree * outIn;
 					assert( outIn < targetInDegree );
 					const unsigned originalEdgeTarget = targetFirstOriginal + outIn;
 					// A shortcut is only potentially necessary if the path found to 'originalEdgeTarget'
@@ -943,6 +1001,7 @@ class TurnContractor {
 						unsigned originalEdgeTarget2 = targetFirstOriginal + i;
 						if ( heap.WasInserted( originalEdgeTarget2 )
 								&& (heap.GetKey( originalEdgeTarget2 ) + g) < shortcutDistance ) {
+							if (node == SPECIAL_NODE) qDebug() << "dont need shortcut other in" << i << "gamma" << g;
 							needShortcut = false;
 							break;
 						}

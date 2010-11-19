@@ -39,14 +39,12 @@ public:
 	typedef Graph::NodeIterator NodeIterator;
 
 	struct Demand {
-		unsigned source;
-		unsigned source2;
-		unsigned target;
-		unsigned target2;
+		TurnQueryEdge source;
+		TurnQueryEdge target;
 		int distance;
 		std::string DebugString() const {
 			std::stringstream ss;
-			ss << source << "->" << source2 << " --- " << distance << " --- " << target2 << "->" << target;
+			ss << source.DebugString() << " --- " << distance << " --- " << target.DebugString();
 			return ss.str();
 		}
 	};
@@ -64,7 +62,7 @@ public:
 		const Graph& graph = contractor.graph();
 		unsigned numNodes = graph.GetNumberOfNodes();
 
-		unsigned numQueries = 100;
+		unsigned numQueries = 1000;
 		srand48(176);
 		std::vector< Demand > demands;
 		demands.reserve( numQueries );
@@ -76,41 +74,47 @@ public:
 //			demand.target = 405441;
 //			demands.push_back(demand);
 //		}
+		std::vector< std::pair< unsigned, unsigned > > temp;
 		for ( unsigned i = 0; i < numQueries; ++i ) {
 			Demand demand;
-			demand.source = lrand48() % numNodes;
-			std::vector< unsigned > temp;
-			for ( unsigned e = graph.BeginEdges( demand.source ); e < graph.EndEdges( demand.source ); ++ e) {
-				if ( graph.GetEdgeData( e ).forward ) {
-					temp.push_back( graph.GetTarget( e ) );
+			while (temp.empty()) {
+				demand.source.source = lrand48() % numNodes;
+				for ( unsigned e = graph.BeginEdges( demand.source.source ); e < graph.EndEdges( demand.source.source ); ++ e) {
+					const EdgeData& edgeData = graph.GetEdgeData( e );
+					if ( !edgeData.shortcut && edgeData.forward ) {
+						temp.push_back( std::make_pair( graph.GetTarget( e ), edgeData.id ) );
+					}
 				}
 			}
-			if ( !temp.empty() ) {
+			{
 				unsigned i = lrand48() % temp.size();
-				demand.source2 = temp[i];
-				temp.clear();
+				demand.source.target = temp[i].first;
+				demand.source.edgeID = temp[i].second;
 			}
-			else
-				demand.source2 = lrand48() % numNodes;
+			temp.clear();
 
-			demand.target = lrand48() % numNodes;
-			for ( unsigned e = graph.BeginEdges( demand.target ); e < graph.EndEdges( demand.target ); ++ e) {
-				if ( graph.GetEdgeData( e ).backward ) {
-					temp.push_back( graph.GetTarget( e ) );
+			while (temp.empty()) {
+				demand.target.target = lrand48() % numNodes;
+				for ( unsigned e = graph.BeginEdges( demand.target.target ); e < graph.EndEdges( demand.target.target ); ++ e) {
+					const EdgeData& edgeData = graph.GetEdgeData( e );
+					if ( !edgeData.shortcut && edgeData.backward ) {
+						temp.push_back( std::make_pair( graph.GetTarget( e ), edgeData.id ) );
+					}
 				}
 			}
-			if ( !temp.empty() ) {
+			{
 				unsigned i = lrand48() % temp.size();
-				demand.target2 = temp[i];
-				temp.clear();
+				demand.target.source = temp[i].first;
+				demand.target.edgeID = temp[i].second;
 			}
-			else
-			demand.target2 = lrand48() % numNodes;
+			temp.clear();
+
 			demand.distance = -1;
 			demands.push_back( demand );
 		}
 
 
+//		omp_set_num_threads(1);
 		int maxThreads = omp_get_max_threads();
 		qDebug( "using %d threads", maxThreads );
 		qDebug() << demands.size() << "queries";
@@ -122,7 +126,7 @@ public:
 			for ( int i = 0; i < (int)demands.size(); ++i )
 			{
 				Demand& demand = demands[i];
-				demand.distance = query.UnidirSearch( demand.source, demand.source2, demand.target, demand.target2 );
+				demand.distance = query.UnidirSearch( demand.source, demand.target );
 				query.Clear();
 				qDebug() << i << demand.DebugString().c_str();
 			}
@@ -138,7 +142,9 @@ public:
 		for ( unsigned i = 0; i < demands.size(); ++i )
 		{
 			const Demand& demand = demands[i];
-			data << demand.source << demand.source2 << demand.target << demand.target2 << demand.distance;
+			data << demand.source.source << demand.source.target << demand.source.edgeID;
+			data << demand.target.source << demand.target.target << demand.target.edgeID;
+			data << demand.distance;
 		}
 		return true;
 	}
@@ -146,93 +152,93 @@ public:
 	bool chtQuery(IImporter* importer, QString dir) {
 		const Graph* graph = TurnContractor::ReadGraphFromFile( fileInDirectory( dir, "CHT Dynamic Graph") );
 
-		if ( false ) {
-			std::vector< IImporter::RoutingNode > inputNodes;
-			std::vector< IImporter::RoutingEdge > inputEdges;
-			std::vector< char > inDegree, outDegree;
-			std::vector< double > penalties;
-
-			if ( !importer->GetRoutingNodes( &inputNodes ) )
-				return false;
-			if ( !importer->GetRoutingEdges( &inputEdges ) )
-				return false;
-			if ( !importer->GetRoutingPenalties( &inDegree, &outDegree, &penalties ) )
-				return false;
-
-			unsigned numNodes = inputNodes.size();
-
-			TurnContractor* contractor = new TurnContractor( numNodes, inputEdges, inDegree, outDegree, penalties );
-			std::vector< IImporter::RoutingEdge >().swap( inputEdges );
-			std::vector< char >().swap( inDegree );
-			std::vector< char >().swap( outDegree );
-			std::vector< double >().swap( penalties );
-			const Graph& plainGraph = contractor->graph();
-			TurnQuery<Graph, false> plainQuery(plainGraph);
-
-			qDebug() << "check shortcuts";
-			unsigned numUnnecessary = 0;
-			for (NodeIterator node = 0; node < graph->GetNumberOfNodes(); ++node)
-			{
-				for (EdgeIterator edge = graph->BeginEdges( node ); edge != graph->EndEdges( node ); ++edge )
-				{
-					bool isUnnecessary = true;
-					const EdgeData& edgeData = graph->GetEdgeData( edge );
-					if ( edgeData.forward )
-					{
-						isUnnecessary = false;
-						NodeIterator source = node;
-						NodeIterator target = graph->GetTarget( edge );
-						EdgeIterator eSource = plainGraph.FindOriginalEdge( source, graph->GetOriginalEdgeSource( edge ), true );
-						assert( eSource != plainGraph.EndEdges( source ) );
-						NodeIterator source2 = plainGraph.GetTarget( eSource );
-						EdgeIterator eTarget = plainGraph.FindOriginalEdge( target, graph->GetOriginalEdgeTarget( edge ), false );
-						assert( eTarget != plainGraph.EndEdges( target ) );
-						NodeIterator target2 = plainGraph.GetTarget( eTarget );
-
-						int distance = plainQuery.UnidirSearch( source, source2, target, target2 );
-						if ( distance > (int)edgeData.distance )
-						{
-							qDebug() << plainGraph.DebugStringEdge( eSource ).c_str();
-							qDebug() << plainGraph.DebugStringEdge( eTarget ).c_str();
-							qDebug() << node << graph->DebugStringEdge( edge ).c_str() << "\t" << distance;
-							exit(1);
-						} else if (distance < (int)edgeData.distance) {
-							isUnnecessary = true;
-						}
-
-						plainQuery.Clear();
-					}
-
-					if ( edgeData.backward )
-					{
-						isUnnecessary = false;
-						NodeIterator source = graph->GetTarget( edge );
-						NodeIterator target = node;
-						EdgeIterator eSource = plainGraph.FindOriginalEdge( source, graph->GetOriginalEdgeTarget( edge ), true );
-						assert( eSource != plainGraph.EndEdges( source ) );
-						NodeIterator source2 = plainGraph.GetTarget( eSource );
-						EdgeIterator eTarget = plainGraph.FindOriginalEdge( target, graph->GetOriginalEdgeSource( edge ), false );
-						assert( eTarget != plainGraph.EndEdges( target ) );
-						NodeIterator target2 = plainGraph.GetTarget( eTarget );
-
-						int distance = plainQuery.UnidirSearch( source, source2, target, target2 );
-						if ( distance > (int)edgeData.distance )
-						{
-							qDebug() << plainGraph.DebugStringEdge( eSource ).c_str();
-							qDebug() << plainGraph.DebugStringEdge( eTarget ).c_str();
-							qDebug() << node << graph->DebugStringEdge( edge ).c_str() << "\t" << distance;
-							exit(1);
-						} else if (distance < (int)edgeData.distance) {
-							isUnnecessary = true;
-						}
-						plainQuery.Clear();
-					}
-					numUnnecessary += isUnnecessary;
-				}
-			}
-			qDebug() << "all shortcuts done," << numUnnecessary << " unnecessary";
-
-		}
+//		if ( false ) {
+//			std::vector< IImporter::RoutingNode > inputNodes;
+//			std::vector< IImporter::RoutingEdge > inputEdges;
+//			std::vector< char > inDegree, outDegree;
+//			std::vector< double > penalties;
+//
+//			if ( !importer->GetRoutingNodes( &inputNodes ) )
+//				return false;
+//			if ( !importer->GetRoutingEdges( &inputEdges ) )
+//				return false;
+//			if ( !importer->GetRoutingPenalties( &inDegree, &outDegree, &penalties ) )
+//				return false;
+//
+//			unsigned numNodes = inputNodes.size();
+//
+//			TurnContractor* contractor = new TurnContractor( numNodes, inputEdges, inDegree, outDegree, penalties );
+//			std::vector< IImporter::RoutingEdge >().swap( inputEdges );
+//			std::vector< char >().swap( inDegree );
+//			std::vector< char >().swap( outDegree );
+//			std::vector< double >().swap( penalties );
+//			const Graph& plainGraph = contractor->graph();
+//			TurnQuery<Graph, false> plainQuery(plainGraph);
+//
+//			qDebug() << "check shortcuts";
+//			unsigned numUnnecessary = 0;
+//			for (NodeIterator node = 0; node < graph->GetNumberOfNodes(); ++node)
+//			{
+//				for (EdgeIterator edge = graph->BeginEdges( node ); edge != graph->EndEdges( node ); ++edge )
+//				{
+//					bool isUnnecessary = true;
+//					const EdgeData& edgeData = graph->GetEdgeData( edge );
+//					if ( edgeData.forward )
+//					{
+//						isUnnecessary = false;
+//						NodeIterator source = node;
+//						NodeIterator target = graph->GetTarget( edge );
+//						EdgeIterator eSource = plainGraph.FindOriginalEdge( source, graph->GetOriginalEdgeSource( edge ), true );
+//						assert( eSource != plainGraph.EndEdges( source ) );
+//						NodeIterator source2 = plainGraph.GetTarget( eSource );
+//						EdgeIterator eTarget = plainGraph.FindOriginalEdge( target, graph->GetOriginalEdgeTarget( edge ), false );
+//						assert( eTarget != plainGraph.EndEdges( target ) );
+//						NodeIterator target2 = plainGraph.GetTarget( eTarget );
+//
+//						int distance = plainQuery.UnidirSearch( source, source2, target, target2 );
+//						if ( distance > (int)edgeData.distance )
+//						{
+//							qDebug() << plainGraph.DebugStringEdge( eSource ).c_str();
+//							qDebug() << plainGraph.DebugStringEdge( eTarget ).c_str();
+//							qDebug() << node << graph->DebugStringEdge( edge ).c_str() << "\t" << distance;
+//							exit(1);
+//						} else if (distance < (int)edgeData.distance) {
+//							isUnnecessary = true;
+//						}
+//
+//						plainQuery.Clear();
+//					}
+//
+//					if ( edgeData.backward )
+//					{
+//						isUnnecessary = false;
+//						NodeIterator source = graph->GetTarget( edge );
+//						NodeIterator target = node;
+//						EdgeIterator eSource = plainGraph.FindOriginalEdge( source, graph->GetOriginalEdgeTarget( edge ), true );
+//						assert( eSource != plainGraph.EndEdges( source ) );
+//						NodeIterator source2 = plainGraph.GetTarget( eSource );
+//						EdgeIterator eTarget = plainGraph.FindOriginalEdge( target, graph->GetOriginalEdgeSource( edge ), false );
+//						assert( eTarget != plainGraph.EndEdges( target ) );
+//						NodeIterator target2 = plainGraph.GetTarget( eTarget );
+//
+//						int distance = plainQuery.UnidirSearch( source, source2, target, target2 );
+//						if ( distance > (int)edgeData.distance )
+//						{
+//							qDebug() << plainGraph.DebugStringEdge( eSource ).c_str();
+//							qDebug() << plainGraph.DebugStringEdge( eTarget ).c_str();
+//							qDebug() << node << graph->DebugStringEdge( edge ).c_str() << "\t" << distance;
+//							exit(1);
+//						} else if (distance < (int)edgeData.distance) {
+//							isUnnecessary = true;
+//						}
+//						plainQuery.Clear();
+//					}
+//					numUnnecessary += isUnnecessary;
+//				}
+//			}
+//			qDebug() << "all shortcuts done," << numUnnecessary << " unnecessary";
+//
+//		}
 
 		unsigned numQueries;
 		std::vector< Demand > demands;
@@ -250,20 +256,41 @@ public:
 			for ( unsigned i = 0; i < numQueries; ++i )
 			{
 				Demand demand;
-				data >> demand.source >> demand.source2 >> demand.target >> demand.target2 >> demand.distance;
+				data >> demand.source.source >> demand.source.target >> demand.source.edgeID;
+				data >> demand.target.source >> demand.target.target >> demand.target.edgeID;
+				data >> demand.distance;
 				demands.push_back( demand );
 			}
 		}
-		if ( true ) {
-			demands.clear();
-			Demand demand;
-			demand.source = 35715;
-			demand.source2 = 9657;
-			demand.target = 292; // 66988;
-			demand.target2 = 40; // 55168;
-			demand.distance = 0;
-			demands.push_back(demand);
-		}
+//		if ( false ) {
+//			demands.clear();
+//			Demand demand;
+//			demand.source = 35715;
+//			demand.source2 = 9657;
+//			demand.target = 292;
+//			demand.target2 = 40;
+//			demand.distance = 13522;
+//
+//			demand.source = 35715;
+//			demand.source2 = 9657;
+//			demand.target = 35;
+//			demand.target2 = 50167;
+//			demand.distance = 4918;
+//
+//			demand.source = 35715;
+//			demand.source2 = 9657;
+//			demand.target = 50167;
+//			demand.target2 = 50166;
+//			demand.distance = 4514;
+//
+//			demand.source = 47;
+//			demand.source2 = 40076;
+//			demand.target = 35;
+//			demand.target2 = 50167;
+//			demand.distance = 756;
+//
+//			demands.push_back(demand);
+//		}
 
 		typedef TurnQuery<Graph, false /*stall on demand*/> Query;
 		Query query(*graph);
@@ -271,9 +298,9 @@ public:
 		for ( int i = 0; i < (int)demands.size(); ++i )
 		{
 			const Demand& demand = demands[i];
-			int distance = query.BidirSearch( demand.source, demand.source2, demand.target, demand.target2 );
+			int distance = query.BidirSearch( demand.source, demand.target );
 			if (distance != demand.distance) {
-				qDebug() << demand.source << "->" << demand.source2 << demand.target << "->" << demand.target2
+				qDebug() << demand.source.DebugString().c_str() << "..." << demand.target.DebugString().c_str()
 						<< ": CHT" << distance << "plain" << demand.distance;
 
 
@@ -291,16 +318,24 @@ public:
 
 				unsigned numNodes = inputNodes.size();
 
+
+
 				TurnContractor* contractor = new TurnContractor( numNodes, inputEdges, inDegree, outDegree, penalties );
 				std::vector< IImporter::RoutingEdge >().swap( inputEdges );
 				std::vector< char >().swap( inDegree );
 				std::vector< char >().swap( outDegree );
 				std::vector< double >().swap( penalties );
 				const Graph& plainGraph = contractor->graph();
+				qDebug() << plainGraph.DebugStringEdgesOf( demand.target.target ).c_str();
+				qDebug() << plainGraph.DebugStringPenaltyData( demand.target.target ).c_str();
 				TurnQuery<Graph, false> plainQuery(plainGraph);
-				int plainDistance = plainQuery.UnidirSearch( demand.source, demand.source2, demand.target, demand.target2);
-				qDebug() << plainDistance;
+				int plainDistanceUnidir = plainQuery.UnidirSearch( demand.source, demand.target );
+				qDebug() << plainQuery.DebugStringPath().c_str();
 				plainQuery.Clear();
+				int plainDistanceBidir = plainQuery.BidirSearch( demand.source, demand.target );
+				qDebug() << plainQuery.DebugStringPath().c_str();
+				plainQuery.Clear();
+				qDebug() << "unidir" << plainDistanceUnidir << "bidir" << plainDistanceBidir;
 
 
 				qDebug() << "up";
@@ -316,7 +351,7 @@ public:
 						ss << "\t" << query.m_heapForward.GetKey( origUp ) << "\t" << graph->DebugStringEdge(edge);
 						ss << "\t||\t" << plainGraph.DebugStringEdge( oEdge );
 						if ( heapData.parentOrig != (unsigned)-1 ) {
-							int testDistance = plainQuery.UnidirSearch( demand.source, demand.source2, graph->GetTarget(edge), plainGraph.GetTarget( oEdge ) );
+							int testDistance = plainQuery.UnidirSearch( demand.source, TurnQueryEdge( graph->GetTarget(edge), plainGraph.GetTarget( oEdge ), plainGraph.GetEdgeData( oEdge ).id ) );
 							plainQuery.Clear();
 							ss << "\t||\t" << testDistance;
 						}
@@ -340,7 +375,7 @@ public:
 						ss << "\t" << query.m_heapBackward.GetKey( origDown ) << "\t" << graph->DebugStringEdge(edge);
 						ss << "\t||\t" << plainGraph.DebugStringEdge( oEdge );
 						if ( heapData.parentOrig != (unsigned)-1 ) {
-							int testDistance = plainQuery.UnidirSearch( graph->GetTarget(edge), plainGraph.GetTarget( oEdge ), demand.target, demand.target2 );
+							int testDistance = plainQuery.UnidirSearch( TurnQueryEdge( graph->GetTarget(edge), plainGraph.GetTarget( oEdge ), plainGraph.GetEdgeData( oEdge ).id ), demand.target );
 							plainQuery.Clear();
 							ss << "\t||\t" << testDistance;
 						}
