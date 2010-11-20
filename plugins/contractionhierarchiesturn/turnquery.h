@@ -245,7 +245,7 @@ public:
 			unsigned firstOriginalTo = m_graph.GetFirstOriginalEdge( to );
 			unsigned originalEdgeLocalTo = m_graph.GetOriginalEdgeTarget( edge );
 
-			if ( StallOnDemand && stallEdgeAllowed( edgeData.forward, edgeData.backward ) ) {
+			if ( StallOnDemand && stallEdgeAllowed( edgeData.forward, edgeData.backward ) && m_graph.GetOriginalEdgeSource( edge ) == data.originalEdge ) {
 				int shorterDistance = std::numeric_limits<int>::max();
 				PenaltyTable toPenaltyTable = m_graph.GetPenaltyTable( to );
 
@@ -264,11 +264,12 @@ public:
 					//insert node into the stall queue
 					heapForward->GetKey( originalEdge ) = shorterDistance;
 					heapForward->GetData( originalEdge ).stalled = true;
+//					qDebug() << "first" << heapForward->GetData( originalEdge ).DebugString().c_str();
 					m_stallQueue.push( StallQueueItem( data.node, data.originalEdge, shorterDistance ) );
 
 					while ( !m_stallQueue.empty() ) {
 						//get node from the queue
-						const StallQueueItem& stallItem = m_stallQueue.front();
+						const StallQueueItem stallItem = m_stallQueue.front();
 						m_stallQueue.pop();
 						const int stallDistance = stallItem.distance;
 						PenaltyTable stallPenaltyTable = m_graph.GetPenaltyTable( stallItem.node );
@@ -279,7 +280,7 @@ public:
 							//is edge outgoing/reached/stalled?
 							if ( !edgeAllowed( stallEdgeData.forward, stallEdgeData.backward ) )
 								continue;
-							const NodeIterator stallTo = m_graph.GetTarget( stallItem.node );
+							const NodeIterator stallTo = m_graph.GetTarget( stallEdge );
 							const unsigned stallOrig = m_graph.GetFirstOriginalEdge( stallTo ) + m_graph.GetOriginalEdgeTarget( stallEdge );
 							if ( !heapForward->WasInserted( stallOrig ) )
 								continue;
@@ -300,6 +301,7 @@ public:
 
 								m_stallQueue.push( StallQueueItem( stallTo, m_graph.GetOriginalEdgeTarget( stallEdge ), stallToDistance ) );
 								heapForward->GetData( stallOrig ).stalled = true;
+//								qDebug() << heapForward->GetData( stallOrig ).DebugString().c_str();
 							}
 						}
 					}
@@ -326,6 +328,7 @@ public:
 					heapForward->Insert( orig, toDistance, toData );
 
 				//Found a shorter Path -> Update distance
+				// '<=' instead of '<' because of stall-on-demand
 				} else if ( toDistance <= heapForward->GetKey( orig ) ) {
 //					qDebug() << "  update";
 					heapForward->DecreaseKey( orig, toDistance );
@@ -345,7 +348,7 @@ public:
 		assert( target.target < m_graph.GetNumberOfNodes() );
 
 		#ifndef NDEBUG
-		qDebug() << source.DebugString().c_str() << "..." << target.DebugString().c_str();
+//		qDebug() << source.DebugString().c_str() << "..." << target.DebugString().c_str();
 		#endif
 
 

@@ -309,11 +309,13 @@ public:
 		EdgeIterator BeginEdges( const NodeIterator &n ) const
 		{
 			//assert( EndEdges( n ) - EdgeIterator( _nodes[n].firstEdge ) <= 100 );
+			assert( n < m_nodes.size() );
 			return EdgeIterator( m_nodes[n].firstEdge );
 		}
 
 		EdgeIterator EndEdges( const NodeIterator &n ) const
 		{
+			assert( n < m_nodes.size() );
 			return EdgeIterator( m_nodes[n].firstEdge + m_nodes[n].edges );
 		}
 
