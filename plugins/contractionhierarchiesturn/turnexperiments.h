@@ -149,7 +149,11 @@ public:
 		return true;
 	}
 
-	bool chtQuery(IImporter* importer, QString dir) {
+	bool chtQuery(IImporter*
+			#ifndef NDEBUG
+			importer
+			#endif
+			, QString dir) {
 		const Graph* graph = Graph::ReadFromFile( fileInDirectory( dir, "CHT Dynamic Graph") );
 
 //		if ( false ) {
@@ -276,37 +280,23 @@ public:
 
 			}
 		}
-//		if ( false ) {
-//			demands.clear();
-//			Demand demand;
-//			demand.source = 35715;
-//			demand.source2 = 9657;
-//			demand.target = 292;
-//			demand.target2 = 40;
-//			demand.distance = 13522;
-//
-//			demand.source = 35715;
-//			demand.source2 = 9657;
-//			demand.target = 35;
-//			demand.target2 = 50167;
-//			demand.distance = 4918;
-//
-//			demand.source = 35715;
-//			demand.source2 = 9657;
-//			demand.target = 50167;
-//			demand.target2 = 50166;
-//			demand.distance = 4514;
-//
-//			demand.source = 47;
-//			demand.source2 = 40076;
-//			demand.target = 35;
-//			demand.target2 = 50167;
-//			demand.distance = 756;
-//
-//			demands.push_back(demand);
-//		}
 
-		typedef TurnQuery<Graph, false /*stall on demand*/> Query;
+        #ifndef NDEBUG
+		if ( false ) {
+			demands.clear();
+			Demand demand;
+			demand.source = TurnQueryEdge( 443808, 443809, 503662 );
+			demand.target = TurnQueryEdge( 483398, 240897, 126592 );
+            demand.distance = 121476;
+
+            demand.source = TurnQueryEdge( 443808, 443809, 503662 );
+            demand.target = TurnQueryEdge( 410, 356230, 606291 );
+            demand.distance = 27749;
+			demands.push_back(demand);
+		}
+        #endif
+
+		typedef TurnQuery<Graph, true /*stall on demand*/> Query;
 		Query query(*graph);
 		double duration = _Timestamp();
 		for ( int i = 0; i < (int)demands.size(); ++i )
@@ -314,7 +304,7 @@ public:
 			const Demand& demand = demands[i];
 			int distance = query.BidirSearch( demand.source, demand.target );
 			if (distance != demand.distance) {
-				qDebug() << demand.source.DebugString().c_str() << "..." << demand.target.DebugString().c_str()
+				qDebug() << i << demand.source.DebugString().c_str() << "..." << demand.target.DebugString().c_str()
 						<< ": CHT" << distance << "plain" << demand.distance;
 
 #ifndef NDEBUG
@@ -344,7 +334,28 @@ public:
 				qDebug() << plainGraph.DebugStringPenaltyTable( demand.target.target ).c_str();
 				TurnQuery<Graph, false> plainQuery(plainGraph);
 				int plainDistanceUnidir = plainQuery.UnidirSearch( demand.source, demand.target );
-				qDebug() << plainQuery.DebugStringPath().c_str();
+
+		        qDebug() << "up";
+		        {
+		            unsigned origUp = plainQuery.m_middle.in;
+		            do {
+		                std::stringstream ss;
+		                assert( plainQuery.m_heapForward.WasInserted( origUp ) );
+		                const TurnQuery< Graph, false >::HeapData& heapData = plainQuery.m_heapForward.GetData( origUp );
+		                EdgeIterator edge = heapData.parentEdge;
+
+		                ss << "\t" << plainQuery.m_heapForward.GetKey( origUp ) << "\t" << plainGraph.DebugStringEdge(edge);
+		                if ( query.m_heapForward.WasInserted( origUp ) ) {
+		                    ss << "\t||\t" << query.m_heapForward.GetKey( origUp ) << "\t" << query.m_heapForward.GetData( origUp ).DebugString().c_str();
+		                }
+		                qDebug() << ss.str().c_str();
+
+		                origUp = heapData.parentOrig;
+		            } while ( origUp != (unsigned)-1 );
+		        }
+		        qDebug();
+
+
 				plainQuery.Clear();
 				int plainDistanceBidir = plainQuery.BidirSearch( demand.source, demand.target );
 				qDebug() << plainQuery.DebugStringPath().c_str();

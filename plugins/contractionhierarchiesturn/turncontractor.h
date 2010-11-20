@@ -96,7 +96,9 @@ class TurnContractor {
         static const _PenaltyData RESTRICTED_TURN = 255;
         typedef short int GammaValue;
         static const GammaValue RESTRICTED_NEIGHBOUR = SHRT_MIN;
+		#ifndef NDEBUG
         static const unsigned SPECIAL_NODE = 1;
+		#endif
 		typedef DynamicTurnGraph< _EdgeData, _PenaltyData > _DynamicGraph;
 		typedef BinaryHeap< NodeID, NodeID, int, _HeapData > _Heap;
 		typedef _DynamicGraph::InputNode _ImportNode;
@@ -239,7 +241,9 @@ class TurnContractor {
 			std::vector< _ImportEdge > edges;
 			edges.reserve( 2 * inputEdges.size() );
 			int skippedLargeEdges = 0;
+			#ifndef NDEBUG
 			if (SPECIAL_NODE < numNodes) qDebug() << SPECIAL_NODE << (int)inDegree[SPECIAL_NODE] << (int)outDegree[SPECIAL_NODE];
+			#endif
 			for ( typename std::vector< InputEdge >::const_iterator i = inputEdges.begin(), e = inputEdges.end(); i != e; ++i ) {
 				_ImportEdge edge;
 				edge.source = i->source;
@@ -247,11 +251,12 @@ class TurnContractor {
 
 				assert( i->edgeIDAtSource < outDegree[i->source] );
 				assert( i->edgeIDAtTarget < inDegree[i->target] );
+				#ifndef NDEBUG
 				if (i->bidirectional) {
 					assert( i->edgeIDAtSource < inDegree[i->source] );
 					assert( i->edgeIDAtTarget < outDegree[i->target] );
 				}
-
+				#endif
 				edge.originalEdgeSource = i->edgeIDAtSource;
 				edge.originalEdgeTarget = i->edgeIDAtTarget;
 				edge.data.distance = std::max( i->distance * 10.0 + 0.5, 1.0 );
@@ -274,9 +279,11 @@ class TurnContractor {
 					//continue;
 				}
 
+				#ifndef NDEBUG
 				if (edge.target == SPECIAL_NODE || edge.source == SPECIAL_NODE) {
 					qDebug() << edge.DebugString().c_str();
 				}
+				#endif
 
 				edges.push_back( edge );
 				// Add reverse edge, unless it is a bidirectional loop.
@@ -317,7 +324,9 @@ class TurnContractor {
 				_ImportNode node;
 				node.firstPenalty = u;
 				penalties[u].inDegree = inDegree[u];
+				assert( penalties[u].inDegree == inDegree[u] );
 				penalties[u].outDegree = outDegree[u];
+				assert( penalties[u].outDegree == outDegree[u] );
 				unsigned penaltySize = (unsigned)inDegree[u] * (unsigned)outDegree[u];
 				penalties[u].data.reserve( penaltySize );
 				for ( unsigned i = 0; i < penaltySize; ++i, ++penaltyIter ) {
@@ -326,8 +335,12 @@ class TurnContractor {
 					if (*penaltyIter < 0) {
 						p = RESTRICTED_TURN;
 					} else {
-						p = table_encode( ( *penaltyIter * 10 ) + 0.5, penaltyEncoderTable );
+						int r = table_encode( ( *penaltyIter * 10 ) + 0.5, penaltyEncoderTable );
+						p = r;
+						assert( p == r );
+						#ifndef NDEBUG
 						if (u == SPECIAL_NODE) qDebug() << p << *penaltyIter;
+						#endif
 					}
 					penalties[u].data.push_back( p );
 				}
@@ -337,6 +350,7 @@ class TurnContractor {
 			}
 			assert( penaltyIter == inputPenalties.end() );
 
+			#ifndef NDEBUG
 			if ( SPECIAL_NODE >= 0 ) {
 				unsigned n = SPECIAL_NODE;
 				unsigned begin = 0;
@@ -357,14 +371,17 @@ class TurnContractor {
 				}
 				qDebug() << ss.str().c_str();
 			}
+			#endif
 
 			assert( penalties.size() == numNodes );
 
 			_graph = new _DynamicGraph( nodes, edges, penalties );
 
+			#ifndef NDEBUG
 			if ( SPECIAL_NODE >= 0 ) {
 				qDebug() << _graph->DebugStringPenaltyTable( SPECIAL_NODE ).c_str();
 			}
+			#endif
 
 			std::vector< _ImportNode >().swap( nodes );
             std::vector< _ImportEdge >().swap( edges );
@@ -528,8 +545,10 @@ class TurnContractor {
 //							exit(1);
 //						}
 						_Contract< false > ( data, x );
+						#ifndef NDEBUG
 						if (x == SPECIAL_NODE)
 							qDebug() << "contracted " << x;
+						#endif
 						nodePriority[x] = -1;
 					}
 					std::sort( data->insertedEdges.begin(), data->insertedEdges.end() );
@@ -757,7 +776,9 @@ class TurnContractor {
 				const NodeID originalEdge = heap.DeleteMin();
 				const int distance = heap.GetKey( originalEdge );
 				const _HeapData& data = heap.GetData( originalEdge );
+				#ifndef NDEBUG
 				if (contracted == SPECIAL_NODE) qDebug() << "settle" << originalEdge << "---" << (int)data.originalEdge << "->" << data.node << ":" << distance << data.onlyViaContracted;
+				#endif
 				if ( data.onlyViaContracted )
 					--numOnlyViaContracted;
 
@@ -782,10 +803,12 @@ class TurnContractor {
 					if ( nodes > maxNodes && to != contracted )
 						continue;
 					assert( data.originalEdge < penaltyTable.GetInDegree() );
+					#ifndef NDEBUG
 					if ( _graph->GetOriginalEdgeSource( edge ) >= _graph->GetOriginalOutDegree( data.node ) ) {
 						qDebug() << data.node << edge << _graph->GetOriginalEdgeSource( edge ) << penaltyTable.GetOutDegree();
 						qDebug() << _graph->DebugStringEdgesOf( data.node ).c_str();
 					}
+					#endif
 					assert( _graph->GetOriginalEdgeSource( edge ) < penaltyTable.GetOutDegree() );
 					const _PenaltyData penalty = penaltyTable.GetData( data.originalEdge, _graph->GetOriginalEdgeSource( edge ) );
 					if (penalty == RESTRICTED_TURN)
@@ -836,7 +859,9 @@ class TurnContractor {
 			int insertedEdgesSize = data->insertedEdges.size();
 			std::vector< _ImportEdge >& insertedEdges = data->insertedEdges;
 
+			#ifndef NDEBUG
 			if (node == SPECIAL_NODE) qDebug() << _graph->DebugStringEdgesOf( node ).c_str();
+			#endif
 
 
 			for ( _DynamicGraph::EdgeIterator inEdge = _graph->BeginEdges( node ), endInEdges = _graph->EndEdges( node ); inEdge != endInEdges; ++inEdge ) {
@@ -850,12 +875,14 @@ class TurnContractor {
 				if ( !inData.backward || source == node )
 					continue;
 
+				#ifndef NDEBUG
 				if (node == SPECIAL_NODE) {
 					qDebug() << "in " << _graph->DebugStringEdge(inEdge).c_str();
 					qDebug() << _graph->DebugStringEdgesOf( source ).c_str();
 					qDebug() << _graph->DebugStringPenaltyTable( source ).c_str();
 					qDebug() << _DebugStringGammaForward( source ).c_str();
 				}
+				#endif
 
 				// Prepare witness search.
                 // -----------------------
@@ -882,10 +909,12 @@ class TurnContractor {
 						assert( _graph->GetOriginalEdgeTarget( sourceEdge ) < _graph->GetOriginalInDegree( sourceTarget ) );
 						const unsigned sourceOriginalTarget = _graph->GetFirstOriginalEdge( sourceTarget ) + _graph->GetOriginalEdgeTarget( sourceEdge );
 						const int pathDistance = sourceData.distance + g;
+						#ifndef NDEBUG
 						if (node == SPECIAL_NODE) {
 							qDebug() << sourceOriginalTarget << "-" << _graph->GetOriginalEdgeSource( sourceEdge ) << "--->" << sourceTarget << ":" << sourceData.distance << "+" << g << "vc" << isViaNode;
 							qDebug() << _graph->GetFirstOriginalEdge(sourceTarget) << _graph->GetOriginalInDegree(sourceTarget);
 						}
+						#endif
 						_HeapData heapData( sourceTarget, sourceData.originalEdges, _graph->GetOriginalEdgeTarget( sourceEdge ), isViaNode);
 						if ( !heap.WasInserted( sourceOriginalTarget ) ) {
 							heap.Insert( sourceOriginalTarget, pathDistance, heapData );
@@ -917,12 +946,14 @@ class TurnContractor {
 					if ( !outData.forward || target == node )
 						continue;
 
+					#ifndef NDEBUG
 					if (node == SPECIAL_NODE) {
 						qDebug() << "out " << _graph->DebugStringEdge(outEdge).c_str();
 						qDebug() << _graph->DebugStringEdgesOf( target ).c_str();
 						qDebug() << _graph->DebugStringPenaltyTable( target ).c_str();
 						qDebug() << _DebugStringGammaBackward( target ).c_str();
 					}
+					#endif
 
                     const unsigned outIn = _graph->GetOriginalEdgeTarget( outEdge );
 					const unsigned targetInDegree = _graph->GetOriginalInDegree( target );
@@ -945,7 +976,9 @@ class TurnContractor {
 						unsigned originalEdgeTarget2 = targetFirstOriginal + i;
 						if ( heap.WasInserted( originalEdgeTarget2 )
 								&& (heap.GetKey( originalEdgeTarget2 ) + g) < shortcutDistance ) {
+							#ifndef NDEBUG
 							if (node == SPECIAL_NODE) qDebug() << "dont need shortcut other in" << i << "gamma" << g;
+							#endif
 							needShortcut = false;
 							break;
 						}
@@ -973,7 +1006,9 @@ class TurnContractor {
 					}
 
 					if ( needShortcut ) {
+						#ifndef NDEBUG
 						if (node == SPECIAL_NODE) qDebug() << "shortcut necessary" << source << "<-" << inOut << "---" << shortcutDistance << "---" << outIn << "->" << target;
+						#endif
 						const unsigned shortcutOriginalEdges = heap.GetData( originalEdgeTarget ).numOriginalEdges;
 						if ( Simulate ) {
 							assert( stats != NULL );
@@ -991,7 +1026,9 @@ class TurnContractor {
 							newEdge.data.middle = node;
 							newEdge.data.shortcut = true;
 							newEdge.data.originalEdges = shortcutOriginalEdges;
+							#ifndef NDEBUG
 							if (source == SPECIAL_NODE || target == SPECIAL_NODE) qDebug() << "add shortcut" << newEdge.DebugString().c_str();
+							#endif
 							insertedEdges.push_back( newEdge );
 							std::swap( newEdge.source, newEdge.target );
 							std::swap( newEdge.originalEdgeSource, newEdge.originalEdgeTarget );
@@ -1196,7 +1233,9 @@ class TurnContractor {
 
 };
 
+#ifndef NDEBUG
 const unsigned TurnContractor::SPECIAL_NODE;
+#endif
 const TurnContractor::_PenaltyData TurnContractor::RESTRICTED_TURN;
 const TurnContractor::GammaValue TurnContractor::RESTRICTED_NEIGHBOUR;
 
