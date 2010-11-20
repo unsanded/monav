@@ -285,14 +285,15 @@ public:
 		if ( false ) {
 			demands.clear();
 			Demand demand;
-			demand.source = TurnQueryEdge( 443808, 443809, 503662 );
-			demand.target = TurnQueryEdge( 483398, 240897, 126592 );
-            demand.distance = 121476;
+			demand.source = TurnQueryEdge( 1980676, 4161, 4199336 );
+			demand.target = TurnQueryEdge( 3027184, 3512749, 3434561 );
+            demand.distance = 14698;
 
-            demand.source = TurnQueryEdge( 443808, 443809, 503662 );
-            demand.target = TurnQueryEdge( 410, 356230, 606291 );
-            demand.distance = 27749;
-			demands.push_back(demand);
+            demand.source = TurnQueryEdge( 1980676, 4161, 4199336 );
+            demand.target = TurnQueryEdge( 2446421, 2442272, 3515556 );
+            demand.distance = 13387;
+
+            demands.push_back(demand);
 		}
         #endif
 
