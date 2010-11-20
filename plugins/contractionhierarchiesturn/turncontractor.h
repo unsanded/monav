@@ -90,6 +90,13 @@ class TurnContractor {
 			bool onlyViaContracted : 1;
             _HeapData(NodeID _node, unsigned _numOriginalEdges, unsigned char _originalEdge, bool _onlyViaContracted)
 				: node(_node), numOriginalEdges(_numOriginalEdges), originalEdge(_originalEdge), onlyViaContracted(_onlyViaContracted) {}
+            std::string DebugString() const {
+                std::stringstream ss;
+                ss << (unsigned)originalEdge << " -> " << node;
+                if (onlyViaContracted)
+                    ss << " ONLY";
+                return ss.str();
+            }
 		};
 
         typedef unsigned char _PenaltyData;
@@ -97,7 +104,7 @@ class TurnContractor {
         typedef short int GammaValue;
         static const GammaValue RESTRICTED_NEIGHBOUR = SHRT_MIN;
 		#ifndef NDEBUG
-        static const unsigned SPECIAL_NODE = 1;
+        static const unsigned SPECIAL_NODE = 3049567;
 		#endif
 		typedef DynamicTurnGraph< _EdgeData, _PenaltyData > _DynamicGraph;
 		typedef BinaryHeap< NodeID, NodeID, int, _HeapData > _Heap;
@@ -351,7 +358,7 @@ class TurnContractor {
 			assert( penaltyIter == inputPenalties.end() );
 
 			#ifndef NDEBUG
-			if ( SPECIAL_NODE >= 0 ) {
+			if ( SPECIAL_NODE < numNodes ) {
 				unsigned n = SPECIAL_NODE;
 				unsigned begin = 0;
 				for ( unsigned u = 0; u < n; ++u ) {
@@ -378,7 +385,7 @@ class TurnContractor {
 			_graph = new _DynamicGraph( nodes, edges, penalties );
 
 			#ifndef NDEBUG
-			if ( SPECIAL_NODE >= 0 ) {
+			if ( SPECIAL_NODE < numNodes ) {
 				qDebug() << _graph->DebugStringPenaltyTable( SPECIAL_NODE ).c_str();
 			}
 			#endif
@@ -399,7 +406,7 @@ class TurnContractor {
 			const NodeID numberOfNodes = _graph->GetNumberOfNodes();
 			_LogData log;
 
-//			omp_set_num_threads(2);
+//			omp_set_num_threads(1);
 			int maxThreads = omp_get_max_threads();
 			std::vector < _ThreadData* > threadData;
 			for ( int threadNum = 0; threadNum < maxThreads; ++threadNum ) {
@@ -453,61 +460,64 @@ class TurnContractor {
 			log.PrintHeader();
 			statistics0.PrintStatistics();
 
-//			typedef TurnQuery<_DynamicGraph, false /*stall on demand*/> TestQuery;
-//			TestQuery testQuery( *_graph );
-
+            #ifndef NDEBUG
+			typedef TurnQuery<_DynamicGraph, false /*stall on demand*/> TestQuery;
+			TestQuery testQuery( *_graph );
+            #endif
 
 			while ( levelID < numberOfNodes ) {
 
-//				if (false) {
-//					//int dist = testQuery.BidirSearch(35715, 9657, 292, 40);
-//					//int dist = testQuery.BidirSearch(35715, 9657, 50167, 50166);
-//					int dist = testQuery.BidirSearch(47, 40076, 35, 50167);
-//					TestQuery::Path path;
-//
-//					qDebug() << "up";
-//					{
-//						unsigned origUp = testQuery.m_middle.in;
-//						do {
-//							std::stringstream ss;
-//							assert( testQuery.m_heapForward.WasInserted( origUp ) );
-//							const TestQuery::HeapData& heapData = testQuery.m_heapForward.GetData( origUp );
-//							_DynamicGraph::EdgeIterator edge = heapData.parentEdge;
-//
-//							ss << "\t" << testQuery.m_heapForward.GetKey( origUp ) << "\t" << _graph->DebugStringEdge(edge);
-//							qDebug() << ss.str().c_str();
-//
-//							origUp = heapData.parentOrig;
-//						} while ( origUp != (unsigned)-1 );
-//					}
-//					qDebug();
-//
-//					qDebug() << "down";
-//					{
-//						unsigned origDown = testQuery.m_middle.out;
-//						do {
-//							std::stringstream ss;
-//							assert( testQuery.m_heapBackward.WasInserted( origDown ) );
-//							const TestQuery::HeapData& heapData = testQuery.m_heapBackward.GetData( origDown );
-//							_DynamicGraph::EdgeIterator edge = heapData.parentEdge;
-//
-//							ss << "\t" << testQuery.m_heapBackward.GetKey( origDown ) << "\t" << _graph->DebugStringEdge(edge);
-//							qDebug() << ss.str().c_str();
-//
-//							origDown = heapData.parentOrig;
-//						} while ( origDown != (unsigned)-1 );
-//					}
-//					qDebug();
-//
-//
-//
-//					qDebug() << "dist" << dist;
-//					if (dist != 756) {
-//						qDebug() << "dist wrong" << dist;
-//						exit(1);
-//					}
-//					testQuery.Clear();
-//				}
+                #ifndef NDEBUG
+				if ( false ) {
+				    TurnQueryEdge testSource( 1980676, 4161, 4199336 );
+				    TurnQueryEdge testTarget( 2446421, 2442272, 3515556 );;
+					int dist = testQuery.BidirSearch( testSource, testTarget );
+					TestQuery::Path path;
+
+					qDebug() << "up";
+					{
+						unsigned origUp = testQuery.m_middle.in;
+						do {
+							std::stringstream ss;
+							assert( testQuery.m_heapForward.WasInserted( origUp ) );
+							const TestQuery::HeapData& heapData = testQuery.m_heapForward.GetData( origUp );
+							_DynamicGraph::EdgeIterator edge = heapData.parentEdge;
+
+							ss << "\t" << testQuery.m_heapForward.GetKey( origUp ) << "\t" << _graph->DebugStringEdge(edge);
+							qDebug() << ss.str().c_str();
+
+							origUp = heapData.parentOrig;
+						} while ( origUp != (unsigned)-1 );
+					}
+					qDebug();
+
+					qDebug() << "down";
+					{
+						unsigned origDown = testQuery.m_middle.out;
+						do {
+							std::stringstream ss;
+							assert( testQuery.m_heapBackward.WasInserted( origDown ) );
+							const TestQuery::HeapData& heapData = testQuery.m_heapBackward.GetData( origDown );
+							_DynamicGraph::EdgeIterator edge = heapData.parentEdge;
+
+							ss << "\t" << testQuery.m_heapBackward.GetKey( origDown ) << "\t" << _graph->DebugStringEdge(edge);
+							qDebug() << ss.str().c_str();
+
+							origDown = heapData.parentOrig;
+						} while ( origDown != (unsigned)-1 );
+					}
+					qDebug();
+
+
+
+					qDebug() << "dist" << dist;
+					if (dist != 13387) {
+						qDebug() << "dist wrong" << dist;
+						exit(1);
+					}
+					testQuery.Clear();
+				}
+                #endif
 
 				_LogItem statistics;
 				statistics.iteration = iteration++;
@@ -775,18 +785,27 @@ class TurnContractor {
 			while ( heap.Size() > 0 ) {
 				const NodeID originalEdge = heap.DeleteMin();
 				const int distance = heap.GetKey( originalEdge );
-				const _HeapData& data = heap.GetData( originalEdge );
+				const _HeapData data = heap.GetData( originalEdge );  // no reference, as heap size may change below
 				#ifndef NDEBUG
 				if (contracted == SPECIAL_NODE) qDebug() << "settle" << originalEdge << "---" << (int)data.originalEdge << "->" << data.node << ":" << distance << data.onlyViaContracted;
 				#endif
 				if ( data.onlyViaContracted )
 					--numOnlyViaContracted;
 
+                #ifndef NDEBUG
 				if (numOnlyViaContracted < 0 ) qDebug() << contracted;
+                #endif
 				assert( numOnlyViaContracted >= 0 );
                 nodes++;
-				if ( numOnlyViaContracted == 0 && data.node != contracted )
-					return;
+                const bool toOnlyViaContracted = data.onlyViaContracted && data.node == contracted;
+                if ( !toOnlyViaContracted ) {
+                    // Stop search as soon as no prefix of a potential shortcut remains in the queue.
+                    if ( numOnlyViaContracted == 0 )
+                        return;
+                    // After settling 'maxNodes', we only look for potential shortcuts.
+                    else if ( nodes > maxNodes )
+                        continue;
+                }
 
 				_DynamicGraph::PenaltyTable penaltyTable = _graph->GetPenaltyTable( data.node );
 
@@ -799,14 +818,11 @@ class TurnContractor {
 					if ( !edgeData.forward )
 						continue;
 					const NodeID to = _graph->GetTarget( edge );
-					// After settling 'maxNodes', we only look for potential shortcuts.
-					if ( nodes > maxNodes && to != contracted )
-						continue;
 					assert( data.originalEdge < penaltyTable.GetInDegree() );
 					#ifndef NDEBUG
 					if ( _graph->GetOriginalEdgeSource( edge ) >= _graph->GetOriginalOutDegree( data.node ) ) {
-						qDebug() << data.node << edge << _graph->GetOriginalEdgeSource( edge ) << penaltyTable.GetOutDegree();
-						qDebug() << _graph->DebugStringEdgesOf( data.node ).c_str();
+						qDebug() << "Ds" << data.node << edge << _graph->GetOriginalEdgeSource( edge ) << penaltyTable.GetOutDegree() << _graph->GetOriginalOutDegree( data.node );
+						qDebug() << "Ds" << _graph->DebugStringEdgesOf( data.node ).c_str();
 					}
 					#endif
 					assert( _graph->GetOriginalEdgeSource( edge ) < penaltyTable.GetOutDegree() );
@@ -815,7 +831,6 @@ class TurnContractor {
 						continue;
 					const int toDistance = distance + penalty + edgeData.distance;
                     const unsigned toOriginalEdge = _graph->GetFirstOriginalEdge(to) + _graph->GetOriginalEdgeTarget( edge );
-                    const bool toOnlyViaContracted = data.onlyViaContracted && data.node == contracted;
                     _HeapData toData( to, data.numOriginalEdges + edgeData.originalEdges, _graph->GetOriginalEdgeTarget( edge ), toOnlyViaContracted );
                     //qDebug() << " relax" << "---" << _graph->GetOriginalEdgeTarget( edge ) << "->" << to << ":" << distance << "+" << penalty << "+" << edgeData.distance;
 
@@ -963,6 +978,14 @@ class TurnContractor {
 					const unsigned originalEdgeTarget = targetFirstOriginal + outIn;
 					// A shortcut is only potentially necessary if the path found to 'originalEdgeTarget'
 					// is only via the contracted node.
+                    #ifndef NDEBUG
+					if (node == SPECIAL_NODE) {
+	                    if (!heap.WasInserted( originalEdgeTarget )) qDebug() << "out not in heap";
+	                    else if (!heap.GetData( originalEdgeTarget ).onlyViaContracted) {
+	                        qDebug() << "not via contracted" << heap.GetKey( originalEdgeTarget ) << heap.GetData( originalEdgeTarget ).DebugString().c_str();
+	                    }
+					}
+                    #endif
 					if ( !heap.WasInserted( originalEdgeTarget ) || !heap.GetData( originalEdgeTarget ).onlyViaContracted )
 						continue;
 					int shortcutDistance = heap.GetKey( originalEdgeTarget );

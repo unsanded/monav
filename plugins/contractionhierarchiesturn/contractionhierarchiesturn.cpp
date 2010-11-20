@@ -82,6 +82,9 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 
 	QString filename = fileInDirectory( dir, "Contraction Hierarchies Turn" );
 
+	if (args.indexOf("--1-thread") != -1) {
+	    omp_set_num_threads(1);
+	}
 	bool doContract = args.indexOf("--cht-contract") != -1;
 	bool doPlainQuery = args.indexOf("--cht-plain-query") != -1;
 	typedef TurnContractor::DynamicGraph Graph;

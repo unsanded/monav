@@ -201,7 +201,7 @@ public:
 
 		const unsigned originalEdge = heapForward->DeleteMin();
 		const int distance = heapForward->GetKey( originalEdge );
-		HeapData data = heapForward->GetData( originalEdge );  // do not use a reference to the data, as it will become invalid on a insert
+		const HeapData data = heapForward->GetData( originalEdge );  // do not use a reference to the data, as it will become invalid on a insert
 //		qDebug() << "settle" << originalEdge << "distance" << distance << "data" << data.DebugString().c_str();
 
 		if ( StallOnDemand && data.stalled )

@@ -241,37 +241,36 @@ public:
         class PenaltyTable {
         	friend class DynamicTurnGraph;
         private:
-        	unsigned inDegree;
         	unsigned outDegree;
         	typename std::vector< Penalty >::const_iterator table;
         public:
         	PenaltyTable( const typename std::vector< Penalty >::const_iterator& it ) {
-        		table = it;
-        		inDegree = table++->data;
-        		outDegree = table++->data;
+        		table = it + 1;
+        		outDegree = table->degree;
+        		++table;
         	}
         	unsigned GetInDegree() const {
-        		return inDegree;
+        		return (table - 2)->degree;
         	}
         	unsigned GetOutDegree() const {
         		return outDegree;
         	}
         	const PenaltyData &GetData(unsigned in, unsigned out) const {
-        		assert( in < inDegree );
-        		assert( out < outDegree );
-        		return ( table + in * outDegree + out )->data;
+        		assert( in < GetInDegree() );
+        		assert( out < GetOutDegree() );
+        		return ( table + ( in * GetOutDegree() ) + out )->data;
         	}
 
             std::string DebugString() const {
             	std::stringstream ss;
-            	for ( unsigned out = 0; out < outDegree; ++out ) {
+            	for ( unsigned out = 0; out < GetOutDegree(); ++out ) {
             		ss << "\t" << out;
             	}
             	ss << "\n";
-            	for ( unsigned in = 0; in < inDegree; ++in )
+            	for ( unsigned in = 0; in < GetInDegree(); ++in )
             	{
             		ss << in;
-            		for ( unsigned out = 0; out < outDegree; ++out ) {
+            		for ( unsigned out = 0; out < GetOutDegree(); ++out ) {
             			ss << "\t" << (int)GetData( in, out );
             		}
             		ss << "\n";
@@ -302,7 +301,12 @@ public:
 
         PenaltyTable GetPenaltyTable( const NodeIterator& n ) const {
         	assert( n < m_nodes.size() );
-
+        	assert( m_nodes[n].firstPenalty + 2 + ( GetOriginalInDegree( n ) * GetOriginalOutDegree( n ) ) <= m_penalties.size() );
+            #ifndef NDEBUG
+        	PenaltyTable pt( m_penalties.begin() + m_nodes[n].firstPenalty );
+        	assert( pt.GetInDegree() == GetOriginalInDegree( n ) );
+        	assert( pt.GetOutDegree() == GetOriginalOutDegree( n ) );
+            #endif
         	return PenaltyTable( m_penalties.begin() + m_nodes[n].firstPenalty );
         }
 
