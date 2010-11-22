@@ -153,42 +153,115 @@ public:
 		}
 	};
 
+
+	#ifdef QUERY_COUNT
+	struct Counter {
+		unsigned long long queries;
+		unsigned long long settledNodes;
+		unsigned long long stalledNodes;
+		unsigned long long scannedEdges;
+		unsigned long long relaxedEdges;
+		unsigned long long insertHeap;
+		unsigned long long updateHeap;
+		unsigned long long getPenaltyTable;
+		unsigned long long accessPenaltyTable;
+		unsigned long long scannedMeeting;
+		unsigned long long relaxedMeeting;
+		unsigned long long successMeeting;
+		unsigned long long stallOps;
+		unsigned long long stallSteps;
+		Counter()  {
+			Clear();
+		}
+		void Clear() {
+			queries = 0;
+			settledNodes = 0;
+			stalledNodes = 0;
+			scannedEdges = 0;
+			relaxedEdges = 0;
+			insertHeap = 0;
+			updateHeap = 0;
+			getPenaltyTable = 0;
+			accessPenaltyTable = 0;
+			scannedMeeting = 0;
+			relaxedMeeting = 0;
+			successMeeting = 0;
+			stallOps = 0;
+			stallSteps = 0;
+		}
+		double avg(unsigned long long sum) const {
+			if (queries == 0) return 0;
+			return (double)sum/queries;
+		}
+		std::string DebugString() const {
+			std::stringstream ss;
+			ss << "#settled/stalled nodes = " << avg(settledNodes) << " / " << avg(stalledNodes) << "\n";
+			ss << "#scanned/relaxed/insert/update edges = " << avg(scannedEdges) << " / " << avg(relaxedEdges) << " / " << avg(insertHeap) << " / " << avg(updateHeap) << "\n";
+			ss << "#get/access penalty = " << avg(getPenaltyTable) << " / " << avg(accessPenaltyTable) << "\n";
+			ss << "#scanned/relaxed/success meeting = " << avg(scannedMeeting) << " / "  << avg(relaxedMeeting) << " / "  << avg(successMeeting) << "\n";
+			ss << "#ops/steps stall = " << avg(stallOps) << " / " << avg(stallSteps);
+			return ss.str();
+		}
+	} m_counter;
+	#endif
+
+
 	template <class EdgeAllowed>
 	void initHeap( Heap* heap, const NodeIterator node, const NodeIterator node2, const unsigned edgeID,
 			const EdgeAllowed& edgeAllowed ) {
 //		qDebug() << m_graph.DebugStringEdgesOf( node ).c_str();
 		bool success = false;
 		for ( EdgeIterator edge = m_graph.BeginEdges( node ), edgeEnd = m_graph.EndEdges( node ); edge < edgeEnd; ++edge ) {
+			#ifdef QUERY_COUNT
+			++m_counter.scannedEdges;
+			#endif
 			const EdgeData& edgeData = m_graph.GetEdgeData( edge );
 			if ( !edgeAllowed(edgeData.forward, edgeData.backward) || edgeData.shortcut || edgeData.id != edgeID  )
 				continue;
 			assert( node2 ==  m_graph.GetTarget( edge ) );
+			#ifdef QUERY_COUNT
+			++m_counter.relaxedEdges;
+			#endif
 
 			const unsigned originalEdgeLocal = m_graph.GetOriginalEdgeTarget( edge );
 			const unsigned originalEdge = m_graph.GetFirstOriginalEdge( node2 ) + originalEdgeLocal;
+			#ifndef NDEBUG
 			if ( heap->WasInserted( originalEdge ) ) {
 				qDebug() << "size" << heap->Size();
 				qDebug() << "oe" << originalEdge;
 				qDebug() << node << node2 << edgeID;
 				qDebug() << m_graph.DebugStringEdgesOf( node ).c_str();
 			}
+			#endif
 			assert( !heap->WasInserted( originalEdge ) );
 //			qDebug() << "edge orig =" << edgeData.id << "originalEdge" << originalEdge;
+			#ifdef QUERY_COUNT
+			++m_counter.insertHeap;
+			#endif
 			heap->Insert( originalEdge, edgeData.distance, HeapData(-1, edge, node2, originalEdgeLocal) );
 			success = true;
 		}
 //		qDebug() << m_graph.DebugStringEdgesOf( node2 ).c_str();
 		if (!success) {
 			for ( EdgeIterator edge = m_graph.BeginEdges( node2 ), edgeEnd = m_graph.EndEdges( node2 ); edge < edgeEnd; ++edge ) {
+				#ifdef QUERY_COUNT
+				++m_counter.scannedEdges;
+				#endif
 				const EdgeData& edgeData = m_graph.GetEdgeData( edge );
 				if ( !edgeAllowed(edgeData.backward, edgeData.forward) || edgeData.shortcut || edgeData.id != edgeID )
 					continue;
 				assert( node == m_graph.GetTarget( edge ) );
+				#ifdef QUERY_COUNT
+				++m_counter.relaxedEdges;
+				#endif
 
 				const unsigned originalEdgeLocal = m_graph.GetOriginalEdgeSource( edge );
 				const unsigned originalEdge = m_graph.GetFirstOriginalEdge( node2 ) + originalEdgeLocal;
 				assert( !heap->WasInserted( originalEdge ) );
 //			    qDebug() << "edge orig =" << edgeData.id << "originalEdge" << originalEdge;
+				#ifdef QUERY_COUNT
+				++m_counter.insertHeap;
+				#endif
 				heap->Insert( originalEdge, edgeData.distance, HeapData(-1, edge, node2, originalEdgeLocal) );
 			}
 		}
@@ -199,28 +272,57 @@ public:
 		const StallEdgeAllowed& stallEdgeAllowed,
 		const PenaltyFunction& penaltyFunction, const MiddleFunction& middleFunction,  int* targetDistance ) {
 
+		#ifdef QUERY_COUNT
+		++m_counter.settledNodes;
+		#endif
+
 		const unsigned originalEdge = heapForward->DeleteMin();
 		const int distance = heapForward->GetKey( originalEdge );
 		const HeapData data = heapForward->GetData( originalEdge );  // do not use a reference to the data, as it will become invalid on a insert
 //		qDebug() << "settle" << originalEdge << "distance" << distance << "data" << data.DebugString().c_str();
 
-		if ( StallOnDemand && data.stalled )
+		if ( StallOnDemand && data.stalled ) {
+			#ifdef QUERY_COUNT
+			++m_counter.stalledNodes;
+			#endif
+
 			return originalEdge;
+		}
 
 		PenaltyTable penaltyTable = m_graph.GetPenaltyTable( data.node );
+		#ifdef QUERY_COUNT
+		++m_counter.getPenaltyTable;
+		#endif
+
 
 		{
 //			qDebug() << "check meeting";
 			unsigned deg = penaltyFunction.GetOutDegree( penaltyTable );
 			unsigned firstOriginal = m_graph.GetFirstOriginalEdge( data.node );
 			for ( unsigned out = 0; out < deg; ++out ) {
+				#ifdef QUERY_COUNT
+				++m_counter.scannedMeeting;
+				#endif
+
 				const unsigned orig = firstOriginal + out;
 				if ( heapBackward->WasInserted( orig ) && !heapBackward->GetData( orig ).stalled ) {
 					PenaltyData penalty = penaltyFunction(penaltyTable, data.originalEdge, out);
+					#ifdef QUERY_COUNT
+					++m_counter.accessPenaltyTable;
+					#endif
+
 					if (penalty == RESTRICTED_TURN)
 						continue;
+					#ifdef QUERY_COUNT
+					++m_counter.relaxedMeeting;
+					#endif
+
 					const int newDistance = heapBackward->GetKey( orig ) + penalty + distance;
 					if ( newDistance < *targetDistance ) {
+						#ifdef QUERY_COUNT
+						++m_counter.successMeeting;
+						#endif
+
 //						qDebug() << "=== new ===" << newDistance << "===" << (unsigned)data.originalEdge << "--" << data.node << "--" << out;
 						m_middle = middleFunction(data.node, originalEdge, orig);
 						*targetDistance = newDistance;
@@ -239,6 +341,10 @@ public:
 //		qDebug() << m_graph.DebugStringPenaltyTable( data.node ).c_str();
 
 		for ( EdgeIterator edge = m_graph.BeginEdges( data.node ), edgeEnd = m_graph.EndEdges( data.node ); edge < edgeEnd; ++edge ) {
+			#ifdef QUERY_COUNT
+			++m_counter.scannedEdges;
+			#endif
+
 			const EdgeData& edgeData = m_graph.GetEdgeData( edge );
 			const NodeIterator to = m_graph.GetTarget( edge );
 			assert( edgeData.distance > 0 );
@@ -248,17 +354,29 @@ public:
 			if ( StallOnDemand && stallEdgeAllowed( edgeData.forward, edgeData.backward ) && m_graph.GetOriginalEdgeSource( edge ) == data.originalEdge ) {
 				int shorterDistance = std::numeric_limits<int>::max();
 				PenaltyTable toPenaltyTable = m_graph.GetPenaltyTable( to );
+				#ifdef QUERY_COUNT
+				++m_counter.getPenaltyTable;
+				#endif
+
 
 				unsigned deg = penaltyFunction.GetInDegree( toPenaltyTable );
 				for ( unsigned in = 0; in < deg; ++in ) {
 					const unsigned orig = firstOriginalTo + in;
 					if ( heapForward->WasInserted( orig ) ) {
 						PenaltyData penalty = penaltyFunction( toPenaltyTable, in, originalEdgeLocalTo );
+						#ifdef QUERY_COUNT
+						++m_counter.accessPenaltyTable;
+						#endif
+
 						if ( penalty == RESTRICTED_TURN ) continue;
 						shorterDistance = std::min( shorterDistance, heapForward->GetKey( orig ) + (int)penalty + (int)edgeData.distance );
 					}
 				}
 				if ( shorterDistance < distance ) {
+					#ifdef QUERY_COUNT
+					++m_counter.stallOps;
+					#endif
+
 					//perform a bfs starting at node
 					//only insert nodes when a sub-optimal path can be proven
 					//insert node into the stall queue
@@ -268,11 +386,19 @@ public:
 					m_stallQueue.push( StallQueueItem( data.node, data.originalEdge, shorterDistance ) );
 
 					while ( !m_stallQueue.empty() ) {
+						#ifdef QUERY_COUNT
+						++m_counter.stallSteps;
+						#endif
+
 						//get node from the queue
 						const StallQueueItem stallItem = m_stallQueue.front();
 						m_stallQueue.pop();
 						const int stallDistance = stallItem.distance;
 						PenaltyTable stallPenaltyTable = m_graph.GetPenaltyTable( stallItem.node );
+						#ifdef QUERY_COUNT
+						++m_counter.getPenaltyTable;
+						#endif
+
 
 						//iterate over outgoing edges
 						for ( EdgeIterator stallEdge = m_graph.BeginEdges( stallItem.node ), stallEdgeEnd = m_graph.EndEdges( stallItem.node ); stallEdge < stallEdgeEnd; ++stallEdge ) {
@@ -287,6 +413,10 @@ public:
 							if ( heapForward->GetData( stallOrig ).stalled == true )
 								continue;
 							PenaltyData penalty = penaltyFunction( stallPenaltyTable, stallItem.originalEdge, m_graph.GetOriginalEdgeSource( stallEdge ) );
+							#ifdef QUERY_COUNT
+							++m_counter.accessPenaltyTable;
+							#endif
+
 							if ( penalty == RESTRICTED_TURN )
 								continue;
 
@@ -312,9 +442,18 @@ public:
 			if ( edgeAllowed( edgeData.forward, edgeData.backward ) ) {
 //				qDebug() << "edge allowed" << m_graph.DebugStringEdge( edge ).c_str() << "||" << data.node << data.originalEdge << m_graph.GetOriginalEdgeSource( edge );
 				PenaltyData penalty = penaltyFunction( penaltyTable, data.originalEdge, m_graph.GetOriginalEdgeSource( edge ) );
+				#ifdef QUERY_COUNT
+				++m_counter.accessPenaltyTable;
+				#endif
+
 //				qDebug() << "penalty" << penalty;
 				if ( penalty == RESTRICTED_TURN )
 					continue;
+
+				#ifdef QUERY_COUNT
+				++m_counter.relaxedEdges;
+				#endif
+
 
 				const unsigned orig = firstOriginalTo + originalEdgeLocalTo;
 				HeapData toData( originalEdge, edge, to, originalEdgeLocalTo );
@@ -324,12 +463,19 @@ public:
 
 				//New Node discovered -> Add to Heap + Node Info Storage
 				if ( !heapForward->WasInserted( orig ) ) {
+					#ifdef QUERY_COUNT
+					++m_counter.insertHeap;
+					#endif
+
 //					qDebug() << "  insert";
 					heapForward->Insert( orig, toDistance, toData );
 
 				//Found a shorter Path -> Update distance
 				// '<=' instead of '<' because of stall-on-demand
 				} else if ( toDistance <= heapForward->GetKey( orig ) ) {
+					#ifdef QUERY_COUNT
+					++m_counter.updateHeap;
+					#endif
 //					qDebug() << "  update";
 					heapForward->DecreaseKey( orig, toDistance );
 					//new parent + unstall
@@ -349,6 +495,10 @@ public:
 
 		#ifndef NDEBUG
 //		qDebug() << source.DebugString().c_str() << "..." << target.DebugString().c_str();
+		#endif
+
+		#ifdef QUERY_COUNT
+		++m_counter.queries;
 		#endif
 
 
@@ -394,6 +544,9 @@ public:
 
 //		qDebug() << source.DebugString().c_str() << "..." << target.DebugString().c_str();
 
+		#ifdef QUERY_COUNT
+		++m_counter.queries;
+		#endif
 
 		AllowForwardEdge forward;
 		AllowBackwardEdge backward;
@@ -496,6 +649,14 @@ public:
 		m_heapBackward.Clear();
 	}
 
+	#ifdef QUERY_COUNT
+	void ClearCounter() {
+		m_counter.Clear();
+	}
+	const Counter& GetCounter() const {
+		return m_counter;
+	}
+	#endif
 
 
 

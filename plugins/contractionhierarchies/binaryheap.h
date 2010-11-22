@@ -94,7 +94,7 @@ class BinaryHeap {
 			heap.resize( 1 );
 			insertedNodes.clear();
 			nodeIndex.clear();
-			heap[0].weight = 0;
+			heap[0].weight = std::numeric_limits< Weight >::min();
 		}
 
 		Key Size() const {

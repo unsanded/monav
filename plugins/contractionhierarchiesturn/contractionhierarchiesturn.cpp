@@ -24,6 +24,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include "contractionturncleanup.h"
 #include "utils/qthelpers.h"
 #include "turnexperiments.h"
+#include "../contractionhierarchies/contractor.h"
 
 ContractionHierarchiesTurn::ContractionHierarchiesTurn()
 {
@@ -113,7 +114,7 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 
 		if (doPlainQuery) {
 			TurnExperiments experiments;
-			experiments.plainDijkstra( dir, *contractor );
+			experiments.PlainUnidirDijkstra( dir, *contractor );
 		}
 
 
@@ -130,6 +131,50 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 		experiments.chtQuery( importer, dir );
 	}
 
+	if (args.indexOf("--ch-contract") != -1) {
+		std::vector< IImporter::RoutingNode > inputNodes;
+		std::vector< IImporter::RoutingEdge > inputEdges;
+
+		if ( !importer->GetRoutingNodes( &inputNodes ) )
+			return false;
+		if ( !importer->GetRoutingEdges( &inputEdges ) )
+			return false;
+
+		unsigned numNodes = inputNodes.size();
+
+		Contractor* contractor = new Contractor( numNodes, inputEdges );
+		std::vector< IImporter::RoutingEdge >().swap( inputEdges );
+
+
+		contractor->Run();
+		qDebug() << "Writing graph to file ...";
+		contractor->GetGraph().WriteToFile( fileInDirectory( dir, "CH Dynamic Graph") );
+	}
+
+	if (args.indexOf("--edge-create") != -1) {
+			TurnExperiments experiments;
+			experiments.CreateEdgeBasedGraph( importer, dir );
+	}
+
+	if (args.indexOf("--edge-query") != -1) {
+			TurnExperiments experiments;
+			experiments.ReadEdgeContractor( dir );
+			experiments.ReadDemands( dir );
+			experiments.EdgePlainUnidirDijkstra();
+	}
+
+	if (args.indexOf("--edge-contract") != -1) {
+			TurnExperiments experiments;
+			experiments.ReadEdgeContractor( dir );
+			experiments.EdgeContract( dir );
+	}
+
+	if (args.indexOf("--edge-ch-query") != -1) {
+			TurnExperiments experiments;
+			experiments.ReadDemands( dir );
+			experiments.ReadEdgeMap( dir );
+			experiments.EdgeCHQuery( importer, dir );
+	}
 
 
     exit(1);

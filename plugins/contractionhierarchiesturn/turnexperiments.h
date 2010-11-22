@@ -30,6 +30,8 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include "utils/config.h"
 #include "turnquery.h"
 #include "turncontractor.h"
+#include "../contractionhierarchies/contractor.h"
+#include "../contractionhierarchies/query.h"
 
 class TurnExperiments {
 public:
@@ -56,23 +58,44 @@ protected:
 		static Timer timer;
 		return ( double ) timer.elapsed() / 1000;
 	}
+    std::string DebugStringSearchGraphMemory( const Graph& graph ) const {
+    	double numNodes = graph.GetNumberOfNodes();
+    	unsigned nodes = graph.GetNumberOfNodes() * 12;  // firstEdge:4, firstPenalty:4, firstOriginalEdge: 4
+    	unsigned edges =  graph.GetNumberOfEdges() * 12; // target:4, originalEdgeSource:2, originalEdgeTarget:2, distance:4
+    	unsigned penalties = graph.GetNumberOfStoredPenalties() *  1;  // penalty:1;
+    	std::stringstream ss;
+    	ss << "nodes: " << nodes/1048576. << " MiB, edges: " << edges/1048576.<< " MiB, penalties: " << penalties/1048576. << " MiB (total " << (nodes+edges+penalties)/numNodes << " Byte/node)";
+    	return ss.str();
+    }
+    std::string DebugStringSearchGraphMemory( const Contractor::_DynamicGraph& graph ) const {
+    	double numNodes = graph.GetNumberOfNodes();
+    	unsigned nodes = graph.GetNumberOfNodes() * 4;  // firstEdge:4
+    	unsigned edges =  graph.GetNumberOfEdges() * 8; // target:4, distance:4
+    	std::stringstream ss;
+    	ss << "nodes: " << nodes/1048576. << " MiB, edges: " << edges/1048576.<< " MiB (total " << (nodes+edges)/numNodes << " Byte/node)";
+    	return ss.str();
+    }
+
+    std::vector< Demand > _demands;
+
 public:
 
-	bool plainDijkstra(QString dir, const TurnContractor& contractor) {
+	bool PlainUnidirDijkstra(QString dir, const TurnContractor& contractor) {
 		const Graph& graph = contractor.GetGraph();
 		unsigned numNodes = graph.GetNumberOfNodes();
+		qDebug() << DebugStringSearchGraphMemory( graph ).c_str();
 
 		unsigned numQueries = 1000;
 		srand48(176);
-		std::vector< Demand > demands;
-		demands.reserve( numQueries );
+		_demands.clear();
+		_demands.reserve( numQueries );
 //		{
 //			Demand demand;
 //			demand.source = 405446;
 //			demand.source2 = 405442;
 //			demand.target2 = 405440;
 //			demand.target = 405441;
-//			demands.push_back(demand);
+//			_demands.push_back(demand);
 //		}
 		std::vector< std::pair< unsigned, unsigned > > temp;
 		for ( unsigned i = 0; i < numQueries; ++i ) {
@@ -110,25 +133,36 @@ public:
 			temp.clear();
 
 			demand.distance = -1;
-			demands.push_back( demand );
+			_demands.push_back( demand );
 		}
 
 
 //		omp_set_num_threads(1);
 		int maxThreads = omp_get_max_threads();
 		qDebug( "using %d threads", maxThreads );
-		qDebug() << demands.size() << "queries";
+		qDebug() << _demands.size() << "queries";
 
+		double duration = _Timestamp();
 		#pragma omp parallel
 		{
 			TurnQuery<Graph, false /*stall on demand*/> query(graph);
 			#pragma omp for schedule ( dynamic )
-			for ( int i = 0; i < (int)demands.size(); ++i )
+			for ( int i = 0; i < (int)_demands.size(); ++i )
 			{
-				Demand& demand = demands[i];
+				Demand& demand = _demands[i];
 				demand.distance = query.UnidirSearch( demand.source, demand.target );
 				query.Clear();
+				#ifndef NDEBUG
 				qDebug() << i << demand.DebugString().c_str();
+				#endif
+			}
+			if (maxThreads == 1) {
+				duration = _Timestamp() - duration;
+				qDebug() << "T queries done in" << duration << "seconds.";
+				qDebug() << "query time:" << duration * 1000 / _demands.size() << " ms";
+				#ifdef QUERY_COUNT
+				qDebug() << query.GetCounter().DebugString().c_str();
+				#endif
 			}
 		}
 
@@ -138,13 +172,53 @@ public:
 		if ( !data.open( QIODevice::WriteOnly ) )
 			return false;
 
-		data << unsigned(demands.size());
-		for ( unsigned i = 0; i < demands.size(); ++i )
+		data << unsigned(_demands.size());
+		for ( unsigned i = 0; i < _demands.size(); ++i )
 		{
-			const Demand& demand = demands[i];
+			const Demand& demand = _demands[i];
 			data << demand.source.source << demand.source.target << demand.source.edgeID;
 			data << demand.target.source << demand.target.target << demand.target.edgeID;
 			data << demand.distance;
+		}
+		return true;
+	}
+
+	bool ReadDemands(QString dir) {
+		qDebug() << "ReadDemands";
+		QString filename = fileInDirectory( dir, "CHT Demands");
+		FileStream data( filename );
+
+		if ( !data.open( QIODevice::ReadOnly ) ) {
+			qCritical() << "TurnExperiments::ReadDemands(): File not found";
+			return false;
+		}
+
+
+		unsigned numQueries;
+		data >> numQueries;
+
+		if ( data.status() == QDataStream::ReadPastEnd ) {
+			qCritical() << "TurnExperiments::ReadDemands(): Corrupted Demands Data";
+			return false;
+		}
+
+		qDebug() << numQueries << "demands";
+		_demands.clear();
+		_demands.reserve( numQueries );
+
+		for ( unsigned i = 0; i < numQueries; ++i )
+		{
+			Demand demand;
+			data >> demand.source.source >> demand.source.target >> demand.source.edgeID;
+			data >> demand.target.source >> demand.target.target >> demand.target.edgeID;
+			data >> demand.distance;
+
+			if ( data.status() == QDataStream::ReadPastEnd ) {
+				qCritical() << "TurnExperiments::ReadDemands(): Corrupted Demands Data";
+				return false;
+			}
+
+			_demands.push_back( demand );
 		}
 		return true;
 	}
@@ -155,6 +229,8 @@ public:
 			#endif
 			, QString dir) {
 		const Graph* graph = Graph::ReadFromFile( fileInDirectory( dir, "CHT Dynamic Graph") );
+		qDebug() << DebugStringSearchGraphMemory( *graph ).c_str();
+
 
 //		if ( false ) {
 //			std::vector< IImporter::RoutingNode > inputNodes;
@@ -244,65 +320,31 @@ public:
 //
 //		}
 
-		unsigned numQueries;
-		std::vector< Demand > demands;
-		{
-			QString filename = fileInDirectory( dir, "CHT Demands");
-			FileStream data( filename );
 
-			if ( !data.open( QIODevice::ReadOnly ) )
-				return false;
-
-			data >> numQueries;
-
-			if ( data.status() == QDataStream::ReadPastEnd ) {
-				qCritical() << "TurnExperiments::cthQuery(): Corrupted Demands Data";
-				return false;
-			}
-
-			qDebug() << numQueries << "queries";
-			demands.reserve( numQueries );
-
-			for ( unsigned i = 0; i < numQueries; ++i )
-			{
-				Demand demand;
-				data >> demand.source.source >> demand.source.target >> demand.source.edgeID;
-				data >> demand.target.source >> demand.target.target >> demand.target.edgeID;
-				data >> demand.distance;
-
-				if ( data.status() == QDataStream::ReadPastEnd ) {
-					qCritical() << "TurnExperiments::cthQuery(): Corrupted Demands Data";
-					return false;
-				}
-
-				demands.push_back( demand );
-
-
-			}
-		}
+		ReadDemands(dir);
 
         #ifndef NDEBUG
 		if ( false ) {
-			demands.clear();
+			_demands.clear();
 			Demand demand;
-			demand.source = TurnQueryEdge( 1980676, 4161, 4199336 );
-			demand.target = TurnQueryEdge( 3027184, 3512749, 3434561 );
-            demand.distance = 14698;
+            demand.source = TurnQueryEdge( 66635, 66633, 75484);
+            demand.target = TurnQueryEdge( 13327, 13326, 89990 );
+            demand.distance = 28625;
 
-            demand.source = TurnQueryEdge( 1980676, 4161, 4199336 );
-            demand.target = TurnQueryEdge( 2446421, 2442272, 3515556 );
-            demand.distance = 13387;
+            demand.source = TurnQueryEdge( 45002, 11622,  49612 );
+            demand.target = TurnQueryEdge( 13327, 13326, 89990 );
+            demand.distance = 27990;
 
-            demands.push_back(demand);
+            _demands.push_back(demand);
 		}
         #endif
 
-		typedef TurnQuery<Graph, true /*stall on demand*/> Query;
+		typedef TurnQuery<Graph, true/*stall on demand*/> Query;
 		Query query(*graph);
 		double duration = _Timestamp();
-		for ( int i = 0; i < (int)demands.size(); ++i )
+		for ( int i = 0; i < (int)_demands.size(); ++i )
 		{
-			const Demand& demand = demands[i];
+			const Demand& demand = _demands[i];
 			int distance = query.BidirSearch( demand.source, demand.target );
 			if (distance != demand.distance) {
 				qDebug() << i << demand.source.DebugString().c_str() << "..." << demand.target.DebugString().c_str()
@@ -377,7 +419,7 @@ public:
 						ss << "\t" << query.m_heapForward.GetKey( origUp ) << "\t" << graph->DebugStringEdge(edge);
 						ss << "\t||\t" << plainGraph.DebugStringEdge( oEdge );
 						if ( heapData.parentOrig != (unsigned)-1 ) {
-							int testDistance = plainQuery.UnidirSearch( demand.source, TurnQueryEdge( graph->GetTarget(edge), plainGraph.GetTarget( oEdge ), plainGraph.GetEdgeData( oEdge ).id ) );
+							int testDistance = plainQuery.UnidirSearch( demand.source, TurnQueryEdge( plainGraph.GetTarget( oEdge ), graph->GetTarget(edge), plainGraph.GetEdgeData( oEdge ).id ) );
 							plainQuery.Clear();
 							ss << "\t||\t" << testDistance;
 						}
@@ -421,6 +463,341 @@ public:
 		}
 		duration = _Timestamp() - duration;
 		qDebug() << "CHT queries done in" << duration << "seconds.";
+		qDebug() << "query time:" << duration * 1000 / _demands.size() << " ms";
+		#ifdef QUERY_COUNT
+		qDebug() << query.GetCounter().DebugString().c_str();
+		#endif
+
+
+		delete graph;
+		return true;
+	}
+
+	struct EdgeMapItem {
+		unsigned first;
+		unsigned second;
+		unsigned distance;
+		EdgeMapItem(unsigned d) : first(-1), second(-1), distance(d) {}
+		EdgeMapItem(unsigned f, unsigned s, unsigned d) : first(f), second(s), distance(d) {}
+	};
+	QHash< unsigned, EdgeMapItem > _edgeMap;
+	Contractor * _contractor;
+
+	bool CreateEdgeBasedGraph(IImporter* importer, QString dir) {
+		std::vector< IImporter::RoutingEdge > inputTurnEdges;
+		_edgeMap.clear();
+		unsigned numNodes = 0;
+		{
+			qDebug() << "Read graph with penalties ...";
+			std::vector< IImporter::RoutingNode > inputNodes;
+			std::vector< IImporter::RoutingEdge > inputEdges;
+			std::vector< char > inDegree, outDegree;
+			std::vector< double > penalties;
+
+			if ( !importer->GetRoutingNodes( &inputNodes ) )
+				return false;
+			if ( !importer->GetRoutingEdges( &inputEdges ) )
+				return false;
+			if ( !importer->GetRoutingPenalties( &inDegree, &outDegree, &penalties ) )
+				return false;
+
+			TurnContractor contractor( inputNodes.size(), inputEdges, inDegree, outDegree, penalties );
+			std::vector< IImporter::RoutingEdge >().swap( inputEdges );
+			std::vector< char >().swap( inDegree );
+			std::vector< char >().swap( outDegree );
+			std::vector< double >().swap( penalties );
+
+			const Graph& graph = contractor.GetGraph();
+
+			qDebug() << "Create edge-based graph ...";
+			for ( unsigned source = 0; source < graph.GetNumberOfNodes(); ++source ) {
+				for ( unsigned edge = graph.BeginEdges( source ); edge < graph.EndEdges( source ); ++edge ) {
+					const EdgeData& edgeData = graph.GetEdgeData( edge );
+					if ( !edgeData.forward )
+						continue;
+					unsigned target = graph.GetTarget( edge );
+					assert( !edgeData.shortcut );
+					QHash< unsigned, EdgeMapItem >::iterator it = _edgeMap.find( edgeData.id );
+					if ( it == _edgeMap.end() ) {
+						it = _edgeMap.insert( edgeData.id, EdgeMapItem( edgeData.distance ) );
+					}
+
+					if ( source <= target ) {
+						assert( it->first == (unsigned)-1 );
+						it->first = numNodes;
+					} else {
+						assert( it->second == (unsigned)-1 );
+						it->second = numNodes;
+					}
+					++numNodes;
+				}
+			}
+
+			for ( unsigned source = 0; source < graph.GetNumberOfNodes(); ++source ) {
+				for ( unsigned edge1 = graph.BeginEdges( source ) ; edge1 < graph.EndEdges( source ); ++edge1 ) {
+					const EdgeData& edge1Data = graph.GetEdgeData( edge1 );
+					if ( !edge1Data.forward )
+						continue;
+					unsigned via = graph.GetTarget( edge1 );
+					Graph::PenaltyTable penaltyTable = graph.GetPenaltyTable( via );
+					assert( !edge1Data.shortcut );
+
+					QHash< unsigned, EdgeMapItem >::iterator it = _edgeMap.find( edge1Data.id );
+					assert( it != _edgeMap.end() );
+					unsigned edgeSource = source <= via ? it->first : it->second;
+					for ( unsigned edge2 = graph.BeginEdges( via ); edge2 < graph.EndEdges( via ); ++edge2 ) {
+						const EdgeData& edge2Data = graph.GetEdgeData( edge2 );
+						if ( !edge2Data.forward )
+							continue;
+						assert( !edge2Data.shortcut );
+						unsigned target = graph.GetTarget( edge2 );
+						Graph::PenaltyData penalty = penaltyTable.GetData( graph.GetOriginalEdgeTarget( edge1 ), graph.GetOriginalEdgeSource( edge2 ) );
+						if ( penalty == TurnContractor::RESTRICTED_TURN )
+							continue;
+
+						it = _edgeMap.find( edge2Data.id );
+						assert( it != _edgeMap.end() );
+						unsigned edgeTarget = via <= target ? it->first : it->second;
+
+						unsigned turnDistance = edge1Data.distance + penalty;
+
+						if (source == 5382 && via == 7029) {
+							qDebug() << graph.DebugStringEdge( edge1 ).c_str() << graph.DebugStringEdge( edge2 ).c_str();
+							qDebug() << edgeSource << edgeTarget << turnDistance;
+						}
+
+						IImporter::RoutingEdge turnEdge;
+						turnEdge.source = edgeSource;
+						turnEdge.target = edgeTarget;
+						turnEdge.distance = turnDistance/10.;
+						turnEdge.bidirectional = false;
+						inputTurnEdges.push_back( turnEdge );
+					}
+				}
+			}
+		}
+
+		qDebug() << "Write edge-based graph to file ...";
+		QString filename =  fileInDirectory( dir, "Edge Based Graph");
+
+		FileStream data( filename );
+
+		if ( !data.open( QIODevice::WriteOnly ) )
+			return false;
+		unsigned numEdges = inputTurnEdges.size();
+		unsigned numMaps = _edgeMap.size();
+		data << numNodes << numEdges << numMaps;
+
+		for ( QHash< unsigned, EdgeMapItem >::iterator it = _edgeMap.begin(); it != _edgeMap.end(); ++it ) {
+			data << it.key() << it->first << it->second << it->distance;
+		}
+
+		for ( unsigned i = 0; i < inputTurnEdges.size(); ++i ) {
+			unsigned source = inputTurnEdges[i].source;
+			unsigned target = inputTurnEdges[i].target;
+			double distance = inputTurnEdges[i].distance;
+			bool bidirectional = inputTurnEdges[i].bidirectional;
+			data << source << target << distance << bidirectional;
+		}
+
+		return true;
+	}
+
+	bool ReadEdgeMap(QString dir) {
+		qDebug() << "ReadEdgeMap";
+		QHash< unsigned, std::pair<unsigned, unsigned> > edgeMap;
+		unsigned numNodes = 0;
+		unsigned numEdges = 0;
+		unsigned numMaps = 0;
+
+
+		QString filename =  fileInDirectory( dir, "Edge Based Graph");
+		FileStream data( filename );
+
+		if ( !data.open( QIODevice::ReadOnly ) ) {
+			qCritical() << "TurnExperiments::ReadEdgeMap(): File not found";
+			exit(1);
+			return false;
+		}
+
+		data >> numNodes >> numEdges >> numMaps;
+
+		if ( data.status() == QDataStream::ReadPastEnd ) {
+			qCritical() << "TurnExperiments::ReadEdgeMap(): Corrupted Graph Data";
+			exit(1);
+		}
+
+		assert( _edgeMap.empty() );
+		_edgeMap.reserve( numMaps );
+
+		for ( unsigned i = 0; i < numMaps; ++i ) {
+			unsigned id, first, second, distance;
+			data >> id >> first >> second >> distance;
+			_edgeMap.insert( id, EdgeMapItem( first, second, distance ) );
+			if ( data.status() == QDataStream::ReadPastEnd ) {
+				qCritical() << "TurnExperiments::GetEdgeContractor(): Corrupted Graph Data";
+				exit(1);
+			}
+		}
+
+		return true;
+	}
+
+
+	bool ReadEdgeContractor(QString dir) {
+		qDebug() << "ReadEdgeContractor";
+		std::vector< IImporter::RoutingEdge > inputTurnEdges;
+		unsigned numNodes = 0;
+		unsigned numEdges = 0;
+		unsigned numMaps = 0;
+
+
+		QString filename =  fileInDirectory( dir, "Edge Based Graph");
+		FileStream data( filename );
+
+		if ( !data.open( QIODevice::ReadOnly ) ) {
+			qCritical() << "TurnExperiments::ReadEdgeContractor(): File not found";
+			exit(1);
+			return false;
+		}
+
+		data >> numNodes >> numEdges >> numMaps;
+
+		if ( data.status() == QDataStream::ReadPastEnd ) {
+			qCritical() << "TurnExperiments::GetEdgeContractor(): Corrupted Graph Data";
+			exit(1);
+		}
+
+		assert( _edgeMap.empty() );
+		_edgeMap.reserve( numMaps );
+		inputTurnEdges.reserve( numEdges );
+
+		for ( unsigned i = 0; i < numMaps; ++i ) {
+			unsigned id, first, second, distance;
+			data >> id >> first >> second >> distance;
+			_edgeMap.insert( id, EdgeMapItem( first, second, distance ) );
+			if ( data.status() == QDataStream::ReadPastEnd ) {
+				qCritical() << "TurnExperiments::GetEdgeContractor(): Corrupted Graph Data";
+				exit(1);
+			}
+		}
+
+		inputTurnEdges.reserve( numEdges );
+		for ( unsigned i = 0; i < numEdges; ++i ) {
+			unsigned source, target;
+			double distance;
+			bool bidirectional;
+			data >> source >> target >> distance >> bidirectional;
+
+			IImporter::RoutingEdge turnEdge;
+			turnEdge.source = source;
+			turnEdge.target = target;
+			turnEdge.distance = distance;
+			turnEdge.bidirectional = bidirectional;
+			inputTurnEdges.push_back( turnEdge );
+		}
+
+		_contractor = new Contractor( numNodes, inputTurnEdges );
+
+		return true;
+	}
+
+	void ReadEdgeDemands(std::vector< Demand > *edgeDemands) {
+		edgeDemands->reserve( _demands.size() );
+		for ( unsigned i = 0; i < _demands.size(); ++i )
+		{
+			const Demand &demand = _demands[i];
+			QHash< unsigned, EdgeMapItem >::iterator it = _edgeMap.find( demand.source.edgeID );
+			assert( it != _edgeMap.end() );
+			Demand edgeDemand;
+			edgeDemand.source.source = demand.source.source <= demand.source.target ? it->first : it->second;
+			assert( edgeDemand.source.source != (unsigned)-1 );
+			it = _edgeMap.find( demand.target.edgeID );
+			assert( it != _edgeMap.end() );
+			edgeDemand.target.target = demand.target.source <= demand.target.target ? it->first : it->second;
+			assert( edgeDemand.target.target != (unsigned)-1 );
+			if ( demand.distance != std::numeric_limits<int>::max() )
+				edgeDemand.distance = demand.distance - it->distance;
+			else
+				edgeDemand.distance = demand.distance;
+			edgeDemands->push_back( edgeDemand );
+		}
+	}
+
+	bool EdgePlainUnidirDijkstra() {
+		const Contractor::_DynamicGraph & graph = _contractor->GetGraph();
+		qDebug() << DebugStringSearchGraphMemory( graph ).c_str();
+
+		std::vector< Demand > edgeDemands;
+		ReadEdgeDemands( &edgeDemands );
+
+		Query<Contractor::_DynamicGraph, false /*stall on demand*/> query(graph);
+
+		double duration = _Timestamp();
+		for ( int i = 0; i < (int)edgeDemands.size(); ++i ) {
+			const Demand& demand = edgeDemands[i];
+			qDebug() << demand.source.source << demand.target.target;
+			int distance = query.UnidirSearch( demand.source.source, demand.target.target );
+			qDebug() << i << _demands[i].DebugString().c_str() << "||" << distance;
+			if (distance != demand.distance) {
+				qDebug() << i << "edge" << distance << "node" << demand.distance;
+
+				qDebug() << graph.DebugStringEdgesOf( demand.source.source ).c_str();
+				qDebug() << graph.DebugStringEdgesOf( demand.target.target ).c_str();
+
+				exit(1);
+			}
+
+			query.Clear();
+		}
+		duration = _Timestamp() - duration;
+		qDebug() << "edge-based graph queries done in" << duration << "seconds.";
+		qDebug() << "query time:" << duration * 1000 / _demands.size() << " ms";
+		#ifdef QUERY_COUNT
+		qDebug() << query.GetCounter().DebugString().c_str();
+		#endif
+		return true;
+	}
+
+	bool EdgeContract(QString dir) {
+		_contractor->Run();
+		qDebug() << "Writing graph to file ...";
+		_contractor->GetGraph().WriteToFile( fileInDirectory( dir, "Edge Based CH Dynamic Graph") );
+		return true;
+	}
+
+	bool EdgeCHQuery(IImporter*, QString dir) {
+		const Contractor::_DynamicGraph* graph = Contractor::_DynamicGraph::ReadFromFile( fileInDirectory( dir, "Edge Based CH Dynamic Graph") );
+		qDebug() << DebugStringSearchGraphMemory( *graph ).c_str();
+
+
+		std::vector< Demand > edgeDemands;
+		ReadEdgeDemands( &edgeDemands );
+
+		typedef Query<Contractor::_DynamicGraph, true /*stall on demand*/> Query;
+		Query query(*graph);
+		double duration = _Timestamp();
+		for ( int i = 0; i < (int)edgeDemands.size(); ++i )
+		{
+			const Demand& demand = edgeDemands[i];
+			int distance = query.BidirSearch( demand.source.source, demand.target.target );
+			if (distance != demand.distance) {
+				qDebug() << i << "edge" << distance << "node" << demand.distance;
+
+				qDebug() << graph->DebugStringEdgesOf( demand.source.source ).c_str();
+				qDebug() << graph->DebugStringEdgesOf( demand.target.target ).c_str();
+
+				exit(1);
+			}
+
+			query.Clear();
+		}
+		duration = _Timestamp() - duration;
+		qDebug() << "edge-based CH queries done in" << duration << "seconds.";
+		qDebug() << "query time:" << duration * 1000 / _demands.size() << " ms";
+		#ifdef QUERY_COUNT
+		qDebug() << query.GetCounter().DebugString().c_str();
+		#endif
 
 		delete graph;
 		return true;

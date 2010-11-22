@@ -171,6 +171,11 @@ class DynamicTurnGraph {
 			return m_numOriginalEdges;
 		}
 
+		unsigned GetNumberOfStoredPenalties() const
+		{
+			return m_penalties.size();
+		}
+
 		unsigned GetOutDegree( const NodeIterator &n ) const
 		{
 			assert( n < m_nodes.size() );
@@ -308,6 +313,11 @@ public:
         	assert( pt.GetOutDegree() == GetOriginalOutDegree( n ) );
             #endif
         	return PenaltyTable( m_penalties.begin() + m_nodes[n].firstPenalty );
+        }
+
+        unsigned GetPenaltyTableID( const NodeIterator& n ) const {
+        	assert( n < m_nodes.size() );
+        	return m_nodes[n].firstPenalty;
         }
 
 		EdgeIterator BeginEdges( const NodeIterator &n ) const
@@ -454,6 +464,7 @@ public:
 				std::vector< InputEdge > edges;
 				for ( EdgeIterator e = BeginEdges( source ), ee = EndEdges( source ); e != ee; ++e ) {
 					InputEdge edge;
+					edge.source = source;
 					edge.target = GetTarget( e );
 					edge.originalEdgeSource = GetOriginalEdgeSource( e );
 					edge.originalEdgeTarget = GetOriginalEdgeTarget( e );
@@ -487,7 +498,7 @@ public:
 			data >> numNodes >> numEdges >> numPenaltyTables;
 
 			if ( data.status() == QDataStream::ReadPastEnd ) {
-				qCritical() << "TurnContractor::ReadGraphFromFile(): Corrupted Graph Data";
+				qCritical() << "DynamicTurnGraph::ReadGraphFromFile(): Corrupted Graph Data";
 				exit(1);
 			}
 
@@ -537,7 +548,7 @@ public:
 				edge.data.Deserialize( &data );
 
 				if ( data.status() == QDataStream::ReadPastEnd ) {
-					qCritical() << "TurnContractor::ReadGraphFromFile(): Corrupted Graph Data";
+					qCritical() << "DynamicTurnGraph::ReadGraphFromFile(): Corrupted Graph Data";
 					exit(1);
 				}
 				edges.push_back( edge );
