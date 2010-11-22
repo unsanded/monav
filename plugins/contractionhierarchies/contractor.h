@@ -22,6 +22,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <vector>
 #include <omp.h>
 #include <limits>
+#include <sstream>
 #include "utils/qthelpers.h"
 #include "dynamicgraph.h"
 #include "binaryheap.h"
@@ -49,12 +50,42 @@ class Contractor {
 				NodeID middle; // shortcut
 				unsigned id; // original edge
 			};
+			std::string DebugString() const {
+				std::stringstream ss;
+				ss << distance << " ";
+				if (backward) ss << "<";
+				ss << "-";
+				if (forward) ss << ">";
+				if (shortcut) ss << " shortcut|" << middle;
+				else ss << " orig=" << id;
+				return ss.str();
+			}
+
+			void Serialize( FileStream *data ) const {
+				unsigned t1; bool t2;
+				t1 = distance;  *data << t1;
+				t2 = shortcut;  *data << t2;
+				t2 = forward;   *data << t2;
+				t2 = backward;  *data << t2;
+				t1 = id;        *data << t1;
+			}
+			void Deserialize( FileStream *data ) {
+				unsigned t1; bool t2;
+				*data >> t1;  distance = t1;
+				*data >> t2;  shortcut = t2;
+				*data >> t2;  forward = t2;
+				*data >> t2;  backward = t2;
+				*data >> t1;  id = t1;
+			}
+
 		} data;
 
 		struct _HeapData {
 		};
 
+	public:
 		typedef DynamicGraph< _EdgeData > _DynamicGraph;
+	private:
 		typedef BinaryHeap< NodeID, NodeID, unsigned, _HeapData > _Heap;
 		typedef _DynamicGraph::InputEdge _ImportEdge;
 
@@ -393,6 +424,10 @@ class Contractor {
 			list = _witnessList;
 		}
 
+		const _DynamicGraph& GetGraph() const {
+			return *_graph;
+		}
+
 	private:
 
 		double _Timestamp() {
@@ -490,9 +525,9 @@ class Contractor {
 				}
 
 				if ( Simulate )
-					_Dijkstra( maxDistance, 500, data );
-				else
 					_Dijkstra( maxDistance, 1000, data );
+				else
+					_Dijkstra( maxDistance, 2000, data );
 
 				for ( _DynamicGraph::EdgeIterator outEdge = _graph->BeginEdges( node ), endOutEdges = _graph->EndEdges( node ); outEdge != endOutEdges; ++outEdge ) {
 					const _EdgeData& outData = _graph->GetEdgeData( outEdge );

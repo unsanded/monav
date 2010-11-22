@@ -25,11 +25,13 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <limits>
 #include "utils/bithelpers.h"
 
-template< typename EdgeData>
+template< typename _EdgeData>
 class DynamicGraph {
 	public:
 		typedef unsigned NodeIterator;
 		typedef unsigned EdgeIterator;
+		typedef _EdgeData EdgeData;
+		typedef DynamicGraph< EdgeData > Self;
 
 		class InputEdge {
 			public:
@@ -198,6 +200,90 @@ class DynamicGraph {
 			return EndEdges( from );
 		}
 
+		bool WriteToFile( QString filename ) const {
+
+			FileStream data( filename );
+
+			if ( !data.open( QIODevice::WriteOnly ) )
+				return false;
+
+			unsigned numNodes = m_numNodes;
+			unsigned numEdges = m_numEdges;
+			data << numNodes << numEdges;
+
+			for ( unsigned source = 0; source < GetNumberOfNodes(); ++source )
+			{
+				std::vector< InputEdge > edges;
+				for ( EdgeIterator e = BeginEdges( source ), ee = EndEdges( source ); e != ee; ++e ) {
+					InputEdge edge;
+					edge.source = source;
+					edge.target = GetTarget( e );
+					edge.data = GetEdgeData( e );
+					edges.push_back( edge );
+				}
+				std::sort( edges.begin(), edges.end() );
+				for ( unsigned i = 0; i < edges.size(); ++i )
+				{
+					const InputEdge& edge = edges[i];
+					unsigned target = edge.target;
+
+					data << source << target;
+					edge.data.Serialize( &data );
+				}
+			}
+			return true;
+		}
+
+		static Self* ReadFromFile( QString filename ) {
+			FileStream data( filename );
+
+			if ( !data.open( QIODevice::ReadOnly ) )
+				return NULL;
+
+			unsigned numNodes;
+			unsigned numEdges;
+			data >> numNodes >> numEdges;
+
+			if ( data.status() == QDataStream::ReadPastEnd ) {
+				qCritical() << "DynamicGraph::ReadGraphFromFile(): Corrupted Graph Data";
+				exit(1);
+			}
+
+			std::vector< InputEdge > edges;
+			edges.reserve( numEdges );
+
+			for ( unsigned i = 0; i < numEdges; ++i ) {
+				unsigned source, target;
+				data >> source >> target;
+
+				InputEdge edge;
+				edge.source = source;
+				edge.target = target;
+				edge.data.Deserialize( &data );
+
+				if ( data.status() == QDataStream::ReadPastEnd ) {
+					qCritical() << "DynamicGraph::ReadGraphFromFile(): Corrupted Graph Data";
+					exit(1);
+				}
+				edges.push_back( edge );
+			}
+			Self* graph = new Self( numNodes, edges );
+			return graph;
+		}
+
+        std::string DebugStringEdge( const EdgeIterator& e ) const {
+        	return m_edges[ e ].DebugString();
+        }
+        std::string DebugStringEdgesOf( const NodeIterator& n ) const {
+        	std::stringstream ss;
+        	ss << "edges of node " << n << ":\n";
+        	for ( EdgeIterator edge =  BeginEdges( n ); edge != EndEdges( n ); ++edge ) {
+        		ss << "[" << edge << "] " << DebugStringEdge(edge) << "\n";
+        	}
+        	return ss.str();
+        }
+
+
 	protected:
 
 		bool isDummy( EdgeIterator edge ) const
@@ -220,6 +306,11 @@ class DynamicGraph {
 		struct Edge {
 			NodeIterator target;
 			EdgeData data;
+			std::string DebugString() const {
+				std::stringstream ss;
+				ss << "-> " << target << ": " << data.DebugString();
+				return ss.str();
+			}
 		};
 
 		NodeIterator m_numNodes;
