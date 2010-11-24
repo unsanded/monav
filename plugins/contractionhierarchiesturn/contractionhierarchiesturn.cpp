@@ -84,7 +84,7 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 	QString filename = fileInDirectory( dir, "Contraction Hierarchies Turn" );
 
 	if (args.indexOf("--1-thread") != -1) {
-	    omp_set_num_threads(1);
+		 omp_set_num_threads(1);
 	}
 	bool doContract = args.indexOf("--cht-contract") != -1;
 	bool doPlainQuery = args.indexOf("--cht-plain-query") != -1;
@@ -106,7 +106,7 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 
 		unsigned numNodes = inputNodes.size();
 
-		TurnContractor* contractor = new TurnContractor( numNodes, inputEdges, inDegree, outDegree, penalties );
+		TurnContractor* contractor = new TurnContractor( numNodes, &inputEdges, inDegree, outDegree, penalties );
 		std::vector< IImporter::RoutingEdge >().swap( inputEdges );
 		std::vector< char >().swap( inDegree );
 		std::vector< char >().swap( outDegree );
@@ -177,7 +177,7 @@ bool ContractionHierarchiesTurn::Preprocess( IImporter* importer, QString dir )
 	}
 
 
-    exit(1);
+	 exit(1);
 
 
 //	std::vector< TurnContractor::Witness > witnessList;

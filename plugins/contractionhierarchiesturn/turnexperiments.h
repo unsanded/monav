@@ -58,25 +58,25 @@ protected:
 		static Timer timer;
 		return ( double ) timer.elapsed() / 1000;
 	}
-    std::string DebugStringSearchGraphMemory( const Graph& graph ) const {
-    	double numNodes = graph.GetNumberOfNodes();
-    	unsigned nodes = graph.GetNumberOfNodes() * 12;  // firstEdge:4, firstPenalty:4, firstOriginalEdge: 4
-    	unsigned edges =  graph.GetNumberOfEdges() * 12; // target:4, originalEdgeSource:2, originalEdgeTarget:2, distance:4
-    	unsigned penalties = graph.GetNumberOfStoredPenalties() *  1;  // penalty:1;
-    	std::stringstream ss;
-    	ss << "nodes: " << nodes/1048576. << " MiB, edges: " << edges/1048576.<< " MiB, penalties: " << penalties/1048576. << " MiB (total " << (nodes+edges+penalties)/numNodes << " Byte/node)";
-    	return ss.str();
-    }
-    std::string DebugStringSearchGraphMemory( const Contractor::_DynamicGraph& graph ) const {
-    	double numNodes = graph.GetNumberOfNodes();
-    	unsigned nodes = graph.GetNumberOfNodes() * 4;  // firstEdge:4
-    	unsigned edges =  graph.GetNumberOfEdges() * 8; // target:4, distance:4
-    	std::stringstream ss;
-    	ss << "nodes: " << nodes/1048576. << " MiB, edges: " << edges/1048576.<< " MiB (total " << (nodes+edges)/numNodes << " Byte/node)";
-    	return ss.str();
-    }
+	 std::string DebugStringSearchGraphMemory( const Graph& graph ) const {
+		double numNodes = graph.GetNumberOfNodes();
+		unsigned nodes = graph.GetNumberOfNodes() * 12;  // firstEdge:4, firstPenalty:4, firstOriginalEdge: 4
+		unsigned edges =  graph.GetNumberOfEdges() * 12; // target:4, originalEdgeSource:2, originalEdgeTarget:2, distance:4
+		unsigned penalties = graph.GetNumberOfStoredPenalties() *  1;  // penalty:1;
+		std::stringstream ss;
+		ss << "nodes: " << nodes/1048576. << " MiB, edges: " << edges/1048576.<< " MiB, penalties: " << penalties/1048576. << " MiB (total " << (nodes+edges+penalties)/numNodes << " Byte/node)";
+		return ss.str();
+	 }
+	 std::string DebugStringSearchGraphMemory( const Contractor::_DynamicGraph& graph ) const {
+		double numNodes = graph.GetNumberOfNodes();
+		unsigned nodes = graph.GetNumberOfNodes() * 4;  // firstEdge:4
+		unsigned edges =  graph.GetNumberOfEdges() * 8; // target:4, distance:4
+		std::stringstream ss;
+		ss << "nodes: " << nodes/1048576. << " MiB, edges: " << edges/1048576.<< " MiB (total " << (nodes+edges)/numNodes << " Byte/node)";
+		return ss.str();
+	 }
 
-    std::vector< Demand > _demands;
+	 std::vector< Demand > _demands;
 
 public:
 
@@ -323,21 +323,21 @@ public:
 
 		ReadDemands(dir);
 
-        #ifndef NDEBUG
+		  #ifndef NDEBUG
 		if ( false ) {
 			_demands.clear();
 			Demand demand;
-            demand.source = TurnQueryEdge( 66635, 66633, 75484);
-            demand.target = TurnQueryEdge( 13327, 13326, 89990 );
-            demand.distance = 28625;
+				demand.source = TurnQueryEdge( 66635, 66633, 75484);
+				demand.target = TurnQueryEdge( 13327, 13326, 89990 );
+				demand.distance = 28625;
 
-            demand.source = TurnQueryEdge( 45002, 11622,  49612 );
-            demand.target = TurnQueryEdge( 13327, 13326, 89990 );
-            demand.distance = 27990;
+				demand.source = TurnQueryEdge( 45002, 11622,  49612 );
+				demand.target = TurnQueryEdge( 13327, 13326, 89990 );
+				demand.distance = 27990;
 
-            _demands.push_back(demand);
+				_demands.push_back(demand);
 		}
-        #endif
+		  #endif
 
 		typedef TurnQuery<Graph, true/*stall on demand*/> Query;
 		Query query(*graph);
@@ -367,7 +367,7 @@ public:
 
 
 
-				TurnContractor* contractor = new TurnContractor( numNodes, inputEdges, inDegree, outDegree, penalties );
+				TurnContractor* contractor = new TurnContractor( numNodes, &inputEdges, inDegree, outDegree, penalties );
 				std::vector< IImporter::RoutingEdge >().swap( inputEdges );
 				std::vector< char >().swap( inDegree );
 				std::vector< char >().swap( outDegree );
@@ -378,25 +378,25 @@ public:
 				TurnQuery<Graph, false> plainQuery(plainGraph);
 				int plainDistanceUnidir = plainQuery.UnidirSearch( demand.source, demand.target );
 
-		        qDebug() << "up";
-		        {
-		            unsigned origUp = plainQuery.m_middle.in;
-		            do {
-		                std::stringstream ss;
-		                assert( plainQuery.m_heapForward.WasInserted( origUp ) );
-		                const TurnQuery< Graph, false >::HeapData& heapData = plainQuery.m_heapForward.GetData( origUp );
-		                EdgeIterator edge = heapData.parentEdge;
+				  qDebug() << "up";
+				  {
+						unsigned origUp = plainQuery.m_middle.in;
+						do {
+							 std::stringstream ss;
+							 assert( plainQuery.m_heapForward.WasInserted( origUp ) );
+							 const TurnQuery< Graph, false >::HeapData& heapData = plainQuery.m_heapForward.GetData( origUp );
+							 EdgeIterator edge = heapData.parentEdge;
 
-		                ss << "\t" << plainQuery.m_heapForward.GetKey( origUp ) << "\t" << plainGraph.DebugStringEdge(edge);
-		                if ( query.m_heapForward.WasInserted( origUp ) ) {
-		                    ss << "\t||\t" << query.m_heapForward.GetKey( origUp ) << "\t" << query.m_heapForward.GetData( origUp ).DebugString().c_str();
-		                }
-		                qDebug() << ss.str().c_str();
+							 ss << "\t" << plainQuery.m_heapForward.GetKey( origUp ) << "\t" << plainGraph.DebugStringEdge(edge);
+							 if ( query.m_heapForward.WasInserted( origUp ) ) {
+								  ss << "\t||\t" << query.m_heapForward.GetKey( origUp ) << "\t" << query.m_heapForward.GetData( origUp ).DebugString().c_str();
+							 }
+							 qDebug() << ss.str().c_str();
 
-		                origUp = heapData.parentOrig;
-		            } while ( origUp != (unsigned)-1 );
-		        }
-		        qDebug();
+							 origUp = heapData.parentOrig;
+						} while ( origUp != (unsigned)-1 );
+				  }
+				  qDebug();
 
 
 				plainQuery.Clear();
@@ -501,7 +501,7 @@ public:
 			if ( !importer->GetRoutingPenalties( &inDegree, &outDegree, &penalties ) )
 				return false;
 
-			TurnContractor contractor( inputNodes.size(), inputEdges, inDegree, outDegree, penalties );
+			TurnContractor contractor( inputNodes.size(), &inputEdges, inDegree, outDegree, penalties );
 			std::vector< IImporter::RoutingEdge >().swap( inputEdges );
 			std::vector< char >().swap( inDegree );
 			std::vector< char >().swap( outDegree );

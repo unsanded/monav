@@ -30,6 +30,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include "utils/config.h"
 #include "utils/bithelpers.h"
 #include "turnquery.h"
+#include "penaltyclassificator.h"
 
 class TurnContractor {
 
@@ -85,28 +86,28 @@ class TurnContractor {
 
 		struct _HeapData {
 			NodeID node;
-            unsigned numOriginalEdges : 23;
+				unsigned numOriginalEdges : 23;
 			unsigned char originalEdge : 8;
 			bool onlyViaContracted : 1;
-            _HeapData(NodeID _node, unsigned _numOriginalEdges, unsigned char _originalEdge, bool _onlyViaContracted)
+				_HeapData(NodeID _node, unsigned _numOriginalEdges, unsigned char _originalEdge, bool _onlyViaContracted)
 				: node(_node), numOriginalEdges(_numOriginalEdges), originalEdge(_originalEdge), onlyViaContracted(_onlyViaContracted) {}
-            std::string DebugString() const {
-                std::stringstream ss;
-                ss << (unsigned)originalEdge << " -> " << node;
-                if (onlyViaContracted)
-                    ss << " ONLY";
-                return ss.str();
-            }
+				std::string DebugString() const {
+					 std::stringstream ss;
+					 ss << (unsigned)originalEdge << " -> " << node;
+					 if (onlyViaContracted)
+						  ss << " ONLY";
+					 return ss.str();
+				}
 		};
 
-        typedef unsigned char _PenaltyData;
+		  typedef unsigned char _PenaltyData;
 	public:
-        static const _PenaltyData RESTRICTED_TURN = 255;
+		  static const _PenaltyData RESTRICTED_TURN = 255;
 	private:
-        typedef short int GammaValue;
-        static const GammaValue RESTRICTED_NEIGHBOUR = SHRT_MIN;
+		  typedef short int GammaValue;
+		  static const GammaValue RESTRICTED_NEIGHBOUR = SHRT_MIN;
 		#ifndef NDEBUG
-        static const unsigned SPECIAL_NODE = -1;
+		  static const unsigned SPECIAL_NODE = -1;
 		#endif
 		typedef DynamicTurnGraph< _EdgeData, _PenaltyData > _DynamicGraph;
 		typedef BinaryHeap< NodeID, NodeID, int, _HeapData > _Heap;
@@ -244,16 +245,100 @@ class TurnContractor {
 		typedef _DynamicGraph DynamicGraph;
 
 		template< class InputEdge, class DegreeType, class PenaltyType >
-		TurnContractor( NodeID numNodes, const std::vector< InputEdge >& inputEdges,
+		TurnContractor( NodeID numNodes, std::vector< InputEdge >* inputEdges,
 				const std::vector< DegreeType >& inDegree, const std::vector< DegreeType >& outDegree,
 				const std::vector< PenaltyType >& inputPenalties ) {
 			std::vector< _ImportEdge > edges;
-			edges.reserve( 2 * inputEdges.size() );
+			edges.reserve( 2 * inputEdges->size() );
 			int skippedLargeEdges = 0;
+
 			#ifndef NDEBUG
 			if (SPECIAL_NODE < numNodes) qDebug() << SPECIAL_NODE << (int)inDegree[SPECIAL_NODE] << (int)outDegree[SPECIAL_NODE];
 			#endif
-			for ( typename std::vector< InputEdge >::const_iterator i = inputEdges.begin(), e = inputEdges.end(); i != e; ++i ) {
+
+			std::vector< unsigned > classMapping;
+			std::vector< PenaltyClassificator::PenaltyClass > penaltyClasses;
+			std::vector< int > quantizedPenalties;
+			/************Compress Penalties**************/
+			{
+				std::vector< int > encoderTable;
+				encoderTable.push_back( -1 );
+				encoderTable.push_back( 0 );
+				PenaltyType maxPenalty = 0;
+				for ( unsigned penalty = 0; penalty < inputPenalties.size(); penalty++ )
+					maxPenalty = std::max( maxPenalty, inputPenalties[penalty] );
+				double error = 0.2;
+				int encoderBits = compute_encoder_table( &encoderTable, maxPenalty * 10 + 1, error );
+
+				qDebug() << "Contraction Hierarchies: Penalty Bits:" << encoderBits << ", Entries:" << encoderTable.size();
+				for ( unsigned penalty = 0; penalty < inputPenalties.size(); penalty++ ) {
+					int value = inputPenalties[penalty] < 0 ? -1 : inputPenalties[penalty] * 10 + 0.5;
+					int encodedValue = table_encode( value, encoderTable );
+					quantizedPenalties.push_back( encoderTable[encodedValue] == -1 ? RESTRICTED_TURN : encoderTable[encodedValue] );
+					if ( ( double ) abs( value - encoderTable[encodedValue] ) / value > error ) {
+						qDebug() << "Wrong Encoding:" << value << encodedValue << encoderTable[encodedValue];
+						for ( unsigned i = 0; i < encoderTable.size(); i++ )
+							qDebug() << i << ":" << encoderTable[i];
+					}
+					if ( value != 0 )
+						assert( ( double ) abs( value - encoderTable[encodedValue] ) / value <= error );
+					else
+						assert( encoderTable[encodedValue] == 0 );
+				}
+
+				PenaltyClassificator* classificator = new PenaltyClassificator( inDegree, outDegree, &quantizedPenalties, *inputEdges );
+				classificator->run();
+				quantizedPenalties.clear();
+				std::vector< char > edgeMapping;
+
+				classificator->getClasses( &penaltyClasses, &quantizedPenalties, &classMapping, &edgeMapping );
+				assert( classMapping.size() == numNodes );
+				delete classificator;
+
+				std::vector< unsigned > edgeMappingIndex;
+				unsigned position = 0;
+				for ( unsigned node = 0; node < classMapping.size(); node++ ) {
+					assert( penaltyClasses[classMapping[node]].in == inDegree[node] );
+					assert( penaltyClasses[classMapping[node]].out == outDegree[node] );
+					edgeMappingIndex.push_back( position );
+					for ( unsigned in = 0; in < ( unsigned ) inDegree[node]; in++ )
+						assert( edgeMapping[position + in] < inDegree[node] );
+					for ( unsigned out = 0; out < ( unsigned ) outDegree[node]; out++ )
+						assert( edgeMapping[position + inDegree[node] + out] < outDegree[node] );
+					position += ( unsigned ) inDegree[node] + outDegree[node];
+				}
+				assert( position == edgeMapping.size() );
+
+				for ( unsigned edge = 0; edge < inputEdges->size(); edge++ ) {
+					IImporter::RoutingEdge& edgeData = ( *inputEdges )[edge];
+					assert( edgeData.edgeIDAtSource < outDegree[edgeData.source] );
+					assert( edgeData.edgeIDAtTarget < inDegree[edgeData.target] );
+					if ( edgeData.bidirectional ) {
+						assert( edgeData.edgeIDAtSource < inDegree[edgeData.source] );
+						assert( edgeData.edgeIDAtTarget < outDegree[edgeData.target] );
+					}
+					edgeData.edgeIDAtTarget = edgeMapping[edgeMappingIndex[edgeData.target] + edgeData.edgeIDAtTarget];
+					edgeData.edgeIDAtSource = edgeMapping[edgeMappingIndex[edgeData.source] + inDegree[edgeData.source] + edgeData.edgeIDAtSource];
+					assert( edgeData.edgeIDAtTarget < inDegree[edgeData.target] );
+					assert( edgeData.edgeIDAtSource < outDegree[edgeData.source] );
+					if ( edgeData.bidirectional ) {
+						if ( edgeData.edgeIDAtSource >= inDegree[edgeData.source] ) {
+							unsigned source = edgeData.source;
+							qDebug() << edgeData.edgeIDAtSource << edgeData.source << ( unsigned ) inDegree[source] << ( unsigned ) outDegree[edgeData.source];
+							for ( unsigned in = 0; in < ( unsigned ) inDegree[source]; in++ )
+								qDebug() << ( unsigned ) edgeMapping[edgeMappingIndex[source] + in];
+							qDebug() << "===";
+							for ( unsigned out = 0; out < ( unsigned ) outDegree[source]; out++ )
+								qDebug() << ( unsigned ) edgeMapping[edgeMappingIndex[source] + inDegree[source] + out];
+						}
+						assert( edgeData.edgeIDAtSource < inDegree[edgeData.source] );
+						assert( edgeData.edgeIDAtTarget < outDegree[edgeData.target] );
+					}
+				}
+			}
+			/************Compress Penalties**************/
+
+			for ( typename std::vector< InputEdge >::const_iterator i = inputEdges->begin(), e = inputEdges->end(); i != e; ++i ) {
 				_ImportEdge edge;
 				edge.source = i->source;
 				edge.target = i->target;
@@ -274,7 +359,7 @@ class TurnContractor {
 					continue;
 				}
 				edge.data.shortcut = false;
-				edge.data.id = i - inputEdges.begin();
+				edge.data.id = i - inputEdges->begin();
 				edge.data.forward = true;
 				edge.data.backward = i->bidirectional;
 				edge.data.originalEdges = 1;
@@ -308,56 +393,32 @@ class TurnContractor {
 				qDebug( "Skipped %d edges with too large edge weight", skippedLargeEdges );
 			std::sort( edges.begin(), edges.end() );
 
-            std::vector< _ImportNode > nodes;
 			std::vector< _ImportPenalty > penalties;
+			std::vector< _ImportNode > nodes;
 			nodes.reserve( numNodes );
-			penalties.reserve( numNodes );
-			penalties.resize( numNodes );
+			penalties.reserve( penaltyClasses.size() );
+			penalties.resize( penaltyClasses.size() );
 
-			PenaltyType minPenalty = std::numeric_limits<PenaltyType>::max();
-			PenaltyType maxPenalty = std::numeric_limits<PenaltyType>::min();
-			for ( typename std::vector< PenaltyType >::const_iterator it = inputPenalties.begin(), end = inputPenalties.end(); it != end; ++it ) {
-				if (*it < 0) continue;
-				minPenalty = std::min( minPenalty, *it );
-				maxPenalty = std::max( maxPenalty, *it );
+			typename std::vector< int >::const_iterator penaltyIter = quantizedPenalties.begin();
+			for ( unsigned tableClass = 0; tableClass < penaltyClasses.size(); tableClass++ ) {
+				penalties[tableClass].inDegree = penaltyClasses[tableClass].in;
+				penalties[tableClass].outDegree = penaltyClasses[tableClass].out;
+				unsigned penaltySize = ( unsigned ) penaltyClasses[tableClass].in * ( unsigned ) penaltyClasses[tableClass].out;
+				penalties[tableClass].data.reserve( penaltySize );
+				for ( unsigned i = 0; i < penaltySize; ++i, ++penaltyIter ) {
+					assert( penaltyIter != quantizedPenalties.end() );
+					penalties[tableClass].data.push_back( *penaltyIter );
+				}
 			}
+			assert( penaltyIter == quantizedPenalties.end() );
 
-			std::vector< int > penaltyEncoderTable;
-			penaltyEncoderTable.push_back( ( minPenalty * 10 ) + 0.5 );
-			compute_encoder_table( &penaltyEncoderTable, ( maxPenalty * 10 ) + 0.5, 0.2 /* 20% error */ );
-			qDebug() << "Penalty encoder table size:" << penaltyEncoderTable.size();
-
-
-			typename std::vector< PenaltyType >::const_iterator penaltyIter = inputPenalties.begin();
 			for ( NodeID u = 0; u < numNodes; ++u ) {
 				_ImportNode node;
-				node.firstPenalty = u;
-				penalties[u].inDegree = inDegree[u];
-				assert( penalties[u].inDegree == inDegree[u] );
-				penalties[u].outDegree = outDegree[u];
-				assert( penalties[u].outDegree == outDegree[u] );
-				unsigned penaltySize = (unsigned)inDegree[u] * (unsigned)outDegree[u];
-				penalties[u].data.reserve( penaltySize );
-				for ( unsigned i = 0; i < penaltySize; ++i, ++penaltyIter ) {
-					assert( penaltyIter != inputPenalties.end() );
-					_PenaltyData p;
-					if (*penaltyIter < 0) {
-						p = RESTRICTED_TURN;
-					} else {
-						int r = table_encode( ( *penaltyIter * 10 ) + 0.5, penaltyEncoderTable );
-						p = r;
-						assert( p == r );
-						#ifndef NDEBUG
-						if (u == SPECIAL_NODE) qDebug() << p << *penaltyIter;
-						#endif
-					}
-					penalties[u].data.push_back( p );
-				}
+				node.firstPenalty = classMapping[u];
 
 //				if (node.inDegree + node.outDegree > 15) qDebug() << u << node.inDegree << node.outDegree;
 				nodes.push_back( node );
 			}
-			assert( penaltyIter == inputPenalties.end() );
 
 			#ifndef NDEBUG
 			if ( SPECIAL_NODE < numNodes ) {
@@ -382,7 +443,7 @@ class TurnContractor {
 			}
 			#endif
 
-			assert( penalties.size() == numNodes );
+			assert( penalties.size() == penaltyClasses.size() );
 
 			_graph = new _DynamicGraph( nodes, edges, penalties );
 
@@ -393,8 +454,8 @@ class TurnContractor {
 			#endif
 
 			std::vector< _ImportNode >().swap( nodes );
-            std::vector< _ImportEdge >().swap( edges );
-            std::vector< _ImportPenalty >().swap( penalties );
+			std::vector< _ImportEdge >().swap( edges );
+			std::vector< _ImportPenalty >().swap( penalties );
 
 			_ComputeGammaTable();
 
@@ -462,17 +523,17 @@ class TurnContractor {
 			log.PrintHeader();
 			statistics0.PrintStatistics();
 
-            #ifndef NDEBUG
+				#ifndef NDEBUG
 			typedef TurnQuery<_DynamicGraph, false /*stall on demand*/> TestQuery;
 			TestQuery testQuery( *_graph );
-            #endif
+				#endif
 
 			while ( levelID < numberOfNodes ) {
 
-                #ifndef NDEBUG
+					 #ifndef NDEBUG
 				if ( false ) {
-				    //TurnQueryEdge testSource( 44912, 8058,  92427 );
-				    //TurnQueryEdge testTarget( 12578, 41446, 7988 );
+					 //TurnQueryEdge testSource( 44912, 8058,  92427 );
+					 //TurnQueryEdge testTarget( 12578, 41446, 7988 );
 					TurnQueryEdge testSource( 44912, 8058,  92427 );
 					TurnQueryEdge testTarget( 49482, 10020, 65423 );
 					int dist = testQuery.BidirSearch( testSource, testTarget );
@@ -521,7 +582,7 @@ class TurnContractor {
 					}
 					testQuery.Clear();
 				}
-                #endif
+					 #endif
 
 				_LogItem statistics;
 				statistics.iteration = iteration++;
@@ -692,104 +753,104 @@ class TurnContractor {
 
 	private:
 
-        struct RandomShuffleGenerator
-        {
-            size_t operator()(size_t n) const
-            {
-                return lrand48() % n;
-            }
-        };
+		  struct RandomShuffleGenerator
+		  {
+				size_t operator()(size_t n) const
+				{
+					 return lrand48() % n;
+				}
+		  };
 
 		void _ComputeGammaTable()
 		{
 			_gammaIndex.clear();
 			_gamma.clear();
 			const NodeID numNodes = _graph->GetNumberOfNodes();
-            _gammaIndex.reserve( numNodes );
+				_gammaIndex.reserve( numNodes );
 
-            QHash< unsigned, GammaIndexItem > penaltyMap;
-            unsigned squareSum = 0;
-            std::vector< NodeID > idOrder;
-            for ( NodeID u = 0; u < numNodes; ++u ) {
-            	unsigned id = _graph->GetPenaltyTableID(u);
-            	QHash< unsigned, GammaIndexItem >::iterator it = penaltyMap.find(id);
-            	if ( it != penaltyMap.end() ) {
-            		_gammaIndex.push_back( it.value() );
-            	} else {
-                	unsigned out = _graph->GetOriginalOutDegree(u);
-                	unsigned in = _graph->GetOriginalInDegree(u);
-                	GammaIndexItem item( squareSum, squareSum + out * out );
-                	_gammaIndex.push_back( item );
-                	penaltyMap.insert( id, item );
-                	idOrder.push_back( u );
-                	squareSum += out * out;
-                	squareSum += in * in;
-            	}
-            }
-            assert( _gammaIndex.size() == numNodes );
+				QHash< unsigned, GammaIndexItem > penaltyMap;
+				unsigned squareSum = 0;
+				std::vector< NodeID > idOrder;
+				for ( NodeID u = 0; u < numNodes; ++u ) {
+					unsigned id = _graph->GetPenaltyTableID(u);
+					QHash< unsigned, GammaIndexItem >::iterator it = penaltyMap.find(id);
+					if ( it != penaltyMap.end() ) {
+						_gammaIndex.push_back( it.value() );
+					} else {
+						unsigned out = _graph->GetOriginalOutDegree(u);
+						unsigned in = _graph->GetOriginalInDegree(u);
+						GammaIndexItem item( squareSum, squareSum + out * out );
+						_gammaIndex.push_back( item );
+						penaltyMap.insert( id, item );
+						idOrder.push_back( u );
+						squareSum += out * out;
+						squareSum += in * in;
+					}
+				}
+				assert( _gammaIndex.size() == numNodes );
 
-            _gamma.reserve( squareSum );
-            {
-            	for ( unsigned i = 0; i < idOrder.size(); ++i ) {
-            		NodeID u = idOrder[i];
-                    _DynamicGraph::PenaltyTable penaltyTable = _graph->GetPenaltyTable( u );
-                    unsigned inDegree = penaltyTable.GetInDegree();
-                    unsigned outDegree = penaltyTable.GetOutDegree();
+				_gamma.reserve( squareSum );
+				{
+					for ( unsigned i = 0; i < idOrder.size(); ++i ) {
+						NodeID u = idOrder[i];
+						  _DynamicGraph::PenaltyTable penaltyTable = _graph->GetPenaltyTable( u );
+						  unsigned inDegree = penaltyTable.GetInDegree();
+						  unsigned outDegree = penaltyTable.GetOutDegree();
 
-                    assert( _gamma.size() == _gammaIndex[u].forward );
+						  assert( _gamma.size() == _gammaIndex[u].forward );
 
-                    for ( unsigned out = 0; out < outDegree; ++out ) {
-                        for ( unsigned out2 = 0; out2 < outDegree; ++out2 ) {
-                            GammaValue g = std::numeric_limits< GammaValue >::min();
-                            bool restricted = false;
-                            for ( unsigned in = 0; in < inDegree; ++in ) {
-                            	GammaValue penalty = penaltyTable.GetData( in, out );
-                            	GammaValue penalty2 = penaltyTable.GetData( in, out2);
-                                if (penalty != RESTRICTED_TURN && penalty2 == RESTRICTED_TURN) {
-                                    // 'u -> out2' not in 'alpha(u -> out)'
-                                    g = RESTRICTED_NEIGHBOUR;
-                                    restricted = true;
-                                    break;
-                                }
-                                if (penalty != RESTRICTED_TURN && penalty2 != RESTRICTED_TURN) {
-                                    g = std::max<GammaValue>( g, penalty2 - penalty );
-                                }
-                            }
-                            if ( !restricted && g == std::numeric_limits< GammaValue >::min() ) g = 0;
-                            _gamma.push_back(g);
-                        }
-                    }
-                    assert( _gamma.size() == _gammaIndex[u].backward );
+						  for ( unsigned out = 0; out < outDegree; ++out ) {
+								for ( unsigned out2 = 0; out2 < outDegree; ++out2 ) {
+									 GammaValue g = std::numeric_limits< GammaValue >::min();
+									 bool restricted = false;
+									 for ( unsigned in = 0; in < inDegree; ++in ) {
+										GammaValue penalty = penaltyTable.GetData( in, out );
+										GammaValue penalty2 = penaltyTable.GetData( in, out2);
+										  if (penalty != RESTRICTED_TURN && penalty2 == RESTRICTED_TURN) {
+												// 'u -> out2' not in 'alpha(u -> out)'
+												g = RESTRICTED_NEIGHBOUR;
+												restricted = true;
+												break;
+										  }
+										  if (penalty != RESTRICTED_TURN && penalty2 != RESTRICTED_TURN) {
+												g = std::max<GammaValue>( g, penalty2 - penalty );
+										  }
+									 }
+									 if ( !restricted && g == std::numeric_limits< GammaValue >::min() ) g = 0;
+									 _gamma.push_back(g);
+								}
+						  }
+						  assert( _gamma.size() == _gammaIndex[u].backward );
 
-                    for ( unsigned in = 0; in < inDegree; ++in ) {
-                        for ( unsigned in2 = 0; in2 < inDegree; ++in2 ) {
-                            GammaValue g = std::numeric_limits< GammaValue >::min();
-                            bool restricted = false;
-                            for ( unsigned out = 0; out < outDegree; ++out ) {
-                                GammaValue penalty = penaltyTable.GetData( in, out);
-                                GammaValue penalty2 = penaltyTable.GetData( in2, out);
-                                if (penalty != RESTRICTED_TURN && penalty2 == RESTRICTED_TURN) {
-                                    // 'in2 -> u' not in 'alpha(in -> u)'
-                                    g = RESTRICTED_NEIGHBOUR;
-                                    restricted = true;
-                                    break;
-                                }
-                                if (penalty != RESTRICTED_TURN && penalty2 != RESTRICTED_TURN) {
-                                    g = std::max<GammaValue>( g, penalty2 - penalty );
-                                }
-                            }
-                            if ( !restricted && g == std::numeric_limits< GammaValue >::min() ) g = 0;
-                            _gamma.push_back(g);
-                        }
-                    }
+						  for ( unsigned in = 0; in < inDegree; ++in ) {
+								for ( unsigned in2 = 0; in2 < inDegree; ++in2 ) {
+									 GammaValue g = std::numeric_limits< GammaValue >::min();
+									 bool restricted = false;
+									 for ( unsigned out = 0; out < outDegree; ++out ) {
+										  GammaValue penalty = penaltyTable.GetData( in, out);
+										  GammaValue penalty2 = penaltyTable.GetData( in2, out);
+										  if (penalty != RESTRICTED_TURN && penalty2 == RESTRICTED_TURN) {
+												// 'in2 -> u' not in 'alpha(in -> u)'
+												g = RESTRICTED_NEIGHBOUR;
+												restricted = true;
+												break;
+										  }
+										  if (penalty != RESTRICTED_TURN && penalty2 != RESTRICTED_TURN) {
+												g = std::max<GammaValue>( g, penalty2 - penalty );
+										  }
+									 }
+									 if ( !restricted && g == std::numeric_limits< GammaValue >::min() ) g = 0;
+									 _gamma.push_back(g);
+								}
+						  }
 
-                }
-            }
+					 }
+				}
 			#ifndef NDEBUG
-            if ( SPECIAL_NODE < numNodes ) {
+				if ( SPECIAL_NODE < numNodes ) {
 				qDebug() << _DebugStringGammaForward( SPECIAL_NODE ).c_str();
 				qDebug() << _DebugStringGammaBackward( SPECIAL_NODE ).c_str();
-            }
+				}
 			#endif
 		}
 
@@ -817,20 +878,20 @@ class TurnContractor {
 				if ( data.onlyViaContracted )
 					--numOnlyViaContracted;
 
-                #ifndef NDEBUG
+					 #ifndef NDEBUG
 				if (numOnlyViaContracted < 0 ) qDebug() << contracted;
-                #endif
+					 #endif
 				assert( numOnlyViaContracted >= 0 );
-                nodes++;
-                const bool toOnlyViaContracted = data.onlyViaContracted && data.node == contracted;
-                if ( !toOnlyViaContracted ) {
-                    // Stop search as soon as no prefix of a potential shortcut remains in the queue.
-                    if ( numOnlyViaContracted == 0 )
-                        return;
-                    // After settling 'maxNodes', we only look for potential shortcuts.
-                    else if ( nodes > maxNodes )
-                        continue;
-                }
+					 nodes++;
+					 const bool toOnlyViaContracted = data.onlyViaContracted && data.node == contracted;
+					 if ( !toOnlyViaContracted ) {
+						  // Stop search as soon as no prefix of a potential shortcut remains in the queue.
+						  if ( numOnlyViaContracted == 0 )
+								return;
+						  // After settling 'maxNodes', we only look for potential shortcuts.
+						  else if ( nodes > maxNodes )
+								continue;
+					 }
 
 				_DynamicGraph::PenaltyTable penaltyTable = _graph->GetPenaltyTable( data.node );
 
@@ -855,9 +916,9 @@ class TurnContractor {
 					if (penalty == RESTRICTED_TURN)
 						continue;
 					const int toDistance = distance + penalty + edgeData.distance;
-                    const unsigned toOriginalEdge = _graph->GetFirstOriginalEdge(to) + _graph->GetOriginalEdgeTarget( edge );
-                    _HeapData toData( to, data.numOriginalEdges + edgeData.originalEdges, _graph->GetOriginalEdgeTarget( edge ), toOnlyViaContracted );
-                    //qDebug() << " relax" << "---" << _graph->GetOriginalEdgeTarget( edge ) << "->" << to << ":" << distance << "+" << penalty << "+" << edgeData.distance;
+						  const unsigned toOriginalEdge = _graph->GetFirstOriginalEdge(to) + _graph->GetOriginalEdgeTarget( edge );
+						  _HeapData toData( to, data.numOriginalEdges + edgeData.originalEdges, _graph->GetOriginalEdgeTarget( edge ), toOnlyViaContracted );
+						  //qDebug() << " relax" << "---" << _graph->GetOriginalEdgeTarget( edge ) << "->" << to << ":" << distance << "+" << penalty << "+" << edgeData.distance;
 
 					//New Node discovered -> Add to Heap + Node Info Storage
 					if ( !heap.WasInserted( toOriginalEdge ) ) {
@@ -925,13 +986,13 @@ class TurnContractor {
 				#endif
 
 				// Prepare witness search.
-                // -----------------------
-                heap.Clear();
-                int numOnlyViaContracted = 0;
-                const unsigned inOut = _graph->GetOriginalEdgeTarget( inEdge );
-                const unsigned sourceOutDegree = _graph->GetOriginalOutDegree( source );
-                assert( inOut < sourceOutDegree );
-                {
+					 // -----------------------
+					 heap.Clear();
+					 int numOnlyViaContracted = 0;
+					 const unsigned inOut = _graph->GetOriginalEdgeTarget( inEdge );
+					 const unsigned sourceOutDegree = _graph->GetOriginalOutDegree( source );
+					 assert( inOut < sourceOutDegree );
+					 {
 					const unsigned gammaIndexDelta = _gammaIndex[source].forward + sourceOutDegree * inOut;
 					for ( _DynamicGraph::EdgeIterator sourceEdge = _graph->BeginEdges( source ), endSourceEdges = _graph->EndEdges( source ); sourceEdge != endSourceEdges; ++sourceEdge ) {
 						const _EdgeData& sourceData = _graph->GetEdgeData( sourceEdge );
@@ -968,17 +1029,17 @@ class TurnContractor {
 							existingData = heapData;
 						}
 					}
-                }
+					 }
 
-                // Run witness search.
-                // -------------------
+					 // Run witness search.
+					 // -------------------
 				if ( Simulate )
 					_Dijkstra( node, numOnlyViaContracted, 1000, data );
 				else
 					_Dijkstra( node, numOnlyViaContracted, 2000, data );
 
 				// Evaluate witness search.
-                // ------------------------
+					 // ------------------------
 				for ( _DynamicGraph::EdgeIterator outEdge = _graph->BeginEdges( node ),
 						endOutEdges = _graph->EndEdges( node ); outEdge != endOutEdges; ++outEdge ) {
 					const _EdgeData& outData = _graph->GetEdgeData( outEdge );
@@ -995,7 +1056,7 @@ class TurnContractor {
 					}
 					#endif
 
-                    const unsigned outIn = _graph->GetOriginalEdgeTarget( outEdge );
+						  const unsigned outIn = _graph->GetOriginalEdgeTarget( outEdge );
 					const unsigned targetInDegree = _graph->GetOriginalInDegree( target );
 					const unsigned targetFirstOriginal = _graph->GetFirstOriginalEdge( target );
 					const unsigned gammaIndexDelta = _gammaIndex[target].backward + targetInDegree * outIn;
@@ -1003,14 +1064,14 @@ class TurnContractor {
 					const unsigned originalEdgeTarget = targetFirstOriginal + outIn;
 					// A shortcut is only potentially necessary if the path found to 'originalEdgeTarget'
 					// is only via the contracted node.
-                    #ifndef NDEBUG
+						  #ifndef NDEBUG
 					if (node == SPECIAL_NODE) {
-	                    if (!heap.WasInserted( originalEdgeTarget )) qDebug() << "out not in heap";
-	                    else if (!heap.GetData( originalEdgeTarget ).onlyViaContracted) {
-	                        qDebug() << "not via contracted" << heap.GetKey( originalEdgeTarget ) << heap.GetData( originalEdgeTarget ).DebugString().c_str();
-	                    }
+							  if (!heap.WasInserted( originalEdgeTarget )) qDebug() << "out not in heap";
+							  else if (!heap.GetData( originalEdgeTarget ).onlyViaContracted) {
+									qDebug() << "not via contracted" << heap.GetKey( originalEdgeTarget ) << heap.GetData( originalEdgeTarget ).DebugString().c_str();
+							  }
 					}
-                    #endif
+						  #endif
 					if ( !heap.WasInserted( originalEdgeTarget ) || !heap.GetData( originalEdgeTarget ).onlyViaContracted )
 						continue;
 					int shortcutDistance = heap.GetKey( originalEdgeTarget );
@@ -1086,7 +1147,7 @@ class TurnContractor {
 						}
 					}  // if needShortcut
 				}  // foreach outEdge
-                //exit(1);
+					 //exit(1);
 
 			}  // foreach inEdge
 
@@ -1236,38 +1297,38 @@ class TurnContractor {
 			std::stringstream ss;
 			GammaIndexItem ind = _gammaIndex[ n ];
 			ss << "forward/out\n";
-            unsigned outDegree = _graph->GetOriginalOutDegree( n );
+				unsigned outDegree = _graph->GetOriginalOutDegree( n );
 
-            for ( unsigned out2 = 0; out2 < outDegree; ++out2 ) {
-            	ss << "\t" << out2;
-            }
-            ss << "\n";
-            for ( unsigned out = 0; out < outDegree; ++out ) {
-            	ss << out;
-                for ( unsigned out2 = 0; out2 < outDegree; ++out2 ) {
-                    ss << "\t" << _gamma[ ind.forward + outDegree * out + out2 ];
-                }
-                ss << "\n";
-            }
-            return ss.str();
+				for ( unsigned out2 = 0; out2 < outDegree; ++out2 ) {
+					ss << "\t" << out2;
+				}
+				ss << "\n";
+				for ( unsigned out = 0; out < outDegree; ++out ) {
+					ss << out;
+					 for ( unsigned out2 = 0; out2 < outDegree; ++out2 ) {
+						  ss << "\t" << _gamma[ ind.forward + outDegree * out + out2 ];
+					 }
+					 ss << "\n";
+				}
+				return ss.str();
 		}
 		std::string _DebugStringGammaBackward( NodeID n ) const {
 			std::stringstream ss;
 			GammaIndexItem ind = _gammaIndex[ n ];
-            unsigned inDegree = _graph->GetOriginalInDegree( n );
-            ss << "\nbackward/in\n";
-            for ( unsigned in2 = 0; in2 < inDegree; ++in2 ) {
-            	ss << "\t" << in2;
-            }
-            ss << "\n";
-            for ( unsigned in = 0; in < inDegree; ++in ) {
-            	ss << in;
-            	for ( unsigned in2 = 0; in2 < inDegree; ++in2 ) {
-                    ss << "\t" << _gamma[ ind.backward + inDegree * in + in2 ];
-                }
-                ss << "\n";
-            }
-            return ss.str();
+				unsigned inDegree = _graph->GetOriginalInDegree( n );
+				ss << "\nbackward/in\n";
+				for ( unsigned in2 = 0; in2 < inDegree; ++in2 ) {
+					ss << "\t" << in2;
+				}
+				ss << "\n";
+				for ( unsigned in = 0; in < inDegree; ++in ) {
+					ss << in;
+					for ( unsigned in2 = 0; in2 < inDegree; ++in2 ) {
+						  ss << "\t" << _gamma[ ind.backward + inDegree * in + in2 ];
+					 }
+					 ss << "\n";
+				}
+				return ss.str();
 		}
 
 

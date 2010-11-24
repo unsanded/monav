@@ -25,7 +25,8 @@ HEADERS += contractionhierarchiesturn.h \
     compressedturngraphbuilder.h \
     utils/bithelpers.h \
     utils/qthelpers.h \
-    interfaces/irouter.h
+    interfaces/irouter.h \
+    penaltyclassificator.h
 SOURCES += contractionhierarchiesturn.cpp \
     chtsettingsdialog.cpp
 FORMS += chtsettingsdialog.ui
