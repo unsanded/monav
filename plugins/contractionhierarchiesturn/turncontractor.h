@@ -753,13 +753,13 @@ class TurnContractor {
 
 	private:
 
-		  struct RandomShuffleGenerator
-		  {
-				size_t operator()(size_t n) const
-				{
-					 return lrand48() % n;
-				}
-		  };
+		struct RandomShuffleGenerator
+		{
+			size_t operator()(size_t n) const
+			{
+				return lrand48() % n;
+			}
+		};
 
 		void _ComputeGammaTable()
 		{

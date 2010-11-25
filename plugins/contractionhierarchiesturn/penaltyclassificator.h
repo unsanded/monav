@@ -140,7 +140,7 @@ public:
 			newClass.out = m_classes[i].out;
 			classes->push_back( newClass );
 			for ( unsigned entry = 0; entry < ( unsigned ) newClass.in * ( unsigned ) newClass.out; entry++ )
-				penalties->push_back( m_penalties[m_classes[i].index] + entry );
+				penalties->push_back( m_penalties[m_classes[i].index + entry] );
 		}
 
 		for ( unsigned int i = 0; i < m_tables.size(); i++ ) {
