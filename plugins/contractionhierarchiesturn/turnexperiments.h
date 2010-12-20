@@ -143,6 +143,9 @@ public:
 		qDebug() << _demands.size() << "queries";
 
 		double duration = _Timestamp();
+		long long progress = 0;
+		long long lastProgress = 0;
+		Timer time;
 		#pragma omp parallel
 		{
 			TurnQuery<Graph, false /*stall on demand*/> query(graph);
@@ -155,6 +158,15 @@ public:
 				#ifndef NDEBUG
 				qDebug() << i << demand.DebugString().c_str();
 				#endif
+
+	#pragma omp critical
+				{
+					progress++;
+					if ( time.elapsed() >= 10000 ) {
+						qDebug() << progress * 100.0 / _demands.size() << "%" << "ETA:" << time.restart() / 1000.0 / ( progress - lastProgress ) * ( _demands.size() - progress ) << "s";
+						lastProgress = progress;
+					}
+				}
 			}
 			if (maxThreads == 1) {
 				duration = _Timestamp() - duration;
@@ -342,15 +354,31 @@ public:
 		typedef TurnQuery<Graph, true/*stall on demand*/> Query;
 		Query query(*graph);
 		double duration = _Timestamp();
+		double maxRelError = 0;
+		double maxAbsError = 0;
+		double sumError = 0;
+
 		for ( int i = 0; i < (int)_demands.size(); ++i )
 		{
 			const Demand& demand = _demands[i];
 			int distance = query.BidirSearch( demand.source, demand.target );
-			if (distance != demand.distance) {
+			if (distance != demand.distance ) {
+				if ( demand.distance != 0 ) {
+					//qDebug() << distance << demand.DebugString().c_str();
+					double relError = fabs( ( double ) distance / demand.distance - 1 );
+					if ( relError > maxRelError ) {
+						maxRelError = relError;
+					}
+					sumError += relError;
+				}
+				double absError = fabs( distance - demand.distance );
+				if ( absError > maxAbsError )
+					maxAbsError = absError;
+
+#ifndef NDEBUG
 				qDebug() << i << demand.source.DebugString().c_str() << "..." << demand.target.DebugString().c_str()
 						<< ": CHT" << distance << "plain" << demand.distance;
 
-#ifndef NDEBUG
 				std::vector< IImporter::RoutingNode > inputNodes;
 				std::vector< IImporter::RoutingEdge > inputEdges;
 				std::vector< char > inDegree, outDegree;
@@ -456,14 +484,17 @@ public:
 
 
 				delete contractor;
-#endif
 				exit(1);
+#endif
 			}
 			query.Clear();
 		}
 		duration = _Timestamp() - duration;
 		qDebug() << "CHT queries done in" << duration << "seconds.";
 		qDebug() << "query time:" << duration * 1000 / _demands.size() << " ms";
+		qDebug() << "max error:" << maxAbsError / 10.0 << "s";
+		qDebug() << "max error:" << maxRelError * 100.0 << "%";
+		qDebug() << "avg error:" << sumError / _demands.size() * 100.0 << "%";
 		#ifdef QUERY_COUNT
 		qDebug() << query.GetCounter().DebugString().c_str();
 		#endif
