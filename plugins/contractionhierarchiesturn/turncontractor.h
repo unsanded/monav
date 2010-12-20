@@ -44,6 +44,9 @@ class TurnContractor {
 
 	private:
 
+		bool m_aggressive;
+		long long m_savedShortcuts;
+
 		struct _EdgeData {
 			unsigned distance;
 			unsigned originalEdges : 29;
@@ -117,11 +120,12 @@ class TurnContractor {
 
 		struct _ThreadData {
 			_Heap heap;
+			_Heap aggressiveHeap;
 			std::vector< _ImportEdge > insertedEdges;
 			std::vector< Witness > witnessList;
 			std::vector< NodeID > neighbours;
 			int deletedEdges;
-			_ThreadData( NodeID numOriginalEdges ): heap( numOriginalEdges ) {
+			_ThreadData( NodeID numOriginalEdges ): heap( numOriginalEdges ), aggressiveHeap( numOriginalEdges ) {
 			}
 		};
 
@@ -252,6 +256,14 @@ class TurnContractor {
 			edges.reserve( 2 * inputEdges->size() );
 			int skippedLargeEdges = 0;
 
+			m_aggressive = false;
+			m_savedShortcuts = 0;
+
+			if ( QCoreApplication::arguments().indexOf( "--aggressive" ) != -1 ) {
+				m_aggressive = true;
+				qDebug() << "aggressive contraction";
+			}
+
 			#ifndef NDEBUG
 			if (SPECIAL_NODE < numNodes) qDebug() << SPECIAL_NODE << (int)inDegree[SPECIAL_NODE] << (int)outDegree[SPECIAL_NODE];
 			#endif
@@ -268,6 +280,13 @@ class TurnContractor {
 				for ( unsigned penalty = 0; penalty < inputPenalties.size(); penalty++ )
 					maxPenalty = std::max( maxPenalty, inputPenalties[penalty] );
 				double error = 0.2;
+				QStringList args = QCoreApplication::arguments();
+				int errorIndex = args.indexOf( QRegExp( "--error=.*" ) );
+				if ( errorIndex != -1 )
+					error = args[errorIndex].section( '=', 1 ).toDouble();
+
+				qDebug() << "Contraction Hierarchies: penalties error:" << error * 100 << "%";
+
 				int encoderBits = compute_encoder_table( &encoderTable, maxPenalty * 10 + 1, error );
 
 				qDebug() << "Contraction Hierarchies: Penalty Bits:" << encoderBits << ", Entries:" << encoderTable.size();
@@ -702,6 +721,7 @@ class TurnContractor {
 
 			log.PrintSummary();
 			qDebug( "Total Time: %lf s", log.GetSum().GetTotalTime() );
+			qDebug() << "saved shortcuts:" << m_savedShortcuts;
 
 		}
 
@@ -953,6 +973,137 @@ class TurnContractor {
 			return result;
 		}
 
+		void _Dijkstra2( unsigned numIn, unsigned maxNodes, _ThreadData* const thread_data ){
+
+			_Heap& heap = thread_data->aggressiveHeap;
+
+			unsigned nodes = 0;
+			unsigned in = 0;
+			while ( heap.Size() > 0 ) {
+				const NodeID originalEdge = heap.DeleteMin();
+				const int distance = heap.GetKey( originalEdge );
+
+				if ( distance == std::numeric_limits< int >::max() )
+					continue;
+
+				const _HeapData data = heap.GetData( originalEdge );  // no reference, as heap size may change below
+
+				nodes++;
+				if ( nodes == maxNodes )
+					return;
+
+				if ( data.onlyViaContracted ) {
+					in++;
+					if ( in == numIn )
+						return;
+				}
+
+				_DynamicGraph::PenaltyTable penaltyTable = _graph->GetPenaltyTable( data.node );
+
+				//iterate over all edges of data.node
+				for ( _DynamicGraph::EdgeIterator edge = _graph->BeginEdges( data.node ), endEdges = _graph->EndEdges( data.node ); edge != endEdges; ++edge ) {
+					const _EdgeData& edgeData = _graph->GetEdgeData( edge );
+					if ( !edgeData.forward )
+						continue;
+					const NodeID to = _graph->GetTarget( edge );
+					assert( data.originalEdge < penaltyTable.GetInDegree() );
+
+					assert( _graph->GetOriginalEdgeSource( edge ) < penaltyTable.GetOutDegree() );
+					const _PenaltyData penalty = penaltyTable.GetData( data.originalEdge, _graph->GetOriginalEdgeSource( edge ) );
+					if (penalty == RESTRICTED_TURN)
+						continue;
+					const int toDistance = distance + penalty + edgeData.distance;
+					const unsigned toOriginalEdge = _graph->GetFirstOriginalEdge(to) + _graph->GetOriginalEdgeTarget( edge );
+					_HeapData toData( to, data.numOriginalEdges + edgeData.originalEdges, _graph->GetOriginalEdgeTarget( edge ), 0 );
+
+					//New Node discovered -> Add to Heap + Node Info Storage
+					if ( !heap.WasInserted( toOriginalEdge ) ) {
+						heap.Insert( toOriginalEdge, toDistance, toData );
+
+					//Found a shorter Path -> Update distance
+					} else if ( toDistance < heap.GetKey( toOriginalEdge ) ) {
+						heap.DecreaseKey( toOriginalEdge, toDistance );
+						_HeapData& existingData = heap.GetData( toOriginalEdge );
+						toData.onlyViaContracted = existingData.onlyViaContracted;
+						existingData = toData;
+					}
+				}
+			}
+		}
+
+		bool shortcutNecessary( _DynamicGraph::EdgeIterator inEdge, _DynamicGraph::EdgeIterator outEdge, int shortcutDistance, _ThreadData* const thread_data )
+		{
+			_Heap& heap = thread_data->aggressiveHeap;
+
+			NodeID source = _graph->GetTarget( inEdge );
+			NodeID target = _graph->GetTarget( outEdge );
+			const _DynamicGraph::PenaltyTable& sourceTable = _graph->GetPenaltyTable( source );
+			const _DynamicGraph::PenaltyTable& targetTable = _graph->GetPenaltyTable( target );
+
+			for ( unsigned preID = 0; preID < sourceTable.GetInDegree(); preID ++ ) {
+
+				_PenaltyData prePenalty = sourceTable.GetData( preID, _graph->GetOriginalEdgeTarget( inEdge ) );
+				if ( prePenalty == RESTRICTED_TURN )
+					continue;
+
+				int pathDistance = prePenalty + shortcutDistance;
+
+				{
+					heap.Clear();
+					unsigned edgeID = _graph->GetFirstOriginalEdge( source ) + preID;
+					_HeapData heapData( source, 0, preID, false );
+					heap.Insert( edgeID, 0, heapData );
+				}
+
+				unsigned numIn = 0;
+				for ( _DynamicGraph::EdgeIterator targetEdge = _graph->BeginEdges( target ); targetEdge < _graph->EndEdges( target ); targetEdge++ ) {
+					if ( !_graph->GetEdgeData( targetEdge ).backward )
+						continue;
+					unsigned edgeID = _graph->GetFirstOriginalEdge( target ) + _graph->GetOriginalEdgeSource( targetEdge );
+					_HeapData heapData( target, 0, _graph->GetOriginalEdgeSource( targetEdge ), true );
+					if ( !heap.WasInserted( edgeID ) ) {
+						numIn++;
+						heap.Insert( edgeID, std::numeric_limits< int >::max(), heapData );
+					}
+				}
+
+				_Dijkstra2( numIn, 2000, thread_data );
+
+				unsigned targetID = _graph->GetOriginalEdgeTarget( outEdge );
+				for ( unsigned postID = 0; postID < targetTable.GetOutDegree(); postID++ ) {
+					_PenaltyData referencePenalty = targetTable.GetData( targetID, postID );
+					if ( referencePenalty == RESTRICTED_TURN )
+						continue;
+
+					int referenceDistance = pathDistance + referencePenalty;
+					int bestDistance = std::numeric_limits< int >::max();
+					for ( unsigned postInID = 0; postInID < targetTable.GetInDegree(); postInID++ ) {
+						unsigned edgeID = _graph->GetFirstOriginalEdge( target ) + postInID;
+						if ( !heap.WasInserted( edgeID ) )
+							continue;
+
+						_PenaltyData newPenalty = targetTable.GetData( postInID, postID );
+						if ( newPenalty == RESTRICTED_TURN )
+							continue;
+
+						int edgeKey = heap.GetKey( edgeID );
+						if ( edgeKey == std::numeric_limits< int >::max() )
+							continue;
+
+						int newDistance = edgeKey + newPenalty;
+						if ( newDistance < bestDistance )
+							bestDistance = newDistance;
+					}
+
+					if ( bestDistance >= referenceDistance )
+						return true;
+				}
+			}
+			//if ( sourceTable.GetInDegree() == 0 || targetTable.GetOutDegree() == 0 )
+			//	return true;
+			return false;
+		}
+
 
 		template< bool Simulate > bool _Contract( _ThreadData* const data, const NodeID node, _ContractionInformation* const stats = NULL ) {
 			_Heap& heap = data->heap;
@@ -1114,36 +1265,45 @@ class TurnContractor {
 						}
 					}
 
+
 					if ( needShortcut ) {
+
 						#ifndef NDEBUG
 						if (node == SPECIAL_NODE) qDebug() << "shortcut necessary" << source << "<-" << inOut << "---" << shortcutDistance << "---" << outIn << "->" << target;
 						#endif
 						const unsigned shortcutOriginalEdges = heap.GetData( originalEdgeTarget ).numOriginalEdges;
-						if ( Simulate ) {
-							assert( stats != NULL );
-							stats->edgesAdded += 2;
-							stats->originalEdgesAdded += 2 * ( shortcutOriginalEdges );
-						} else {
-							_ImportEdge newEdge;
-							newEdge.source = source;
-							newEdge.target = target;
-							newEdge.originalEdgeSource = inOut;
-							newEdge.originalEdgeTarget = outIn;
-							newEdge.data.distance = shortcutDistance;
-							newEdge.data.forward = true;
-							newEdge.data.backward = false;
-							newEdge.data.middle = node;
-							newEdge.data.shortcut = true;
-							newEdge.data.originalEdges = shortcutOriginalEdges;
-							#ifndef NDEBUG
-							if (source == SPECIAL_NODE || target == SPECIAL_NODE) qDebug() << "add shortcut" << newEdge.DebugString().c_str();
-							#endif
-							insertedEdges.push_back( newEdge );
-							std::swap( newEdge.source, newEdge.target );
-							std::swap( newEdge.originalEdgeSource, newEdge.originalEdgeTarget );
-							newEdge.data.forward = false;
-							newEdge.data.backward = true;
-							insertedEdges.push_back( newEdge );
+						if ( !Simulate &&  m_aggressive ) {
+							needShortcut = shortcutNecessary( inEdge, outEdge, shortcutDistance, data );
+							if ( !needShortcut )
+								m_savedShortcuts++;
+						}
+						if ( needShortcut ) {
+							if ( Simulate ) {
+								assert( stats != NULL );
+								stats->edgesAdded += 2;
+								stats->originalEdgesAdded += 2 * ( shortcutOriginalEdges );
+							} else {
+								_ImportEdge newEdge;
+								newEdge.source = source;
+								newEdge.target = target;
+								newEdge.originalEdgeSource = inOut;
+								newEdge.originalEdgeTarget = outIn;
+								newEdge.data.distance = shortcutDistance;
+								newEdge.data.forward = true;
+								newEdge.data.backward = false;
+								newEdge.data.middle = node;
+								newEdge.data.shortcut = true;
+								newEdge.data.originalEdges = shortcutOriginalEdges;
+								#ifndef NDEBUG
+								if (source == SPECIAL_NODE || target == SPECIAL_NODE) qDebug() << "add shortcut" << newEdge.DebugString().c_str();
+								#endif
+								insertedEdges.push_back( newEdge );
+								std::swap( newEdge.source, newEdge.target );
+								std::swap( newEdge.originalEdgeSource, newEdge.originalEdgeTarget );
+								newEdge.data.forward = false;
+								newEdge.data.backward = true;
+								insertedEdges.push_back( newEdge );
+							}
 						}
 					}  // if needShortcut
 				}  // foreach outEdge
