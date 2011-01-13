@@ -354,15 +354,18 @@ public:
 		typedef TurnQuery<Graph, true/*stall on demand*/> Query;
 		Query query(*graph);
 		double duration = _Timestamp();
+		#ifdef QUERY_COUNT
 		double maxRelError = 0;
 		double maxAbsError = 0;
 		double sumError = 0;
+		#endif
 
 		for ( int i = 0; i < (int)_demands.size(); ++i )
 		{
 			const Demand& demand = _demands[i];
 			int distance = query.BidirSearch( demand.source, demand.target );
 			if (distance != demand.distance ) {
+				#ifdef QUERY_COUNT
 				if ( demand.distance != 0 ) {
 					//qDebug() << distance << demand.DebugString().c_str();
 					double relError = fabs( ( double ) distance / demand.distance - 1 );
@@ -374,6 +377,7 @@ public:
 				double absError = fabs( distance - demand.distance );
 				if ( absError > maxAbsError )
 					maxAbsError = absError;
+				#endif
 
 #ifndef NDEBUG
 				qDebug() << i << demand.source.DebugString().c_str() << "..." << demand.target.DebugString().c_str()
@@ -492,10 +496,10 @@ public:
 		duration = _Timestamp() - duration;
 		qDebug() << "CHT queries done in" << duration << "seconds.";
 		qDebug() << "query time:" << duration * 1000 / _demands.size() << " ms";
+		#ifdef QUERY_COUNT
 		qDebug() << "max error:" << maxAbsError / 10.0 << "s";
 		qDebug() << "max error:" << maxRelError * 100.0 << "%";
 		qDebug() << "avg error:" << sumError / _demands.size() * 100.0 << "%";
-		#ifdef QUERY_COUNT
 		qDebug() << query.GetCounter().DebugString().c_str();
 		#endif
 
@@ -808,17 +812,40 @@ public:
 		typedef Query<Contractor::_DynamicGraph, true /*stall on demand*/> Query;
 		Query query(*graph);
 		double duration = _Timestamp();
+		#ifdef QUERY_COUNT
+		double maxRelError = 0;
+		double maxAbsError = 0;
+		double sumError = 0;
+		#endif
 		for ( int i = 0; i < (int)edgeDemands.size(); ++i )
 		{
 			const Demand& demand = edgeDemands[i];
 			int distance = query.BidirSearch( demand.source.source, demand.target.target );
 			if (distance != demand.distance) {
+
+				#ifdef QUERY_COUNT
+				if ( demand.distance != 0 ) {
+					//qDebug() << distance << demand.DebugString().c_str();
+					double relError = fabs( ( double ) distance / demand.distance - 1 );
+					if ( relError > maxRelError ) {
+						maxRelError = relError;
+					}
+					sumError += relError;
+				}
+				double absError = fabs( distance - demand.distance );
+				if ( absError > maxAbsError )
+					maxAbsError = absError;
+				#endif
+
+				#ifndef NDEBUG
 				qDebug() << i << "edge" << distance << "node" << demand.distance;
 
 				qDebug() << graph->DebugStringEdgesOf( demand.source.source ).c_str();
 				qDebug() << graph->DebugStringEdgesOf( demand.target.target ).c_str();
 
 				exit(1);
+				#endif
+
 			}
 
 			query.Clear();
@@ -827,6 +854,9 @@ public:
 		qDebug() << "edge-based CH queries done in" << duration << "seconds.";
 		qDebug() << "query time:" << duration * 1000 / _demands.size() << " ms";
 		#ifdef QUERY_COUNT
+		qDebug() << "max error:" << maxAbsError / 10.0 << "s";
+		qDebug() << "max error:" << maxRelError * 100.0 << "%";
+		qDebug() << "avg error:" << sumError / _demands.size() * 100.0 << "%";
 		qDebug() << query.GetCounter().DebugString().c_str();
 		#endif
 

@@ -45,6 +45,7 @@ class TurnContractor {
 	private:
 
 		bool m_aggressive;
+		bool m_naive;
 		long long m_savedShortcuts;
 
 		struct _EdgeData {
@@ -257,12 +258,19 @@ class TurnContractor {
 			int skippedLargeEdges = 0;
 
 			m_aggressive = false;
+			m_naive = false;
 			m_savedShortcuts = 0;
 
 			if ( QCoreApplication::arguments().indexOf( "--aggressive" ) != -1 ) {
 				m_aggressive = true;
 				qDebug() << "aggressive contraction";
 			}
+
+			if ( QCoreApplication::arguments().indexOf( "--naive" ) != -1 ) {
+				m_naive = true;
+				qDebug() << "naive contraction";
+			}
+
 
 			#ifndef NDEBUG
 			if (SPECIAL_NODE < numNodes) qDebug() << SPECIAL_NODE << (int)inDegree[SPECIAL_NODE] << (int)outDegree[SPECIAL_NODE];
@@ -646,7 +654,8 @@ class TurnContractor {
 						#endif
 						nodePriority[x] = -1;
 					}
-					std::sort( data->insertedEdges.begin(), data->insertedEdges.end() );
+					InsertedEdgeComparator comp;
+					std::sort( data->insertedEdges.begin(), data->insertedEdges.end(), comp );
 				}
 				statistics.contraction += _Timestamp() - timeLast;
 				timeLast = _Timestamp();
@@ -778,6 +787,24 @@ class TurnContractor {
 			size_t operator()(size_t n) const
 			{
 				return lrand48() % n;
+			}
+		};
+
+		struct InsertedEdgeComparator
+		{
+			bool operator()(const _ImportEdge& a, const _ImportEdge& b)
+			{
+				if ( a.source != b.source )
+					return a.source < b.source;
+				if ( a.originalEdgeSource != b.originalEdgeSource )
+					return a.originalEdgeSource < b.originalEdgeSource;
+				if ( a.target != b.target )
+					return a.target < b.target;
+				if ( a.originalEdgeTarget != b.originalEdgeTarget )
+					return a.originalEdgeTarget < b.originalEdgeTarget;
+				if ( a.data.forward != b.data.forward )
+					return a.data.forward < b.data.forward;
+				return a.data.backward < b.data.backward;
 			}
 		};
 
@@ -1111,6 +1138,9 @@ class TurnContractor {
 			int insertedEdgesSize = data->insertedEdges.size();
 			std::vector< _ImportEdge >& insertedEdges = data->insertedEdges;
 
+			const bool TurnReplacement = !m_naive;
+			const bool LoopAvoidance = !m_naive;
+
 			#ifndef NDEBUG
 			if (node == SPECIAL_NODE) qDebug() << _graph->DebugStringEdgesOf( node ).c_str();
 			#endif
@@ -1137,13 +1167,13 @@ class TurnContractor {
 				#endif
 
 				// Prepare witness search.
-					 // -----------------------
-					 heap.Clear();
-					 int numOnlyViaContracted = 0;
-					 const unsigned inOut = _graph->GetOriginalEdgeTarget( inEdge );
-					 const unsigned sourceOutDegree = _graph->GetOriginalOutDegree( source );
-					 assert( inOut < sourceOutDegree );
-					 {
+				// -----------------------
+				heap.Clear();
+				int numOnlyViaContracted = 0;
+				const unsigned inOut = _graph->GetOriginalEdgeTarget( inEdge );
+				const unsigned sourceOutDegree = _graph->GetOriginalOutDegree( source );
+				assert( inOut < sourceOutDegree );
+				if (TurnReplacement) {
 					const unsigned gammaIndexDelta = _gammaIndex[source].forward + sourceOutDegree * inOut;
 					for ( _DynamicGraph::EdgeIterator sourceEdge = _graph->BeginEdges( source ), endSourceEdges = _graph->EndEdges( source ); sourceEdge != endSourceEdges; ++sourceEdge ) {
 						const _EdgeData& sourceData = _graph->GetEdgeData( sourceEdge );
@@ -1159,7 +1189,9 @@ class TurnContractor {
 						const bool isViaNode = (sourceTarget == node && sourceOut == inOut);
 
 						assert( _graph->GetOriginalEdgeTarget( sourceEdge ) < _graph->GetOriginalInDegree( sourceTarget ) );
-						const unsigned sourceOriginalTarget = _graph->GetFirstOriginalEdge( sourceTarget ) + _graph->GetOriginalEdgeTarget( sourceEdge );
+						_HeapData heapData( sourceTarget, sourceData.originalEdges, _graph->GetOriginalEdgeTarget( sourceEdge ), isViaNode);
+						assert( heapData.originalEdge == _graph->GetOriginalEdgeTarget( sourceEdge ) );
+						const unsigned sourceOriginalTarget = _graph->GetFirstOriginalEdge( sourceTarget ) + heapData.originalEdge;
 						const int pathDistance = (int)sourceData.distance + g;
 						#ifndef NDEBUG
 						if (node == SPECIAL_NODE) {
@@ -1167,7 +1199,6 @@ class TurnContractor {
 							qDebug() << _graph->GetFirstOriginalEdge(sourceTarget) << _graph->GetOriginalInDegree(sourceTarget);
 						}
 						#endif
-						_HeapData heapData( sourceTarget, sourceData.originalEdges, _graph->GetOriginalEdgeTarget( sourceEdge ), isViaNode);
 						if ( !heap.WasInserted( sourceOriginalTarget ) ) {
 							heap.Insert( sourceOriginalTarget, pathDistance, heapData );
 							numOnlyViaContracted += isViaNode;
@@ -1180,7 +1211,12 @@ class TurnContractor {
 							existingData = heapData;
 						}
 					}
-					 }
+				} else {
+					_HeapData heapData( node, inData.originalEdges, _graph->GetOriginalEdgeSource( inEdge ), true);
+					const unsigned originalTarget = _graph->GetFirstOriginalEdge( node ) + heapData.originalEdge;
+					heap.Insert( originalTarget, inData.distance, heapData );
+					numOnlyViaContracted++;
+				}
 
 					 // Run witness search.
 					 // -------------------
@@ -1207,7 +1243,7 @@ class TurnContractor {
 					}
 					#endif
 
-						  const unsigned outIn = _graph->GetOriginalEdgeTarget( outEdge );
+					const unsigned outIn = _graph->GetOriginalEdgeTarget( outEdge );
 					const unsigned targetInDegree = _graph->GetOriginalInDegree( target );
 					const unsigned targetFirstOriginal = _graph->GetFirstOriginalEdge( target );
 					const unsigned gammaIndexDelta = _gammaIndex[target].backward + targetInDegree * outIn;
@@ -1215,37 +1251,41 @@ class TurnContractor {
 					const unsigned originalEdgeTarget = targetFirstOriginal + outIn;
 					// A shortcut is only potentially necessary if the path found to 'originalEdgeTarget'
 					// is only via the contracted node.
-						  #ifndef NDEBUG
+					#ifndef NDEBUG
 					if (node == SPECIAL_NODE) {
 							  if (!heap.WasInserted( originalEdgeTarget )) qDebug() << "out not in heap";
 							  else if (!heap.GetData( originalEdgeTarget ).onlyViaContracted) {
 									qDebug() << "not via contracted" << heap.GetKey( originalEdgeTarget ) << heap.GetData( originalEdgeTarget ).DebugString().c_str();
 							  }
 					}
-						  #endif
-					if ( !heap.WasInserted( originalEdgeTarget ) || !heap.GetData( originalEdgeTarget ).onlyViaContracted )
+					#endif
+					if ( !heap.WasInserted( originalEdgeTarget ) || !heap.GetData( originalEdgeTarget ).onlyViaContracted ) {
+						//qDebug() << "found witness";
 						continue;
+					}
 					int shortcutDistance = heap.GetKey( originalEdgeTarget );
 					assert( shortcutDistance >= 0 );
 					bool needShortcut = true;
 
-					for ( unsigned i = 0; i < targetInDegree; ++i ) {
-						GammaValue g = _gamma[ gammaIndexDelta + i ];
-						if ( g == RESTRICTED_NEIGHBOUR || i == outIn )
-							continue;
-						unsigned originalEdgeTarget2 = targetFirstOriginal + i;
-						if ( heap.WasInserted( originalEdgeTarget2 )
-								&& (heap.GetKey( originalEdgeTarget2 ) + g) < shortcutDistance ) {
-							#ifndef NDEBUG
-							if (node == SPECIAL_NODE) qDebug() << "dont need shortcut other in" << i << "gamma" << g;
-							#endif
-							needShortcut = false;
-							break;
+					if (TurnReplacement) {
+						for ( unsigned i = 0; i < targetInDegree; ++i ) {
+							GammaValue g = _gamma[ gammaIndexDelta + i ];
+							if ( g == RESTRICTED_NEIGHBOUR || i == outIn )
+								continue;
+							unsigned originalEdgeTarget2 = targetFirstOriginal + i;
+							if ( heap.WasInserted( originalEdgeTarget2 )
+									&& (heap.GetKey( originalEdgeTarget2 ) + g) < shortcutDistance ) {
+								#ifndef NDEBUG
+								if (node == SPECIAL_NODE) qDebug() << "dont need shortcut other in" << i << "gamma" << g;
+								#endif
+								needShortcut = false;
+								break;
+							}
 						}
 					}
 
 					// Loop avoidance.
-					if ( needShortcut && source == target ) {
+					if ( LoopAvoidance && needShortcut && source == target ) {
 						needShortcut = false;
 						// Decide locally whether the loop makes sense.
 						_DynamicGraph::PenaltyTable penaltyTable = _graph->GetPenaltyTable( source );
