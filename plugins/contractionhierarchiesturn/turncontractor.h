@@ -1173,49 +1173,45 @@ class TurnContractor {
 				const unsigned inOut = _graph->GetOriginalEdgeTarget( inEdge );
 				const unsigned sourceOutDegree = _graph->GetOriginalOutDegree( source );
 				assert( inOut < sourceOutDegree );
-				if (TurnReplacement) {
-					const unsigned gammaIndexDelta = _gammaIndex[source].forward + sourceOutDegree * inOut;
-					for ( _DynamicGraph::EdgeIterator sourceEdge = _graph->BeginEdges( source ), endSourceEdges = _graph->EndEdges( source ); sourceEdge != endSourceEdges; ++sourceEdge ) {
-						const _EdgeData& sourceData = _graph->GetEdgeData( sourceEdge );
-						if ( !sourceData.forward )
-							continue;
+				const unsigned gammaIndexDelta = _gammaIndex[source].forward + sourceOutDegree * inOut;
+				for ( _DynamicGraph::EdgeIterator sourceEdge = _graph->BeginEdges( source ), endSourceEdges = _graph->EndEdges( source ); sourceEdge != endSourceEdges; ++sourceEdge ) {
+					const _EdgeData& sourceData = _graph->GetEdgeData( sourceEdge );
+					if ( !sourceData.forward )
+						continue;
 
-						const unsigned sourceOut = _graph->GetOriginalEdgeSource( sourceEdge );
-						GammaValue g = _gamma[ gammaIndexDelta + sourceOut ];
-						if (g == RESTRICTED_NEIGHBOUR)
-							continue;
+					const unsigned sourceOut = _graph->GetOriginalEdgeSource( sourceEdge );
+					if  (!TurnReplacement && sourceOut != _graph->GetOriginalEdgeTarget( inEdge ) )
+						continue;
 
-						const NodeID sourceTarget = _graph->GetTarget( sourceEdge );
-						const bool isViaNode = (sourceTarget == node && sourceOut == inOut);
+					GammaValue g = _gamma[ gammaIndexDelta + sourceOut ];
+					if (g == RESTRICTED_NEIGHBOUR)
+						continue;
 
-						assert( _graph->GetOriginalEdgeTarget( sourceEdge ) < _graph->GetOriginalInDegree( sourceTarget ) );
-						_HeapData heapData( sourceTarget, sourceData.originalEdges, _graph->GetOriginalEdgeTarget( sourceEdge ), isViaNode);
-						assert( heapData.originalEdge == _graph->GetOriginalEdgeTarget( sourceEdge ) );
-						const unsigned sourceOriginalTarget = _graph->GetFirstOriginalEdge( sourceTarget ) + heapData.originalEdge;
-						const int pathDistance = (int)sourceData.distance + g;
-						#ifndef NDEBUG
-						if (node == SPECIAL_NODE) {
-							qDebug() << sourceOriginalTarget << "-" << _graph->GetOriginalEdgeSource( sourceEdge ) << "--->" << sourceTarget << ":" << sourceData.distance << "+" << g << "vc" << isViaNode;
-							qDebug() << _graph->GetFirstOriginalEdge(sourceTarget) << _graph->GetOriginalInDegree(sourceTarget);
-						}
-						#endif
-						if ( !heap.WasInserted( sourceOriginalTarget ) ) {
-							heap.Insert( sourceOriginalTarget, pathDistance, heapData );
-							numOnlyViaContracted += isViaNode;
-						}
-						else if ( pathDistance < heap.GetKey( sourceOriginalTarget ) ) {
-							heap.DecreaseKey( sourceOriginalTarget, pathDistance );
-							_HeapData& existingData = heap.GetData( sourceOriginalTarget );
-							numOnlyViaContracted -= existingData.onlyViaContracted;
-							numOnlyViaContracted += isViaNode;
-							existingData = heapData;
-						}
+					const NodeID sourceTarget = _graph->GetTarget( sourceEdge );
+					const bool isViaNode = (sourceTarget == node && sourceOut == inOut);
+
+					assert( _graph->GetOriginalEdgeTarget( sourceEdge ) < _graph->GetOriginalInDegree( sourceTarget ) );
+					_HeapData heapData( sourceTarget, sourceData.originalEdges, _graph->GetOriginalEdgeTarget( sourceEdge ), isViaNode);
+					assert( heapData.originalEdge == _graph->GetOriginalEdgeTarget( sourceEdge ) );
+					const unsigned sourceOriginalTarget = _graph->GetFirstOriginalEdge( sourceTarget ) + heapData.originalEdge;
+					const int pathDistance = (int)sourceData.distance + g;
+					#ifndef NDEBUG
+					if (node == SPECIAL_NODE) {
+						qDebug() << sourceOriginalTarget << "-" << _graph->GetOriginalEdgeSource( sourceEdge ) << "--->" << sourceTarget << ":" << sourceData.distance << "+" << g << "vc" << isViaNode;
+						qDebug() << _graph->GetFirstOriginalEdge(sourceTarget) << _graph->GetOriginalInDegree(sourceTarget);
 					}
-				} else {
-					_HeapData heapData( node, inData.originalEdges, _graph->GetOriginalEdgeSource( inEdge ), true);
-					const unsigned originalTarget = _graph->GetFirstOriginalEdge( node ) + heapData.originalEdge;
-					heap.Insert( originalTarget, inData.distance, heapData );
-					numOnlyViaContracted++;
+					#endif
+					if ( !heap.WasInserted( sourceOriginalTarget ) ) {
+						heap.Insert( sourceOriginalTarget, pathDistance, heapData );
+						numOnlyViaContracted += isViaNode;
+					}
+					else if ( pathDistance < heap.GetKey( sourceOriginalTarget ) ) {
+						heap.DecreaseKey( sourceOriginalTarget, pathDistance );
+						_HeapData& existingData = heap.GetData( sourceOriginalTarget );
+						numOnlyViaContracted -= existingData.onlyViaContracted;
+						numOnlyViaContracted += isViaNode;
+						existingData = heapData;
+					}
 				}
 
 					 // Run witness search.
