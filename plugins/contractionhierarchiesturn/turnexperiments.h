@@ -622,6 +622,8 @@ public:
 		unsigned numEdges = inputTurnEdges.size();
 		unsigned numMaps = _edgeMap.size();
 		data << numNodes << numEdges << numMaps;
+		qDebug() << numNodes << "nodes," << numEdges << "edges";
+
 
 		for ( QHash< unsigned, EdgeMapItem >::iterator it = _edgeMap.begin(); it != _edgeMap.end(); ++it ) {
 			data << it.key() << it->first << it->second << it->distance;
