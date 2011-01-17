@@ -125,6 +125,7 @@ class TurnContractor {
 			std::vector< _ImportEdge > insertedEdges;
 			std::vector< Witness > witnessList;
 			std::vector< NodeID > neighbours;
+			std::vector< bool > necessary;
 			int deletedEdges;
 			_ThreadData( NodeID numOriginalEdges ): heap( numOriginalEdges ), aggressiveHeap( numOriginalEdges ) {
 			}
@@ -731,7 +732,6 @@ class TurnContractor {
 			log.PrintSummary();
 			qDebug( "Total Time: %lf s", log.GetSum().GetTotalTime() );
 			qDebug() << "saved shortcuts:" << m_savedShortcuts;
-
 		}
 
 		template< class Edge >
@@ -1153,6 +1153,148 @@ class TurnContractor {
 			return false;
 		}
 
+		void _AggressiveContract( const NodeID node, _DynamicGraph::EdgeIterator inEdge, unsigned maxSettled, _ThreadData* const thread_data ) {
+
+			_Heap& heap2 = thread_data->aggressiveHeap;
+			_Heap& heap = thread_data->heap;
+			std::vector< bool >& necessary = thread_data->necessary;
+
+			NodeID source = _graph->GetTarget( inEdge );
+			const _DynamicGraph::PenaltyTable& sourceTable = _graph->GetPenaltyTable( source );
+			necessary.assign( _graph->GetOutDegree(node), false);
+
+			for ( unsigned preID = 0; preID < sourceTable.GetInDegree(); preID ++ ) {
+
+				_PenaltyData prePenalty = sourceTable.GetData( preID, _graph->GetOriginalEdgeTarget( inEdge ) );
+				if ( prePenalty == RESTRICTED_TURN )
+					continue;
+
+				{
+					heap2.Clear();
+					unsigned edgeID = _graph->GetFirstOriginalEdge( source ) + preID;
+					_HeapData heapData( source, 0, preID, false );
+					heap2.Insert( edgeID, 0, heapData );
+				}
+
+				unsigned numIn = 0;
+				int maxSearchDistance = 0;
+				for ( _DynamicGraph::EdgeIterator outEdge = _graph->BeginEdges( node ),
+						endOutEdges = _graph->EndEdges( node ); outEdge != endOutEdges; ++outEdge ) {
+					const _EdgeData& outData = _graph->GetEdgeData( outEdge );
+					const NodeID target = _graph->GetTarget( outEdge );
+					if ( !outData.forward || target == node )
+						continue;
+
+					const unsigned outIn = _graph->GetOriginalEdgeTarget( outEdge );
+					const unsigned targetFirstOriginal = _graph->GetFirstOriginalEdge( target );
+					assert( outIn < targetInDegree );
+					const unsigned originalEdgeTarget = targetFirstOriginal + outIn;
+					// A shortcut is only potentially necessary if the path found to 'originalEdgeTarget'
+					// is only via the contracted node.
+					if ( !heap.WasInserted( originalEdgeTarget ) || !heap.GetData( originalEdgeTarget ).onlyViaContracted ) {
+						//qDebug() << "found witness";
+						continue;
+					}
+					int shortcutDistance = heap.GetKey( originalEdgeTarget );
+					int pathDistance = prePenalty + shortcutDistance;
+
+					for ( _DynamicGraph::EdgeIterator targetEdge = _graph->BeginEdges( target ); targetEdge < _graph->EndEdges( target ); targetEdge++ ) {
+						if ( !_graph->GetEdgeData( targetEdge ).backward )
+							continue;
+						unsigned edgeID = _graph->GetFirstOriginalEdge( target ) + _graph->GetOriginalEdgeSource( targetEdge );
+						_HeapData heapData( target, 0, _graph->GetOriginalEdgeSource( targetEdge ), true );
+						if ( !heap2.WasInserted( edgeID ) ) {
+							numIn++;
+							heap2.Insert( edgeID, std::numeric_limits< int >::max(), heapData );
+						}
+					}
+
+					const unsigned targetID = outIn;
+					const _DynamicGraph::PenaltyTable& targetTable = _graph->GetPenaltyTable( target );
+
+					for ( unsigned postID = 0; postID < targetTable.GetOutDegree(); postID++ ) {
+						_PenaltyData referencePenalty = targetTable.GetData( targetID, postID );
+						if ( referencePenalty == RESTRICTED_TURN )
+							continue;
+
+
+						int minNewPenalty = referencePenalty;
+						for ( unsigned postInID = 0; postInID < targetTable.GetInDegree(); postInID++ ) {
+							_PenaltyData newPenalty = targetTable.GetData( postInID, postID );
+							if ( newPenalty == RESTRICTED_TURN )
+								continue;
+							if (newPenalty < minNewPenalty)
+								minNewPenalty = newPenalty;
+						}
+
+						int searchDistance = pathDistance + referencePenalty - minNewPenalty;
+						if ( searchDistance > maxSearchDistance )
+							maxSearchDistance = searchDistance;
+					}
+				}
+
+				_Dijkstra2( numIn, maxSearchDistance, maxSettled, thread_data );
+
+				for ( _DynamicGraph::EdgeIterator outEdge = _graph->BeginEdges( node ),
+						endOutEdges = _graph->EndEdges( node ); outEdge != endOutEdges; ++outEdge ) {
+					const _EdgeData& outData = _graph->GetEdgeData( outEdge );
+					const NodeID target = _graph->GetTarget( outEdge );
+					if ( !outData.forward || target == node )
+						continue;
+
+					const unsigned outIn = _graph->GetOriginalEdgeTarget( outEdge );
+					const unsigned targetFirstOriginal = _graph->GetFirstOriginalEdge( target );
+					const unsigned targetID = outIn;
+					assert( outIn < targetInDegree );
+					const unsigned originalEdgeTarget = targetFirstOriginal + outIn;
+					// A shortcut is only potentially necessary if the path found to 'originalEdgeTarget'
+					// is only via the contracted node.
+					if ( !heap.WasInserted( originalEdgeTarget ) || !heap.GetData( originalEdgeTarget ).onlyViaContracted ) {
+						//qDebug() << "found witness";
+						continue;
+					}
+					int shortcutDistance = heap.GetKey( originalEdgeTarget );
+					assert( shortcutDistance >= 0 );
+					int pathDistance = prePenalty + shortcutDistance;
+
+					const _DynamicGraph::PenaltyTable& targetTable = _graph->GetPenaltyTable( target );
+
+					for ( unsigned postID = 0; postID < targetTable.GetOutDegree(); postID++ ) {
+						_PenaltyData referencePenalty = targetTable.GetData( targetID, postID );
+						if ( referencePenalty == RESTRICTED_TURN )
+							continue;
+
+						int referenceDistance = pathDistance + referencePenalty;
+						int bestDistance = std::numeric_limits< int >::max();
+						for ( unsigned postInID = 0; postInID < targetTable.GetInDegree(); postInID++ ) {
+							unsigned edgeID = _graph->GetFirstOriginalEdge( target ) + postInID;
+							if ( !heap2.WasInserted( edgeID ) )
+								continue;
+
+							_PenaltyData newPenalty = targetTable.GetData( postInID, postID );
+							if ( newPenalty == RESTRICTED_TURN )
+								continue;
+
+							int edgeKey = heap2.GetKey( edgeID );
+							if ( edgeKey == std::numeric_limits< int >::max() )
+								continue;
+
+							int newDistance = edgeKey + newPenalty;
+							if ( newDistance < bestDistance )
+								bestDistance = newDistance;
+						}
+
+						if ( bestDistance >= referenceDistance ) {
+							necessary[endOutEdges-outEdge] = true;
+							break;
+						}
+					}
+				}
+			}
+		}
+
+
+
 
 		template< bool Simulate > bool _Contract( _ThreadData* const data, const NodeID node, _ContractionInformation* const stats = NULL ) {
 			_Heap& heap = data->heap;
@@ -1160,8 +1302,8 @@ class TurnContractor {
 			int insertedEdgesSize = data->insertedEdges.size();
 			std::vector< _ImportEdge >& insertedEdges = data->insertedEdges;
 
-			const bool TurnReplacement = !m_naive;
-			const bool LoopAvoidance = !m_naive;
+			const bool TurnReplacement = !(m_naive | m_aggressive);
+			const bool LoopAvoidance = TurnReplacement;
 
 			#ifndef NDEBUG
 			if (node == SPECIAL_NODE) qDebug() << _graph->DebugStringEdgesOf( node ).c_str();
@@ -1238,8 +1380,12 @@ class TurnContractor {
 
 					 // Run witness search.
 					 // -------------------
-				const int maxSettled = (m_naive & m_aggressive) ? 0 : (Simulate ? 1000 : 2000);
+				const int maxSettled = m_aggressive ? 0 : (Simulate ? 1000 : 2000);
 				_Dijkstra( node, numOnlyViaContracted, maxSettled, data );
+
+				if (m_aggressive) {
+					_AggressiveContract(node, inEdge, Simulate ? 1000 : 2000, data);
+				}
 
 				// Evaluate witness search.
 					 // ------------------------
@@ -1328,14 +1474,8 @@ class TurnContractor {
 						if (node == SPECIAL_NODE) qDebug() << "shortcut necessary" << source << "<-" << inOut << "---" << shortcutDistance << "---" << outIn << "->" << target;
 						#endif
 						if ( m_aggressive ) {
-							if ( Simulate ) {
-								if ( m_naive )
-									needShortcut = shortcutNecessary( inEdge, outEdge, shortcutDistance, 1000, data );
-							} else {
-								needShortcut = shortcutNecessary( inEdge, outEdge, shortcutDistance, 2000, data );
-								if ( !needShortcut )
-									m_savedShortcuts++;
-							}
+							assert( endOutEdges - outEdge < data->necessary.size() );
+							needShortcut = data->necessary[endOutEdges - outEdge];
 						}
 						if ( needShortcut ) {
 							const unsigned shortcutOriginalEdges = heap.GetData( originalEdgeTarget ).numOriginalEdges;
