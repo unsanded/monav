@@ -908,7 +908,7 @@ class TurnContractor {
 
 		bool _ConstructCH( _DynamicGraph* _graph );
 
-		void _Dijkstra( const NodeID contracted, int numOnlyViaContracted, const int maxNodes, _ThreadData* const thread_data ){
+		void _Dijkstra( const NodeID contracted, int numOnlyViaContracted, const int maxSettled, _ThreadData* const thread_data ){
 
 			_Heap& heap = thread_data->heap;
 
@@ -935,8 +935,8 @@ class TurnContractor {
 						  // Stop search as soon as no prefix of a potential shortcut remains in the queue.
 						  if ( numOnlyViaContracted == 0 )
 								return;
-						  // After settling 'maxNodes', we only look for potential shortcuts.
-						  else if ( nodes > maxNodes )
+						  // After settling 'maxSettled', we only look for potential shortcuts.
+						  else if ( nodes > maxSettled )
 								continue;
 					 }
 
@@ -1000,7 +1000,7 @@ class TurnContractor {
 			return result;
 		}
 
-		void _Dijkstra2( unsigned numIn, unsigned maxNodes, _ThreadData* const thread_data ){
+		void _Dijkstra2( unsigned numIn, unsigned maxSettled, _ThreadData* const thread_data ){
 
 			_Heap& heap = thread_data->aggressiveHeap;
 
@@ -1016,7 +1016,7 @@ class TurnContractor {
 				const _HeapData data = heap.GetData( originalEdge );  // no reference, as heap size may change below
 
 				nodes++;
-				if ( nodes == maxNodes )
+				if ( nodes == maxSettled )
 					return;
 
 				if ( data.onlyViaContracted ) {
@@ -1058,7 +1058,7 @@ class TurnContractor {
 			}
 		}
 
-		bool shortcutNecessary( _DynamicGraph::EdgeIterator inEdge, _DynamicGraph::EdgeIterator outEdge, int shortcutDistance, _ThreadData* const thread_data )
+		bool shortcutNecessary( _DynamicGraph::EdgeIterator inEdge, _DynamicGraph::EdgeIterator outEdge, int shortcutDistance, unsigned maxSettled, _ThreadData* const thread_data )
 		{
 			_Heap& heap = thread_data->aggressiveHeap;
 
@@ -1094,7 +1094,7 @@ class TurnContractor {
 					}
 				}
 
-				_Dijkstra2( numIn, 2000, thread_data );
+				_Dijkstra2( numIn, maxSettled, thread_data );
 
 				unsigned targetID = _graph->GetOriginalEdgeTarget( outEdge );
 				for ( unsigned postID = 0; postID < targetTable.GetOutDegree(); postID++ ) {
@@ -1216,10 +1216,8 @@ class TurnContractor {
 
 					 // Run witness search.
 					 // -------------------
-				if ( Simulate )
-					_Dijkstra( node, numOnlyViaContracted, 1000, data );
-				else
-					_Dijkstra( node, numOnlyViaContracted, 2000, data );
+				const int maxSettled = (m_naive & m_aggressive) ? 0 : (Simulate ? 1000 : 2000);
+				_Dijkstra( node, numOnlyViaContracted, maxSettled, data );
 
 				// Evaluate witness search.
 					 // ------------------------
@@ -1307,13 +1305,18 @@ class TurnContractor {
 						#ifndef NDEBUG
 						if (node == SPECIAL_NODE) qDebug() << "shortcut necessary" << source << "<-" << inOut << "---" << shortcutDistance << "---" << outIn << "->" << target;
 						#endif
-						const unsigned shortcutOriginalEdges = heap.GetData( originalEdgeTarget ).numOriginalEdges;
-						if ( !Simulate &&  m_aggressive ) {
-							needShortcut = shortcutNecessary( inEdge, outEdge, shortcutDistance, data );
-							if ( !needShortcut )
-								m_savedShortcuts++;
+						if ( m_aggressive ) {
+							if ( Simulate ) {
+								if ( m_naive )
+									needShortcut = shortcutNecessary( inEdge, outEdge, shortcutDistance, 1000, data );
+							} else {
+								needShortcut = shortcutNecessary( inEdge, outEdge, shortcutDistance, 2000, data );
+								if ( !needShortcut )
+									m_savedShortcuts++;
+							}
 						}
 						if ( needShortcut ) {
+							const unsigned shortcutOriginalEdges = heap.GetData( originalEdgeTarget ).numOriginalEdges;
 							if ( Simulate ) {
 								assert( stats != NULL );
 								stats->edgesAdded += 2;
