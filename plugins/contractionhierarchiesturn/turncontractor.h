@@ -1000,7 +1000,7 @@ class TurnContractor {
 			return result;
 		}
 
-		void _Dijkstra2( unsigned numIn, unsigned maxSettled, _ThreadData* const thread_data ){
+		void _Dijkstra2( unsigned numIn, int maxDist, unsigned maxSettled, _ThreadData* const thread_data ){
 
 			_Heap& heap = thread_data->aggressiveHeap;
 
@@ -1010,8 +1010,8 @@ class TurnContractor {
 				const NodeID originalEdge = heap.DeleteMin();
 				const int distance = heap.GetKey( originalEdge );
 
-				if ( distance == std::numeric_limits< int >::max() )
-					continue;
+				if ( distance == std::numeric_limits< int >::max() || distance > maxDist )
+					return;
 
 				const _HeapData data = heap.GetData( originalEdge );  // no reference, as heap size may change below
 
@@ -1094,9 +1094,31 @@ class TurnContractor {
 					}
 				}
 
-				_Dijkstra2( numIn, maxSettled, thread_data );
-
 				unsigned targetID = _graph->GetOriginalEdgeTarget( outEdge );
+				int maxSearchDistance = 0;
+				for ( unsigned postID = 0; postID < targetTable.GetOutDegree(); postID++ ) {
+					_PenaltyData referencePenalty = targetTable.GetData( targetID, postID );
+					if ( referencePenalty == RESTRICTED_TURN )
+						continue;
+
+
+					int minNewPenalty = referencePenalty;
+					for ( unsigned postInID = 0; postInID < targetTable.GetInDegree(); postInID++ ) {
+						_PenaltyData newPenalty = targetTable.GetData( postInID, postID );
+						if ( newPenalty == RESTRICTED_TURN )
+							continue;
+						if (newPenalty < minNewPenalty)
+							minNewPenalty = newPenalty;
+					}
+
+					int searchDistance = pathDistance + referencePenalty - minNewPenalty;
+					if ( searchDistance > maxSearchDistance )
+						maxSearchDistance = searchDistance;
+				}
+
+
+				_Dijkstra2( numIn, maxSearchDistance, maxSettled, thread_data );
+
 				for ( unsigned postID = 0; postID < targetTable.GetOutDegree(); postID++ ) {
 					_PenaltyData referencePenalty = targetTable.GetData( targetID, postID );
 					if ( referencePenalty == RESTRICTED_TURN )
