@@ -75,12 +75,23 @@ protected slots:
 	void targetByBookmark();
 	void targetByAddress();
 	void subductRoutepoint();
-	void addRoutepoint();
+	// TODO: Remove
+	void addRoutepoint_old();
+	void addRoutepoint( UnsignedCoordinate );
+
+	// TODO: Remove
+	void bookmarks_old();
 
 	void bookmarks();
+	void addresses();
+	void remove();
+	void gpsLocation();
+	void gpsCoordinate();
 
 	void setModeSourceSelection();
+	void setModeViaSelection();
 	void setModeTargetSelection();
+	void setModeInstructions();
 	void setModeless();
 	void toggleLocked();
 
@@ -94,6 +105,7 @@ protected slots:
 
 	void displayMapChooser();
 	void displayModuleChooser();
+	void hideControls();
 
 protected:
 

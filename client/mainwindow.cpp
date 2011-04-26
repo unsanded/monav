@@ -175,6 +175,32 @@ MainWindow::~MainWindow()
 
 void MainWindow::connectSlots()
 {
+	connect( d->actionSource, SIGNAL( triggered() ), this, SLOT( setModeSourceSelection() ));
+	connect( d->actionViapoint, SIGNAL( triggered() ), this, SLOT( setModeViaSelection() ));
+	connect( d->actionTarget, SIGNAL( triggered() ), this, SLOT( setModeTargetSelection() ));
+	connect( d->actionInstructions, SIGNAL( triggered() ), this, SLOT( setModeInstructions() ));
+
+	connect( d->actionZoomIn, SIGNAL( triggered() ), this, SLOT( addZoom() ));
+	connect( d->actionZoomOut, SIGNAL( triggered() ), this, SLOT( subtractZoom() ));
+
+	connect( d->actionBookmark, SIGNAL( triggered() ), this, SLOT( bookmarks_old() ));
+	// connect( d->actionAddress, SIGNAL( triggered() ), this, SLOT( addresses() ));
+	// connect( d->actionGpsLocation, SIGNAL( triggered() ), this, SLOT( gpsLocation() ));
+	// connect( d->actionGpsCoordinate, SIGNAL( triggered() ), this, SLOT( gpsCoordinate() ));
+	// connect( d->actionRemove, SIGNAL( triggered() ), this, SLOT( remove() ));
+
+	connect( d->actionHideControls, SIGNAL( triggered() ), this, SLOT( hideControls() ));
+	connect( d->actionPackages, SIGNAL( triggered() ), this, SLOT( displayMapChooser() ));
+	connect( d->actionModules, SIGNAL( triggered() ), this, SLOT( displayModuleChooser() ));
+	connect( d->actionPreferencesGeneral, SIGNAL( triggered() ), this, SLOT( settingsGeneral() ));
+	connect( d->actionPreferencesRenderer, SIGNAL( triggered() ), this, SLOT( settingsRenderer() ));
+	connect( d->actionPreferencesRouter, SIGNAL( triggered() ), this, SLOT( settingsRouter() ));
+	connect( d->actionPreferencesGpsLookup, SIGNAL( triggered() ), this, SLOT( settingsGPSLookup() ));
+	connect( d->actionPreferencesAddressLookup, SIGNAL( triggered() ), this, SLOT( settingsAddressLookup() ));
+	connect( d->actionPreferencesGpsReceiver, SIGNAL( triggered() ), this, SLOT( settingsGPS() ));
+
+	// TODO: Clean up old stuff which is obsolete since the new user interface
+
 	MapData* mapData = MapData::instance();
 	connect( m_ui->zoomBar, SIGNAL(valueChanged(int)), this, SLOT(setZoom(int)) );
 	connect( m_ui->paintArea, SIGNAL(zoomChanged(int)), this, SLOT(setZoom(int)) );
@@ -191,7 +217,7 @@ void MainWindow::connectSlots()
 	connect( RoutingLogic::instance(), SIGNAL(waypointsChanged()), this, SLOT(waypointsChanged()) );
 	connect( m_ui->lockButton, SIGNAL(clicked()), this, SLOT(toggleLocked()) );
 
-	connect( m_ui->bookmarks, SIGNAL(clicked()), this, SLOT(bookmarks()) );
+	connect( m_ui->bookmarks, SIGNAL(clicked()), this, SLOT(bookmarks_old()) );
 	connect( m_ui->show, SIGNAL(clicked()), this, SLOT(gotoMenu()) );
 	connect( m_ui->settings, SIGNAL(clicked()), this, SLOT(settingsMenu()) );
 
@@ -235,7 +261,7 @@ void MainWindow::setupMenu()
 	d->targetMenu->addAction( QIcon( ":/images/oxygen/bookmarks.png" ), tr( "Bookmark" ), this, SLOT(targetByBookmark()) );
 	d->targetMenu->addAction( QIcon( ":/images/address.png" ), tr( "Address" ), this, SLOT(targetByAddress()) );
 	d->targetMenu->addSeparator();
-	d->targetMenu->addAction( QIcon( ":/images/oxygen/list-add.png" ), tr( "Viapoint +" ), this, SLOT(addRoutepoint()) );
+	d->targetMenu->addAction( QIcon( ":/images/oxygen/list-add.png" ), tr( "Viapoint +" ), this, SLOT(addRoutepoint_old()) );
 	d->targetMenu->addAction( QIcon( ":/images/oxygen/list-remove.png" ), tr( "Viapoint -" ), this, SLOT(subductRoutepoint()) );
 
 	d->targetOverlay = new OverlayWidget( this, tr( "Destination" ) );
@@ -270,13 +296,13 @@ void MainWindow::createActions()
 	d->actionZoomIn = new QAction( QIcon( ":/images/oxygen/zoom-in.png" ), tr( "Zoom In" ), this );
 	d->actionZoomOut = new QAction( QIcon( ":/images/oxygen/zoom-out.png" ), tr( "Zoom Out" ), this );
 
-	d->actionHideControls = new QAction( QIcon( ":/images/oxygen/map.png" ), tr( "Hide Controls" ), this );
+	d->actionHideControls = new QAction( QIcon( ":/images/map.png" ), tr( "Hide Controls" ), this );
 	d->actionPackages = new QAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Packages" ), this );
 	d->actionModules = new QAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Modules" ), this );
 	d->actionPreferencesGeneral = new QAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "General" ), this );
 	d->actionPreferencesRenderer = new QAction( QIcon( ":/images/map.png" ), tr( "Renderer" ), this );
 	d->actionPreferencesRouter = new QAction( QIcon( ":/images/route.png" ), tr( "Router" ), this );
-	d->actionPreferencesGpsLookup = new QAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "GPS-Lookup" ), this );
+	d->actionPreferencesGpsLookup = new QAction( QIcon( ":/images/satellite.png" ), tr( "GPS-Lookup" ), this );
 	d->actionPreferencesAddressLookup = new QAction( QIcon( ":/images/address.png" ), tr( "Address Lookup" ), this );
 	d->actionPreferencesGpsReceiver = new QAction( QIcon( ":/images/oxygen/hwinfo.png" ), tr( "GPS Receiver" ), this );
 
@@ -382,6 +408,14 @@ void MainWindow::populateToolbars()
 	d->toolBarPreferences->addAction( d->actionPreferencesGpsLookup );
 	d->toolBarPreferences->addAction( d->actionPreferencesAddressLookup );
 	d->toolBarPreferences->addAction( d->actionPreferencesGpsReceiver );
+}
+
+void MainWindow::hideControls()
+{
+	d->toolBarRouting->setVisible( !d->actionHideControls->isChecked() );
+	d->toolBarMethod->setVisible( !d->actionHideControls->isChecked() );
+	d->toolBarView->setVisible( !d->actionHideControls->isChecked() );
+	d->toolBarPreferences->setVisible( !d->actionHideControls->isChecked() );
 }
 
 void MainWindow::resizeIcons()
@@ -659,31 +693,126 @@ void MainWindow::keyPressEvent( QKeyEvent* event )
 
 void MainWindow::setModeSourceSelection()
 {
+	if ( !d->actionSource->isChecked() ){
+		setModeless();
+		return;
+	}
+
+	d->mode = PrivateImplementation::Source;
+	d->fixed = false;
+	m_ui->paintArea->setFixed( false );
 	m_ui->paintArea->setKeepPositionVisible( false );
 	d->mode = PrivateImplementation::Source;
+	m_ui->infoWidget->hide();
+
+	d->actionTarget->setChecked( false );
+	d->actionViapoint->setChecked( false );
+	d->actionInstructions->setChecked( false );
+
 	m_ui->waypointsWidget->setVisible( false );
 	m_ui->menuWidget->setVisible( false );
 	m_ui->lockButton->setVisible( false );
 	m_ui->tapMode->setVisible( true );
+
+	d->toolBarMethod->setDisabled( false );
+}
+
+void MainWindow::setModeViaSelection()
+{
+	if ( !d->actionViapoint->isChecked() ){
+		setModeless();
+		return;
+	}
+
+	d->mode = PrivateImplementation::Viapoint;
+	d->fixed = false;
+	m_ui->paintArea->setFixed( false );
+	m_ui->paintArea->setKeepPositionVisible( false );
+	m_ui->infoWidget->hide();
+
+	d->actionSource->setChecked( false );
+	d->actionTarget->setChecked( false );
+	d->actionInstructions->setChecked( false );
+
+	m_ui->waypointsWidget->setVisible( false );
+	m_ui->menuWidget->setVisible( false );
+	m_ui->lockButton->setVisible( false );
+	m_ui->tapMode->setVisible( true );
+
+	d->toolBarMethod->setDisabled( false );
 }
 
 void MainWindow::setModeTargetSelection()
 {
-	m_ui->paintArea->setKeepPositionVisible( false );
+	if ( !d->actionTarget->isChecked() ){
+		setModeless();
+		return;
+	}
+
 	d->mode = PrivateImplementation::Target;
+	d->fixed = false;
+	m_ui->paintArea->setFixed( false );
+	m_ui->paintArea->setKeepPositionVisible( false );
+	m_ui->infoWidget->hide();
+
+	d->actionSource->setChecked( false );
+	d->actionViapoint->setChecked( false );
+	d->actionInstructions->setChecked( false );
+
 	m_ui->waypointsWidget->setVisible( false );
 	m_ui->menuWidget->setVisible( false );
 	m_ui->lockButton->setVisible( false );
 	m_ui->tapMode->setVisible( true );
+
+	d->toolBarMethod->setDisabled( false );
+}
+
+void MainWindow::setModeInstructions()
+{
+	if ( !d->actionInstructions->isChecked() ){
+		setModeless();
+		return;
+	}
+
+	d->mode = PrivateImplementation::Instructions;
+
+	m_ui->paintArea->setKeepPositionVisible( true );
+	d->fixed = true;
+	m_ui->paintArea->setFixed( true );
+	// m_ui->infoWidget->show();
+	instructionsChanged();
+
+	d->actionSource->setChecked( false );
+	d->actionTarget->setChecked( false );
+	d->actionViapoint->setChecked( false );
+	// d->actionInstructions->setChecked( true );
+
+	m_ui->waypointsWidget->setVisible( false );
+	m_ui->menuWidget->setVisible( false );
+	m_ui->lockButton->setVisible( false );
+	m_ui->tapMode->setVisible( true );
+
+	d->toolBarMethod->setDisabled( true );
 }
 
 void MainWindow::setModeless()
 {
 	d->mode = PrivateImplementation::Modeless;
-	m_ui->waypointsWidget->setVisible( true );
-	m_ui->menuWidget->setVisible( true );
+	d->fixed = false;
+	m_ui->paintArea->setFixed( false );
+	m_ui->infoWidget->hide();
+
+	d->actionSource->setChecked( false );
+	d->actionTarget->setChecked( false );
+	d->actionViapoint->setChecked( false );
+	d->actionInstructions->setChecked( false );
+
+	m_ui->waypointsWidget->setVisible( false );
+	m_ui->menuWidget->setVisible( false );
 	m_ui->lockButton->setVisible( true );
 	m_ui->tapMode->setVisible( false );
+
+	d->toolBarMethod->setDisabled( false );
 }
 
 void MainWindow::mouseClicked( ProjectedCoordinate clickPos )
@@ -854,7 +983,7 @@ void MainWindow::subductRoutepoint()
 	routingLogic->setWaypoints( waypoints );
 }
 
-void MainWindow::addRoutepoint()
+void MainWindow::addRoutepoint_old()
 {
 	RoutingLogic* routingLogic = RoutingLogic::instance();
 	QVector< UnsignedCoordinate > waypoints = routingLogic->waypoints();
@@ -864,6 +993,25 @@ void MainWindow::addRoutepoint()
 	routingLogic->setWaypoints( waypoints );
 }
 
+void MainWindow::addRoutepoint( UnsignedCoordinate coordinate )
+{
+	RoutingLogic* routingLogic = RoutingLogic::instance();
+	QVector< UnsignedCoordinate > waypoints = routingLogic->waypoints();
+	if ( waypoints.empty() )
+		waypoints.resize( d->currentWaypoint );
+	waypoints.insert( d->currentWaypoint, coordinate );
+	routingLogic->setWaypoints( waypoints );
+}
+
+void MainWindow::bookmarks_old()
+{
+	UnsignedCoordinate result;
+	if ( !BookmarksDialog::showBookmarks( &result, this ) )
+		return;
+
+	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
+}
+
 void MainWindow::bookmarks()
 {
 	UnsignedCoordinate result;
@@ -871,6 +1019,86 @@ void MainWindow::bookmarks()
 		return;
 
 	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
+}
+
+void MainWindow::addresses()
+{
+	if ( MapData::instance()->addressLookup() == NULL )
+		return;
+	UnsignedCoordinate result;
+	if ( !AddressDialog::getAddress( &result, this ) )
+		return;
+
+	if ( d->mode == d->Source )
+		RoutingLogic::instance()->setSource( result );
+	if ( d->mode == d->Target )
+		RoutingLogic::instance()->setTarget( result );
+	if ( d->mode == d->Viapoint )
+		addRoutepoint( result );
+	m_ui->paintArea->setKeepPositionVisible( false );
+	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
+}
+
+void MainWindow::gpsLocation()
+{
+	const RoutingLogic::GPSInfo& gpsInfo = RoutingLogic::instance()->gpsInfo();
+	if ( !gpsInfo.position.IsValid() )
+		return;
+	GPSCoordinate gps( gpsInfo.position.ToGPSCoordinate().latitude, gpsInfo.position.ToGPSCoordinate().longitude );
+	UnsignedCoordinate result = UnsignedCoordinate( gps );
+	if ( d->mode == d->Source )
+		RoutingLogic::instance()->setSource( result );
+	if ( d->mode == d->Target )
+		RoutingLogic::instance()->setTarget( result );
+	if ( d->mode == d->Viapoint )
+		addRoutepoint( result );
+
+	m_ui->paintArea->setCenter( ProjectedCoordinate( gps ) );
+	m_ui->paintArea->setKeepPositionVisible( true );
+
+	IRenderer* renderer = MapData::instance()->renderer();
+	if ( renderer == NULL )
+		return;
+	setZoom( renderer->GetMaxZoom() - 5 );
+}
+
+void MainWindow::gpsCoordinate()
+{
+	bool ok = false;
+	double latitude = QInputDialog::getDouble( this, "Enter Coordinate", "Enter Latitude", 0, -90, 90, 5, &ok );
+	if ( !ok )
+		return;
+	double longitude = QInputDialog::getDouble( this, "Enter Coordinate", "Enter Longitude", 0, -180, 180, 5, &ok );
+	if ( !ok )
+		return;
+	GPSCoordinate gps( latitude, longitude );
+
+	UnsignedCoordinate result = UnsignedCoordinate( gps );
+	if ( d->mode == d->Source )
+		RoutingLogic::instance()->setSource( result );
+	if ( d->mode == d->Target )
+		RoutingLogic::instance()->setTarget( result );
+	if ( d->mode == d->Viapoint )
+		addRoutepoint( result );
+
+	m_ui->paintArea->setCenter( ProjectedCoordinate( gps ) );
+	m_ui->paintArea->setKeepPositionVisible( false );
+
+	IRenderer* renderer = MapData::instance()->renderer();
+	if ( renderer == NULL )
+		return;
+	setZoom( renderer->GetMaxZoom() - 5 );
+}
+
+void MainWindow::remove()
+{
+	// TODO: RoutingLogic::instance()->clear() does not remove rendering waypoints and target.
+	if ( d->mode == d->Viapoint )
+		subductRoutepoint();
+	else
+		RoutingLogic::instance()->clear();
+
+	// m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
 }
 
 void MainWindow::addZoom()
