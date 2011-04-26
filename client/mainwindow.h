@@ -81,7 +81,7 @@ protected slots:
 
 	void setModeSourceSelection();
 	void setModeTargetSelection();
-	void setModeNoSelection();
+	void setModeless();
 	void toggleLocked();
 
 	void gotoMenu();
@@ -98,8 +98,11 @@ protected slots:
 protected:
 
 	virtual void resizeEvent( QResizeEvent* event );
+	void setupMenu(); // TODO: Remove me
+	void createActions();
+	void populateMenus();
+	void populateToolbars();
 	void connectSlots();
-	void setupMenu();
 	void resizeIcons();
 
 #ifdef Q_WS_MAEMO_5
