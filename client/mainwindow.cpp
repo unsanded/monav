@@ -53,7 +53,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 struct MainWindow::PrivateImplementation {
 
 	enum Mode {
-		Source, Target, POI, NoSelection
+		Modeless, Source, Target, Viapoint, Instructions
 	};
 
 	OverlayWidget* targetOverlay;
@@ -61,10 +61,45 @@ struct MainWindow::PrivateImplementation {
 	OverlayWidget* gotoOverlay;
 	OverlayWidget* settingsOverlay;
 
-	QMenu* targetMenu;
-	QMenu* sourceMenu;
-	QMenu* gotoMenu;
-	QMenu* settingsMenu;
+	QMenu* sourceMenu; // TODO: Remove
+	QMenu* targetMenu; // TODO: Remove
+	QMenu* gotoMenu; // TODO: Remove
+	QMenu* settingsMenu; // TODO: Remove
+
+	QMenuBar* menuBar;
+
+	QMenu* menuRouting;
+	QMenu* menuMethod;
+	QMenu* menuView;
+	QMenu* menuSettings;
+
+	QToolBar* toolBarRouting;
+	QToolBar* toolBarMethod;
+	QToolBar* toolBarView;
+	QToolBar* toolBarPreferences;
+
+	QAction* actionSource;
+	QAction* actionViapoint;
+	QAction* actionTarget;
+	QAction* actionInstructions;
+
+	QAction* actionBookmark;
+	QAction* actionAddress;
+	QAction* actionGpsCoordinate;
+	QAction* actionRemove;
+
+	QAction* actionZoomIn;
+	QAction* actionZoomOut;
+
+	QAction* actionHideControls;
+	QAction* actionPackages;
+	QAction* actionModules;
+	QAction* actionPreferencesGeneral;
+	QAction* actionPreferencesRenderer;
+	QAction* actionPreferencesRouter;
+	QAction* actionPreferencesGpsLookup;
+	QAction* actionPreferencesAddressLookup;
+	QAction* actionPreferencesGpsReceiver;
 
 	QSignalMapper* waypointMapper;
 
@@ -85,7 +120,10 @@ MainWindow::MainWindow( QWidget* parent ) :
 	m_ui->setupUi( this );
 	d = new PrivateImplementation;
 
-	setupMenu();
+	setupMenu(); // TODO: Remove
+	createActions();
+	populateMenus();
+	populateToolbars();
 	m_ui->zoomBar->hide();
 	m_ui->infoWidget->hide();
 	m_ui->tapMode->hide();
@@ -94,7 +132,7 @@ MainWindow::MainWindow( QWidget* parent ) :
 	// ensure that we're painting our background
 	setAutoFillBackground(true);
 
-	d->mode = PrivateImplementation::NoSelection;
+	d->mode = PrivateImplementation::Modeless;
 	d->fixed = false;
 
 	QSettings settings( "MoNavClient" );
@@ -166,9 +204,10 @@ void MainWindow::connectSlots()
 	d->waypointMapper->setMapping( m_ui->target, 0 );
 	connect( m_ui->target, SIGNAL(clicked()), this, SLOT(targetMenu()) );
 
-	connect( m_ui->tapMode, SIGNAL(clicked()), this, SLOT(setModeNoSelection()) );
+	connect( m_ui->tapMode, SIGNAL(clicked()), this, SLOT(setModeless()) );
 }
 
+// TODO: Remove
 void MainWindow::setupMenu()
 {
 	d->gotoMenu = new QMenu( tr( "Show" ), this );
@@ -196,8 +235,8 @@ void MainWindow::setupMenu()
 	d->targetMenu->addAction( QIcon( ":/images/oxygen/bookmarks.png" ), tr( "Bookmark" ), this, SLOT(targetByBookmark()) );
 	d->targetMenu->addAction( QIcon( ":/images/address.png" ), tr( "Address" ), this, SLOT(targetByAddress()) );
 	d->targetMenu->addSeparator();
-	d->targetMenu->addAction( QIcon( ":/images/oxygen/list-add.png" ), tr( "+Waypoint" ), this, SLOT(addRoutepoint()) );
-	d->targetMenu->addAction( QIcon( ":/images/oxygen/list-remove.png" ), tr( "-Waypoint" ), this, SLOT(subductRoutepoint()) );
+	d->targetMenu->addAction( QIcon( ":/images/oxygen/list-add.png" ), tr( "Viapoint +" ), this, SLOT(addRoutepoint()) );
+	d->targetMenu->addAction( QIcon( ":/images/oxygen/list-remove.png" ), tr( "Viapoint -" ), this, SLOT(subductRoutepoint()) );
 
 	d->targetOverlay = new OverlayWidget( this, tr( "Destination" ) );
 	d->targetOverlay->addActions( d->targetMenu->actions() );
@@ -214,6 +253,135 @@ void MainWindow::setupMenu()
 
 	d->settingsOverlay = new OverlayWidget( this, tr( "Settings" ) );
 	d->settingsOverlay->addActions( d->settingsMenu->actions() );
+}
+
+void MainWindow::createActions()
+{
+	d->actionSource = new QAction( QIcon( ":/images/source.png" ), tr( "Source" ), this );
+	d->actionViapoint = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Viapoint" ), this );
+	d->actionTarget = new QAction( QIcon( ":/images/target.png" ), tr( "Target" ), this );
+	d->actionInstructions = new QAction( QIcon( ":/images/oxygen/emblem-unlocked.png" ), tr( "Instructions" ), this );
+
+	d->actionBookmark = new QAction( QIcon( ":/images/oxygen/bookmarks.png" ), tr( "Bookmark" ), this );
+	d->actionAddress = new QAction( QIcon( ":/images/address.png" ), tr( "Address" ), this );
+	d->actionGpsCoordinate = new QAction( QIcon( ":/images/oxygen/network-wireless.png" ), tr( "GPS-Coordinate" ), this );
+	d->actionRemove = new QAction( QIcon( ":/images/notok.png" ), tr( "Delete" ), this );
+
+	d->actionZoomIn = new QAction( QIcon( ":/images/oxygen/zoom-in.png" ), tr( "Zoom In" ), this );
+	d->actionZoomOut = new QAction( QIcon( ":/images/oxygen/zoom-out.png" ), tr( "Zoom Out" ), this );
+
+	d->actionHideControls = new QAction( QIcon( ":/images/oxygen/map.png" ), tr( "Hide Controls" ), this );
+	d->actionPackages = new QAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Packages" ), this );
+	d->actionModules = new QAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Modules" ), this );
+	d->actionPreferencesGeneral = new QAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "General" ), this );
+	d->actionPreferencesRenderer = new QAction( QIcon( ":/images/map.png" ), tr( "Renderer" ), this );
+	d->actionPreferencesRouter = new QAction( QIcon( ":/images/route.png" ), tr( "Router" ), this );
+	d->actionPreferencesGpsLookup = new QAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "GPS-Lookup" ), this );
+	d->actionPreferencesAddressLookup = new QAction( QIcon( ":/images/address.png" ), tr( "Address Lookup" ), this );
+	d->actionPreferencesGpsReceiver = new QAction( QIcon( ":/images/oxygen/hwinfo.png" ), tr( "GPS Receiver" ), this );
+
+	// d->actionGpsLocation = new QAction( QIcon( ":/images/satellite.png" ), tr( "GPS-Location" ), this );
+
+	d->actionSource->setCheckable( true );
+	d->actionTarget->setCheckable( true );
+	d->actionViapoint->setCheckable( true );
+	d->actionInstructions->setCheckable( true );
+
+	d->actionHideControls->setCheckable( true );
+
+	d->actionSource->setShortcut( Qt::Key_S );
+	d->actionViapoint->setShortcut( Qt::Key_W );
+	d->actionTarget->setShortcut( Qt::Key_T );
+	d->actionInstructions->setShortcut( Qt::Key_R );
+
+	d->actionBookmark->setShortcut( Qt::Key_D );
+	d->actionAddress->setShortcut( Qt::Key_A );
+	d->actionGpsCoordinate->setShortcut( Qt::Key_G );
+	d->actionRemove->setShortcut( Qt::Key_Backspace );
+
+	d->actionZoomIn->setShortcut( Qt::Key_Plus );
+	d->actionZoomOut->setShortcut( Qt::Key_Minus );
+
+	d->actionHideControls->setShortcut( Qt::Key_H );
+	d->actionPackages->setShortcut( Qt::Key_P );
+	d->actionModules->setShortcut( Qt::Key_M );
+	d->actionPreferencesGeneral->setShortcut( Qt::Key_P );
+
+	// d->actionGpsLocation->setShortcut( Qt::Key_L );
+}
+
+void MainWindow::populateMenus()
+{
+	d->menuBar = menuBar();
+
+	d->menuRouting = new QMenu( tr( "Routing" ), this );
+	d->menuMethod = new QMenu( tr( "Methods" ), this );
+	d->menuView = new QMenu( tr( "View" ), this );
+	d->menuSettings = new QMenu( tr( "Settings" ), this );
+
+	d->menuRouting->addAction( d->actionSource );
+	d->menuRouting->addAction( d->actionViapoint );
+	d->menuRouting->addAction( d->actionTarget );
+	d->menuRouting->addAction( d->actionInstructions );
+
+	d->menuMethod->addAction( d->actionBookmark );
+	d->menuMethod->addAction( d->actionAddress );
+	d->menuMethod->addAction( d->actionGpsCoordinate );
+	d->menuMethod->addAction( d->actionRemove );
+
+	d->menuView->addAction( d->actionZoomIn );
+	d->menuView->addAction( d->actionZoomOut );
+
+	d->menuSettings->addAction( d->actionHideControls );
+	d->menuSettings->addAction( d->actionPackages );
+	d->menuSettings->addAction( d->actionModules );
+	d->menuSettings->addAction( d->actionPreferencesGeneral );
+	d->menuSettings->addAction( d->actionPreferencesRenderer );
+	d->menuSettings->addAction( d->actionPreferencesRouter );
+	d->menuSettings->addAction( d->actionPreferencesGpsLookup );
+	d->menuSettings->addAction( d->actionPreferencesAddressLookup );
+	d->menuSettings->addAction( d->actionPreferencesGpsReceiver );
+
+#ifndef Q_WS_MAEMO_5
+	d->menuBar->addMenu( d->menuRouting );
+	d->menuBar->addMenu( d->menuMethod );
+	d->menuBar->addMenu( d->menuView );
+#endif
+	d->menuBar->addMenu( d->menuSettings );
+
+}
+
+void MainWindow::populateToolbars()
+{
+	d->toolBarRouting = addToolBar( tr( "Route" ) );
+	d->toolBarMethod = addToolBar( tr( "Method" ) );
+	d->toolBarView = addToolBar( tr( "Zoom" ) );
+#ifndef Q_WS_MAEMO_5
+	d->toolBarPreferences = addToolBar( tr( "Preferences" ) );
+#endif
+
+	d->toolBarRouting->addAction( d->actionSource );
+	d->toolBarRouting->addAction( d->actionViapoint );
+	d->toolBarRouting->addAction( d->actionTarget );
+	d->toolBarRouting->addAction( d->actionInstructions );
+
+	d->toolBarMethod->addAction( d->actionBookmark );
+	d->toolBarMethod->addAction( d->actionAddress );
+	d->toolBarMethod->addAction( d->actionGpsCoordinate );
+	d->toolBarMethod->addAction( d->actionRemove );
+
+	d->toolBarView->addAction( d->actionZoomIn );
+	d->toolBarView->addAction( d->actionZoomOut );
+
+	d->toolBarPreferences->addAction( d->actionHideControls );
+	d->toolBarPreferences->addAction( d->actionPackages );
+	d->toolBarPreferences->addAction( d->actionModules );
+	d->toolBarPreferences->addAction( d->actionPreferencesGeneral );
+	d->toolBarPreferences->addAction( d->actionPreferencesRenderer );
+	d->toolBarPreferences->addAction( d->actionPreferencesRouter );
+	d->toolBarPreferences->addAction( d->actionPreferencesGpsLookup );
+	d->toolBarPreferences->addAction( d->actionPreferencesAddressLookup );
+	d->toolBarPreferences->addAction( d->actionPreferencesGpsReceiver );
 }
 
 void MainWindow::resizeIcons()
@@ -509,9 +677,9 @@ void MainWindow::setModeTargetSelection()
 	m_ui->tapMode->setVisible( true );
 }
 
-void MainWindow::setModeNoSelection()
+void MainWindow::setModeless()
 {
-	d->mode = PrivateImplementation::NoSelection;
+	d->mode = PrivateImplementation::Modeless;
 	m_ui->waypointsWidget->setVisible( true );
 	m_ui->menuWidget->setVisible( true );
 	m_ui->lockButton->setVisible( true );
@@ -525,7 +693,7 @@ void MainWindow::mouseClicked( ProjectedCoordinate clickPos )
 		RoutingLogic::instance()->setSource( coordinate );
 	} else if ( d->mode == PrivateImplementation::Target ) {
 		RoutingLogic::instance()->setWaypoint( d->currentWaypoint, coordinate );
-	} else if ( d->mode == PrivateImplementation::POI ){
+	} else if ( d->mode == PrivateImplementation::Viapoint ){
 		//m_selected = coordinate;
 		//m_ui->paintArea->setPOI( coordinate );
 		//return;
