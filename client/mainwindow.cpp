@@ -125,7 +125,13 @@ MainWindow::MainWindow( QWidget* parent ) :
 	populateMenus();
 	populateToolbars();
 	m_ui->zoomBar->hide();
+	// TODO: Clean up obsolete ui elements
+	m_ui->zoomBar->hide();
+	// m_ui->waypointsWidget->hide();
+	// m_ui->zoomWidget->hide();
 	m_ui->infoWidget->hide();
+	// m_ui->menuWidget->hide();
+	// m_ui->lockWidget->hide();
 	m_ui->tapMode->hide();
 	m_ui->paintArea->setKeepPositionVisible( true );
 
@@ -183,11 +189,11 @@ void MainWindow::connectSlots()
 	connect( d->actionZoomIn, SIGNAL( triggered() ), this, SLOT( addZoom() ));
 	connect( d->actionZoomOut, SIGNAL( triggered() ), this, SLOT( subtractZoom() ));
 
-	connect( d->actionBookmark, SIGNAL( triggered() ), this, SLOT( bookmarks_old() ));
-	// connect( d->actionAddress, SIGNAL( triggered() ), this, SLOT( addresses() ));
+	connect( d->actionBookmark, SIGNAL( triggered() ), this, SLOT( bookmarks() ));
+	connect( d->actionAddress, SIGNAL( triggered() ), this, SLOT( addresses() ));
 	// connect( d->actionGpsLocation, SIGNAL( triggered() ), this, SLOT( gpsLocation() ));
-	// connect( d->actionGpsCoordinate, SIGNAL( triggered() ), this, SLOT( gpsCoordinate() ));
-	// connect( d->actionRemove, SIGNAL( triggered() ), this, SLOT( remove() ));
+	connect( d->actionGpsCoordinate, SIGNAL( triggered() ), this, SLOT( gpsCoordinate() ));
+	connect( d->actionRemove, SIGNAL( triggered() ), this, SLOT( remove() ));
 
 	connect( d->actionHideControls, SIGNAL( triggered() ), this, SLOT( hideControls() ));
 	connect( d->actionPackages, SIGNAL( triggered() ), this, SLOT( displayMapChooser() ));
@@ -316,7 +322,7 @@ void MainWindow::createActions()
 	d->actionHideControls->setCheckable( true );
 
 	d->actionSource->setShortcut( Qt::Key_S );
-	d->actionViapoint->setShortcut( Qt::Key_W );
+	d->actionViapoint->setShortcut( Qt::Key_V );
 	d->actionTarget->setShortcut( Qt::Key_T );
 	d->actionInstructions->setShortcut( Qt::Key_R );
 
@@ -1018,6 +1024,13 @@ void MainWindow::bookmarks()
 	if ( !BookmarksDialog::showBookmarks( &result, this ) )
 		return;
 
+	if ( d->mode == d->Source )
+		RoutingLogic::instance()->setSource( result );
+	if ( d->mode == d->Target )
+		RoutingLogic::instance()->setTarget( result );
+	if ( d->mode == d->Viapoint )
+		addRoutepoint( result );
+	m_ui->paintArea->setKeepPositionVisible( false );
 	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
 }
 
