@@ -288,6 +288,9 @@ void MainWindow::populateMenus()
 	d->menuSettings->addAction( d->actionPreferencesGpsLookup );
 	d->menuSettings->addAction( d->actionPreferencesAddressLookup );
 	d->menuSettings->addAction( d->actionPreferencesGpsReceiver );
+#ifdef Q_WS_MAEMO_5
+	d->menuSettings->addAction( d->actionGpsCoordinate );
+#endif
 
 #ifndef Q_WS_MAEMO_5
 	d->menuBar->addMenu( d->menuFile );
@@ -303,8 +306,9 @@ void MainWindow::populateToolbars()
 	d->toolBarRouting = addToolBar( tr( "Route" ) );
 	d->toolBarMethods = addToolBar( tr( "Method" ) );
 	d->toolBarView = addToolBar( tr( "Zoom" ) );
-#ifndef Q_WS_MAEMO_5
 	d->toolBarPreferences = addToolBar( tr( "Preferences" ) );
+#ifdef Q_WS_MAEMO_5
+	d->toolBarPreferences->setVisible( false );
 #endif
 
 	d->toolBarRouting->addAction( d->actionSource );
@@ -314,7 +318,9 @@ void MainWindow::populateToolbars()
 
 	d->toolBarMethods->addAction( d->actionBookmark );
 	d->toolBarMethods->addAction( d->actionAddress );
+#ifndef Q_WS_MAEMO_5
 	d->toolBarMethods->addAction( d->actionGpsCoordinate );
+#endif
 	d->toolBarMethods->addAction( d->actionRemove );
 
 	d->toolBarView->addAction( d->actionZoomIn );
