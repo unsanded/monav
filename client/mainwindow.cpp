@@ -61,13 +61,8 @@ struct MainWindow::PrivateImplementation {
 	OverlayWidget* gotoOverlay;
 	OverlayWidget* settingsOverlay;
 
-	QMenu* sourceMenu; // TODO: Remove
-	QMenu* targetMenu; // TODO: Remove
-	QMenu* gotoMenu; // TODO: Remove
-	QMenu* settingsMenu; // TODO: Remove
-
 	QMenuBar* menuBar;
-
+	QMenu* menuFile;
 	QMenu* menuRouting;
 	QMenu* menuMethods;
 	QMenu* menuView;
@@ -101,15 +96,12 @@ struct MainWindow::PrivateImplementation {
 	QAction* actionPreferencesAddressLookup;
 	QAction* actionPreferencesGpsReceiver;
 
-	// QSignalMapper* waypointMapper;
-
 	int currentWaypoint;
 
 	int maxZoom;
 	bool fixed;
 	Mode mode;
 
-	// void setupMenu();
 	void resizeIcons();
 };
 
@@ -120,19 +112,10 @@ MainWindow::MainWindow( QWidget* parent ) :
 	m_ui->setupUi( this );
 	d = new PrivateImplementation;
 
-	// setupMenu(); // TODO: Remove
 	createActions();
 	populateMenus();
 	populateToolbars();
-	m_ui->zoomBar->hide();
-	// TODO: Clean up obsolete ui elements
-	m_ui->zoomBar->hide();
-	// m_ui->waypointsWidget->hide();
-	// m_ui->zoomWidget->hide();
 	m_ui->infoWidget->hide();
-	// m_ui->menuWidget->hide();
-	// m_ui->lockWidget->hide();
-	m_ui->tapMode->hide();
 	m_ui->paintArea->setKeepPositionVisible( true );
 
 	// ensure that we're painting our background
@@ -186,12 +169,8 @@ void MainWindow::connectSlots()
 	connect( d->actionTarget, SIGNAL( triggered() ), this, SLOT( setModeTargetSelection() ));
 	connect( d->actionInstructions, SIGNAL( triggered() ), this, SLOT( setModeInstructions() ));
 
-	connect( d->actionZoomIn, SIGNAL( triggered() ), this, SLOT( addZoom() ));
-	connect( d->actionZoomOut, SIGNAL( triggered() ), this, SLOT( subtractZoom() ));
-
 	connect( d->actionBookmark, SIGNAL( triggered() ), this, SLOT( bookmarks() ));
 	connect( d->actionAddress, SIGNAL( triggered() ), this, SLOT( addresses() ));
-	// connect( d->actionGpsLocation, SIGNAL( triggered() ), this, SLOT( gpsLocation() ));
 	connect( d->actionGpsCoordinate, SIGNAL( triggered() ), this, SLOT( gpsCoordinate() ));
 	connect( d->actionRemove, SIGNAL( triggered() ), this, SLOT( remove() ));
 
@@ -208,11 +187,8 @@ void MainWindow::connectSlots()
 	// TODO: Clean up old stuff which is obsolete since the new user interface
 
 	MapData* mapData = MapData::instance();
-	connect( m_ui->zoomBar, SIGNAL(valueChanged(int)), this, SLOT(setZoom(int)) );
 	connect( m_ui->paintArea, SIGNAL(zoomChanged(int)), this, SLOT(setZoom(int)) );
 	connect( m_ui->paintArea, SIGNAL(mouseClicked(ProjectedCoordinate)), this, SLOT(mouseClicked(ProjectedCoordinate)) );
-	connect( m_ui->zoomIn, SIGNAL(clicked()), this, SLOT(addZoom()) );
-	connect( m_ui->zoomOut, SIGNAL(clicked()), this, SLOT(subtractZoom()) );
 
 	connect( m_ui->infoIcon1, SIGNAL(clicked()), this, SLOT(showInstructions()) );
 	connect( m_ui->infoIcon2, SIGNAL(clicked()), this, SLOT(showInstructions()) );
@@ -221,72 +197,8 @@ void MainWindow::connectSlots()
 	connect( mapData, SIGNAL(dataLoaded()), this, SLOT(dataLoaded()) );
 	connect( RoutingLogic::instance(), SIGNAL(instructionsChanged()), this, SLOT(instructionsChanged()) );
 	// connect( RoutingLogic::instance(), SIGNAL(waypointsChanged()), this, SLOT(waypointsChanged()) );
-	connect( m_ui->lockButton, SIGNAL(clicked()), this, SLOT(toggleLocked()) );
-
-	// connect( m_ui->bookmarks, SIGNAL(clicked()), this, SLOT(bookmarks_old()) );
-	// connect( m_ui->show, SIGNAL(clicked()), this, SLOT(gotoMenu()) );
-	// connect( m_ui->settings, SIGNAL(clicked()), this, SLOT(settingsMenu()) );
-
-	// d->waypointMapper = new QSignalMapper( this );
-	// connect( d->waypointMapper, SIGNAL(mapped(int)), SLOT(setWaypointID(int)) );
-	// connect( m_ui->source, SIGNAL(clicked()), d->waypointMapper, SLOT(map()) );
-	// d->waypointMapper->setMapping( m_ui->source, -1 );
-	// connect( m_ui->source, SIGNAL(clicked()), this, SLOT(sourceMenu()) );
-	// connect( m_ui->target, SIGNAL(clicked()), d->waypointMapper, SLOT(map()) );
-	// d->waypointMapper->setMapping( m_ui->target, 0 );
-	// connect( m_ui->target, SIGNAL(clicked()), this, SLOT(targetMenu()) );
-
-	// connect( m_ui->tapMode, SIGNAL(clicked()), this, SLOT(setModeless()) );
 }
 
-/*
-void MainWindow::setupMenu()
-{
-	d->gotoMenu = new QMenu( tr( "Show" ), this );
-	d->gotoMenu->addAction( QIcon( ":/images/oxygen/network-wireless.png" ), tr( "GPS-Location" ), this, SLOT(gotoGpsLocation()) );
-	d->gotoMenu->addAction( QIcon( ":/images/source.png" ), tr( "Departure" ), this, SLOT(gotoSource()) );
-	d->gotoMenu->addAction( QIcon( ":/images/target.png" ), tr( "Destination" ), this, SLOT(gotoTarget()) );
-	d->gotoMenu->addAction( QIcon( ":/images/oxygen/bookmarks.png" ), tr( "Bookmark..." ), this, SLOT(gotoBookmark()) );
-	d->gotoMenu->addAction( QIcon( ":/images/address.png" ), tr( "Address..." ), this, SLOT(gotoAddress()) );
-	d->gotoMenu->addAction( QIcon( ":/images/oxygen/network-wireless.png" ), tr( "GPS-Coordinate..." ), this, SLOT(gotoGpsCoordinate()) );
-
-	d->gotoOverlay = new OverlayWidget( this, tr( "Show" ) );
-	d->gotoOverlay->addActions( d->gotoMenu->actions() );
-
-	d->sourceMenu = new QMenu( tr( "Departure" ), this );
-	d->sourceMenu->addAction( QIcon( ":/images/map.png" ), tr( "Tap on Map" ), this, SLOT(setModeSourceSelection()) );
-	d->sourceMenu->addAction( QIcon( ":/images/oxygen/bookmarks.png" ), tr( "Bookmark" ), this, SLOT(sourceByBookmark()) );
-	d->sourceMenu->addAction( QIcon( ":/images/address.png" ), tr( "Address" ), this, SLOT(sourceByAddress()) );
-	d->sourceMenu->addAction( QIcon( ":/images/oxygen/network-wireless.png" ), tr( "GPS-Location" ), this, SLOT(sourceByGPS()) );
-
-	d->sourceOverlay = new OverlayWidget( this, tr( "Departure" ) );
-	d->sourceOverlay->addActions( d->sourceMenu->actions() );
-
-	d->targetMenu = new QMenu( tr( "Destination" ), this );
-	d->targetMenu->addAction( QIcon( ":/images/map.png" ), tr( "Tap on Map" ), this, SLOT(setModeTargetSelection()) );
-	d->targetMenu->addAction( QIcon( ":/images/oxygen/bookmarks.png" ), tr( "Bookmark" ), this, SLOT(targetByBookmark()) );
-	d->targetMenu->addAction( QIcon( ":/images/address.png" ), tr( "Address" ), this, SLOT(targetByAddress()) );
-	d->targetMenu->addSeparator();
-	d->targetMenu->addAction( QIcon( ":/images/oxygen/list-add.png" ), tr( "Via +" ), this, SLOT(addRoutepoint_old()) );
-	d->targetMenu->addAction( QIcon( ":/images/oxygen/list-remove.png" ), tr( "Via -" ), this, SLOT(subductRoutepoint()) );
-
-	d->targetOverlay = new OverlayWidget( this, tr( "Destination" ) );
-	d->targetOverlay->addActions( d->targetMenu->actions() );
-
-	d->settingsMenu = new QMenu( tr( "Settings" ), this );
-	d->settingsMenu->addAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Packages" ), this, SLOT(displayMapChooser()) );
-	d->settingsMenu->addAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Modules" ), this, SLOT(displayModuleChooser()) );
-	d->settingsMenu->addAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "General" ), this, SLOT(settingsGeneral()) );
-	d->settingsMenu->addAction( QIcon( ":/images/oxygen/network-wireless.png" ), tr( "GPS Lookup" ), this, SLOT(settingsGPSLookup()) );
-	d->settingsMenu->addAction( QIcon( ":/images/map.png" ), tr( "Renderer" ), this, SLOT(settingsRenderer()) );
-	d->settingsMenu->addAction( QIcon( ":/images/route.png" ), tr( "Router" ), this, SLOT(settingsRouter()) );
-	d->settingsMenu->addAction( QIcon( ":/images/address.png" ), tr( "Address Lookup" ), this, SLOT(settingsAddressLookup()) );
-	d->settingsMenu->addAction( QIcon( ":/images/oxygen/hwinfo.png" ), tr( "GPS Receiver" ), this, SLOT(settingsGPS()) );
-
-	d->settingsOverlay = new OverlayWidget( this, tr( "Settings" ) );
-	d->settingsOverlay->addActions( d->settingsMenu->actions() );
-}
-*/
 void MainWindow::createActions()
 {
 	d->actionSource = new QAction( QIcon( ":/images/source.png" ), tr( "Source" ), this );
@@ -312,8 +224,6 @@ void MainWindow::createActions()
 	d->actionPreferencesAddressLookup = new QAction( QIcon( ":/images/address.png" ), tr( "Address Lookup" ), this );
 	d->actionPreferencesGpsReceiver = new QAction( QIcon( ":/images/oxygen/hwinfo.png" ), tr( "GPS Receiver" ), this );
 
-	// d->actionGpsLocation = new QAction( QIcon( ":/images/satellite.png" ), tr( "GPS-Location" ), this );
-
 	d->actionSource->setCheckable( true );
 	d->actionTarget->setCheckable( true );
 	d->actionVia->setCheckable( true );
@@ -338,18 +248,20 @@ void MainWindow::createActions()
 	d->actionPackages->setShortcut( Qt::Key_P );
 	d->actionModules->setShortcut( Qt::Key_M );
 	d->actionPreferencesGeneral->setShortcut( Qt::Key_P );
-
-	// d->actionGpsLocation->setShortcut( Qt::Key_L );
 }
 
 void MainWindow::populateMenus()
 {
 	d->menuBar = menuBar();
 
+	d->menuFile = new QMenu( tr( "File" ), this );
 	d->menuRouting = new QMenu( tr( "Routing" ), this );
 	d->menuMethods = new QMenu( tr( "Methods" ), this );
 	d->menuView = new QMenu( tr( "View" ), this );
 	d->menuSettings = new QMenu( tr( "Settings" ), this );
+
+	d->menuFile->addAction( d->actionPackages );
+	d->menuFile->addAction( d->actionModules );
 
 	d->menuRouting->addAction( d->actionSource );
 	d->menuRouting->addAction( d->actionVia );
@@ -363,8 +275,8 @@ void MainWindow::populateMenus()
 
 	d->menuView->addAction( d->actionZoomIn );
 	d->menuView->addAction( d->actionZoomOut );
+	d->menuView->addAction( d->actionHideControls );
 
-	d->menuSettings->addAction( d->actionHideControls );
 	d->menuSettings->addAction( d->actionPackages );
 	d->menuSettings->addAction( d->actionModules );
 	d->menuSettings->addAction( d->actionPreferencesGeneral );
@@ -375,6 +287,7 @@ void MainWindow::populateMenus()
 	d->menuSettings->addAction( d->actionPreferencesGpsReceiver );
 
 #ifndef Q_WS_MAEMO_5
+	d->menuBar->addMenu( d->menuFile );
 	d->menuBar->addMenu( d->menuRouting );
 	d->menuBar->addMenu( d->menuMethods );
 	d->menuBar->addMenu( d->menuView );
@@ -434,7 +347,7 @@ void MainWindow::resizeIcons()
 		button->setIconSize( QSize( iconSize, iconSize ) );
 	foreach ( QToolBar* button, this->findChildren< QToolBar* >() )
 		button->setIconSize( QSize( iconSize, iconSize ) );
-	m_ui->waypointsWidget->setMinimumSize( m_ui->waypointsWidget->widget()->sizeHint() );
+	// m_ui->waypointsWidget->setMinimumSize( m_ui->waypointsWidget->widget()->sizeHint() );
 }
 
 void MainWindow::showInstructions()
@@ -522,7 +435,6 @@ void MainWindow::dataLoaded()
 		return;
 
 	d->maxZoom = renderer->GetMaxZoom();
-	m_ui->zoomBar->setMaximum( d->maxZoom );
 	m_ui->paintArea->setMaxZoom( d->maxZoom );
 	setZoom( GlobalSettings::zoomMainMap());
 	m_ui->paintArea->setVirtualZoom( GlobalSettings::magnification() );
@@ -559,8 +471,6 @@ void MainWindow::instructionsChanged()
 	m_ui->infoLabel2->setText( label[1] );
 	m_ui->infoIcon2->setIcon( QIcon( icon[1] ) );
 }
-
-// SETTINGS
 
 void MainWindow::settingsGeneral()
 {
@@ -605,50 +515,6 @@ void MainWindow::settingsGPS()
 	window->exec();
 	delete window;
 }
-
-// MENUES
-/*
-void MainWindow::gotoMenu()
-{
-	if ( GlobalSettings::menuMode() == GlobalSettings::MenuPopup ) {
-		QPoint position = m_ui->show->mapToGlobal( QPoint( m_ui->show->width() / 2, m_ui->show->height() / 2 ) );
-		d->gotoMenu->exec( position );
-	} else {
-		d->gotoOverlay->show();
-	}
-}
-
-void MainWindow::settingsMenu()
-{
-	if ( GlobalSettings::menuMode() == GlobalSettings::MenuPopup ) {
-		QPoint position = m_ui->settings->mapToGlobal( QPoint( m_ui->settings->width() / 2, m_ui->settings->height() / 2 ) );
-		d->settingsMenu->exec( position );
-	} else {
-		d->settingsOverlay->show();
-	}
-}
-
-void MainWindow::sourceMenu()
-{
-	if ( GlobalSettings::menuMode() == GlobalSettings::MenuPopup ) {
-		QPoint position = m_ui->source->mapToGlobal( QPoint( m_ui->source->width() / 2, m_ui->source->height() / 2 ) );
-		d->sourceMenu->exec( position );
-	} else {
-		d->sourceOverlay->show();
-	}
-}
-
-void MainWindow::targetMenu()
-{
-	if ( GlobalSettings::menuMode() == GlobalSettings::MenuPopup ) {
-		QPoint position = m_ui->target->mapToGlobal( QPoint( m_ui->target->width() / 2, m_ui->target->height() / 2 ) );
-		d->targetMenu->exec( position );
-	} else {
-		d->targetOverlay->show();
-	}
-}
-*/
-// EVENTS
 
 void MainWindow::resizeEvent( QResizeEvent* event )
 {
@@ -696,8 +562,6 @@ void MainWindow::keyPressEvent( QKeyEvent* event )
 }
 #endif
 
-// SLOTS
-
 void MainWindow::setModeSourceSelection()
 {
 	if ( !d->actionSource->isChecked() ){
@@ -715,10 +579,7 @@ void MainWindow::setModeSourceSelection()
 	d->actionTarget->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
-	m_ui->waypointsWidget->setVisible( false );
 	m_ui->menuWidget->setVisible( false );
-	m_ui->lockButton->setVisible( false );
-	m_ui->tapMode->setVisible( true );
 
 	d->toolBarMethods->setDisabled( false );
 }
@@ -740,10 +601,7 @@ void MainWindow::setModeViaSelection()
 	d->actionTarget->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
-	m_ui->waypointsWidget->setVisible( false );
 	m_ui->menuWidget->setVisible( false );
-	m_ui->lockButton->setVisible( false );
-	m_ui->tapMode->setVisible( true );
 
 	d->toolBarMethods->setDisabled( false );
 }
@@ -765,10 +623,7 @@ void MainWindow::setModeTargetSelection()
 	d->actionVia->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
-	m_ui->waypointsWidget->setVisible( false );
 	m_ui->menuWidget->setVisible( false );
-	m_ui->lockButton->setVisible( false );
-	m_ui->tapMode->setVisible( true );
 
 	d->toolBarMethods->setDisabled( false );
 }
@@ -790,10 +645,7 @@ void MainWindow::setModeInstructions()
 	d->actionTarget->setChecked( false );
 	d->actionVia->setChecked( false );
 
-	m_ui->waypointsWidget->setVisible( false );
 	m_ui->menuWidget->setVisible( false );
-	m_ui->lockButton->setVisible( false );
-	m_ui->tapMode->setVisible( true );
 
 	d->toolBarMethods->setDisabled( true );
 	instructionsChanged();
@@ -811,10 +663,7 @@ void MainWindow::setModeless()
 	d->actionVia->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
-	m_ui->waypointsWidget->setVisible( false );
 	m_ui->menuWidget->setVisible( false );
-	m_ui->lockButton->setVisible( true );
-	m_ui->tapMode->setVisible( false );
 
 	d->toolBarMethods->setDisabled( false );
 }
@@ -832,150 +681,7 @@ void MainWindow::mouseClicked( ProjectedCoordinate clickPos )
 		RoutingLogic::instance()->setTarget( coordinate );
 	}
 }
-/*
-void MainWindow::gotoGpsLocation()
-{
-	const RoutingLogic::GPSInfo& gpsInfo = RoutingLogic::instance()->gpsInfo();
-	if ( !gpsInfo.position.IsValid() )
-		return;
-	GPSCoordinate gps( gpsInfo.position.ToGPSCoordinate().latitude, gpsInfo.position.ToGPSCoordinate().longitude );
-	m_ui->paintArea->setCenter( ProjectedCoordinate( gps ) );
-	m_ui->paintArea->setKeepPositionVisible( true );
 
-	IRenderer* renderer = MapData::instance()->renderer();
-	if ( renderer == NULL )
-		return;
-	setZoom( renderer->GetMaxZoom() - 5 );
-}
-
-void MainWindow::gotoSource()
-{
-	UnsignedCoordinate coordinate = RoutingLogic::instance()->source();
-	if ( !coordinate.IsValid() )
-		return;
-	m_ui->paintArea->setCenter( coordinate.ToProjectedCoordinate() );
-	m_ui->paintArea->setKeepPositionVisible( true );
-
-	IRenderer* renderer = MapData::instance()->renderer();
-	if ( renderer == NULL )
-		return;
-	setZoom( renderer->GetMaxZoom() - 5 );
-}
-
-void MainWindow::gotoTarget()
-{
-	UnsignedCoordinate coordinate = RoutingLogic::instance()->target();
-	if ( !coordinate.IsValid() )
-		return;
-	m_ui->paintArea->setCenter( coordinate.ToProjectedCoordinate() );
-	m_ui->paintArea->setKeepPositionVisible( false );
-
-	IRenderer* renderer = MapData::instance()->renderer();
-	if ( renderer == NULL )
-		return;
-	setZoom( renderer->GetMaxZoom() - 5 );
-}
-
-void MainWindow::gotoBookmark()
-{
-	UnsignedCoordinate result;
-	if ( !BookmarksDialog::showBookmarks( &result, this ) )
-		return;
-	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
-	m_ui->paintArea->setKeepPositionVisible( false );
-
-	IRenderer* renderer = MapData::instance()->renderer();
-	if ( renderer == NULL )
-		return;
-	setZoom( renderer->GetMaxZoom() - 5 );
-}
-
-void MainWindow::gotoAddress()
-{
-	if ( MapData::instance()->addressLookup() == NULL )
-		return;
-	UnsignedCoordinate result;
-	if ( !AddressDialog::getAddress( &result, this, true ) )
-		return;
-	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
-	m_ui->paintArea->setKeepPositionVisible( false );
-
-	IRenderer* renderer = MapData::instance()->renderer();
-	if ( renderer == NULL )
-		return;
-	setZoom( renderer->GetMaxZoom() - 5 );
-}
-
-void MainWindow::gotoGpsCoordinate()
-{
-	bool ok = false;
-	double latitude = QInputDialog::getDouble( this, "Enter Coordinate", "Enter Latitude", 0, -90, 90, 5, &ok );
-	if ( !ok )
-		return;
-	double longitude = QInputDialog::getDouble( this, "Enter Coordinate", "Enter Longitude", 0, -180, 180, 5, &ok );
-	if ( !ok )
-		return;
-	GPSCoordinate gps( latitude, longitude );
-	m_ui->paintArea->setCenter( ProjectedCoordinate( gps ) );
-	m_ui->paintArea->setKeepPositionVisible( false );
-
-	IRenderer* renderer = MapData::instance()->renderer();
-	if ( renderer == NULL )
-		return;
-	setZoom( renderer->GetMaxZoom() - 5 );
-}
-*/
-/*
-void MainWindow::sourceByBookmark()
-{
-	UnsignedCoordinate result;
-	if ( !BookmarksDialog::showBookmarks( &result, this ) )
-		return;
-	RoutingLogic::instance()->setSource( result );
-	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
-}
-
-void MainWindow::sourceByAddress()
-{
-	if ( MapData::instance()->addressLookup() == NULL )
-		return;
-	UnsignedCoordinate result;
-	if ( !AddressDialog::getAddress( &result, this ) )
-		return;
-	RoutingLogic::instance()->setSource( result );
-	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
-}
-*/
-void MainWindow::sourceByGPS()
-{
-	RoutingLogic::instance()->setGPSLink( true );
-}
-/*
-void MainWindow::setWaypointID( int id )
-{
-	d->currentWaypoint = id;
-}
-
-void MainWindow::targetByBookmark()
-{
-	UnsignedCoordinate result;
-	if ( !BookmarksDialog::showBookmarks( &result, this ) )
-		return;
-	RoutingLogic::instance()->setWaypoint( d->currentWaypoint, result );
-	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
-}
-
-void MainWindow::targetByAddress()
-{
-	if ( MapData::instance()->addressLookup() == NULL )
-		return;
-	UnsignedCoordinate result;
-	if ( !AddressDialog::getAddress( &result, this ) )
-		return;
-	RoutingLogic::instance()->setWaypoint( d->currentWaypoint, result );
-	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
-}
-*/
 void MainWindow::subductRoutepoint()
 {
 	RoutingLogic* routingLogic = RoutingLogic::instance();
@@ -986,38 +692,13 @@ void MainWindow::subductRoutepoint()
 	routingLogic->setWaypoints( waypoints );
 }
 
-void MainWindow::addRoutepoint_old()
-{
-	RoutingLogic* routingLogic = RoutingLogic::instance();
-	QVector< UnsignedCoordinate > waypoints = routingLogic->waypoints();
-	if ( waypoints.empty() )
-		waypoints.resize( d->currentWaypoint );
-	waypoints.insert( d->currentWaypoint, UnsignedCoordinate() );
-	routingLogic->setWaypoints( waypoints );
-}
-
 void MainWindow::addViapoint( UnsignedCoordinate coordinate )
 {
 	RoutingLogic* routingLogic = RoutingLogic::instance();
 	QVector< UnsignedCoordinate > waypoints = routingLogic->waypoints();
 	waypoints.clear();
-	// waypoints.append(coordinate);
 
-/*
-	if ( waypoints.empty() )
-		waypoints.resize( d->currentWaypoint );
-	waypoints.insert( d->currentWaypoint, coordinate );
-*/
 	routingLogic->setWaypoints( waypoints );
-}
-
-void MainWindow::bookmarks_old()
-{
-	UnsignedCoordinate result;
-	if ( !BookmarksDialog::showBookmarks( &result, this ) )
-		return;
-
-	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
 }
 
 void MainWindow::bookmarks()
@@ -1136,53 +817,7 @@ void MainWindow::setZoom( int zoom )
 	if( zoom < 0 )
 		zoom = 0;
 
-	m_ui->zoomBar->setValue( zoom );
 	m_ui->paintArea->setZoom( zoom );
 	GlobalSettings::setZoomMainMap( zoom );
 }
 
-void MainWindow::toggleLocked()
-{
-	d->fixed = !d->fixed;
-	m_ui->paintArea->setFixed( d->fixed );
-	if ( d->fixed ) {
-		m_ui->lockButton->setIcon( QIcon( ":images/oxygen/emblem-locked.png") );
-		instructionsChanged();
-	} else {
-		m_ui->lockButton->setIcon( QIcon( ":images/oxygen/emblem-unlocked.png") );
-		m_ui->infoWidget->hide();
-	}
-}
-/*
-void MainWindow::waypointsChanged()
-{
-	QList< QToolButton* > waypointButtons = findChildren< QToolButton* >( "waypoint" );
-	foreach( QToolButton* button, waypointButtons )
-		button->deleteLater();
-	QVector< UnsignedCoordinate > waypoints = RoutingLogic::instance()->waypoints();
-	for ( int i = 0; i < waypoints.size() - 1; i++ )
-	{
-		int id = waypoints.size() - 1 - i;
-		QToolButton* button = new QToolButton( NULL );
-		if ( QFile::exists( QString( ":/images/waypoint%1.png" ).arg( id ) ) )
-			button->setIcon( QIcon( QString( ":/images/waypoint%1.png" ).arg( id ) ) );
-		else
-			button->setIcon( QIcon( ":/images/target.png" ) );
-		button->setIconSize( QSize( GlobalSettings::iconSize(), GlobalSettings::iconSize() ) );
-		button->setAutoRaise( true );
-		button->setObjectName( "waypoint" );
-		m_ui->scrollAreaWidgetContents->layout()->addWidget( button );
-		// d->waypointMapper->setMapping( button, id - 1 );
-		// connect( button, SIGNAL(clicked()), d->waypointMapper, SLOT(map()) );
-		// connect( button, SIGNAL(clicked()), this, SLOT(targetMenu()) );
-		// button->show();
-	}
-
-	if ( !waypoints.empty() )
-		d->waypointMapper->setMapping( m_ui->target, waypoints.size() - 1 );
-	else
-		d->waypointMapper->setMapping( m_ui->target, 0 );
-
-	m_ui->scrollAreaWidgetContents->layout()->addWidget( m_ui->source );
-}
-*/
