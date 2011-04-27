@@ -57,30 +57,9 @@ protected slots:
 	void settingsGPSLookup();
 	void settingsAddressLookup();
 	void settingsGPS();
-/*
-	void gotoSource();
-	void gotoGpsCoordinate();
-	void gotoGpsLocation();
-	void gotoTarget();
-	void gotoBookmark();
-	void gotoAddress();
-*/
-	// void sourceByBookmark();
-	// void sourceByAddress();
-	void sourceByGPS();
 
-	// void setWaypointID( int id );
-	// void waypointsChanged();
-
-	// void targetByBookmark();
-	// void targetByAddress();
 	void subductRoutepoint();
-	// TODO: Remove
-	void addRoutepoint_old();
 	void addViapoint( UnsignedCoordinate );
-
-	// TODO: Remove
-	void bookmarks_old();
 
 	void bookmarks();
 	void addresses();
@@ -93,12 +72,6 @@ protected slots:
 	void setModeTargetSelection();
 	void setModeInstructions();
 	void setModeless();
-	void toggleLocked();
-
-	// void gotoMenu();
-	// void settingsMenu();
-	// void sourceMenu();
-	// void targetMenu();
 
 	void showInstructions();
 	void instructionsChanged();
@@ -110,7 +83,6 @@ protected slots:
 protected:
 
 	virtual void resizeEvent( QResizeEvent* event );
-	// void setupMenu(); // TODO: Remove me
 	void createActions();
 	void populateMenus();
 	void populateToolbars();
