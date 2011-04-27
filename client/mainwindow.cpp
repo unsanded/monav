@@ -164,25 +164,28 @@ MainWindow::~MainWindow()
 
 void MainWindow::connectSlots()
 {
-	connect( d->actionSource, SIGNAL( triggered() ), this, SLOT( setModeSourceSelection() ));
-	connect( d->actionVia, SIGNAL( triggered() ), this, SLOT( setModeViaSelection() ));
-	connect( d->actionTarget, SIGNAL( triggered() ), this, SLOT( setModeTargetSelection() ));
-	connect( d->actionInstructions, SIGNAL( triggered() ), this, SLOT( setModeInstructions() ));
+	connect( d->actionSource, SIGNAL( triggered() ), this, SLOT( setModeSourceSelection()));
+	connect( d->actionVia, SIGNAL( triggered() ), this, SLOT( setModeViaSelection()));
+	connect( d->actionTarget, SIGNAL( triggered() ), this, SLOT( setModeTargetSelection()));
+	connect( d->actionInstructions, SIGNAL( triggered() ), this, SLOT( setModeInstructions()));
 
-	connect( d->actionBookmark, SIGNAL( triggered() ), this, SLOT( bookmarks() ));
-	connect( d->actionAddress, SIGNAL( triggered() ), this, SLOT( addresses() ));
-	connect( d->actionGpsCoordinate, SIGNAL( triggered() ), this, SLOT( gpsCoordinate() ));
-	connect( d->actionRemove, SIGNAL( triggered() ), this, SLOT( remove() ));
+	connect( d->actionBookmark, SIGNAL( triggered() ), this, SLOT( bookmarks()));
+	connect( d->actionAddress, SIGNAL( triggered() ), this, SLOT( addresses()));
+	connect( d->actionGpsCoordinate, SIGNAL( triggered() ), this, SLOT( gpsCoordinate()));
+	connect( d->actionRemove, SIGNAL( triggered() ), this, SLOT( remove()));
 
-	connect( d->actionHideControls, SIGNAL( triggered() ), this, SLOT( hideControls() ));
-	connect( d->actionPackages, SIGNAL( triggered() ), this, SLOT( displayMapChooser() ));
-	connect( d->actionModules, SIGNAL( triggered() ), this, SLOT( displayModuleChooser() ));
-	connect( d->actionPreferencesGeneral, SIGNAL( triggered() ), this, SLOT( settingsGeneral() ));
-	connect( d->actionPreferencesRenderer, SIGNAL( triggered() ), this, SLOT( settingsRenderer() ));
-	connect( d->actionPreferencesRouter, SIGNAL( triggered() ), this, SLOT( settingsRouter() ));
-	connect( d->actionPreferencesGpsLookup, SIGNAL( triggered() ), this, SLOT( settingsGPSLookup() ));
-	connect( d->actionPreferencesAddressLookup, SIGNAL( triggered() ), this, SLOT( settingsAddressLookup() ));
-	connect( d->actionPreferencesGpsReceiver, SIGNAL( triggered() ), this, SLOT( settingsGPS() ));
+	connect( d->actionZoomIn, SIGNAL( triggered() ), this, SLOT( addZoom()));
+	connect( d->actionZoomOut, SIGNAL( triggered() ), this, SLOT( subtractZoom()));
+
+	connect( d->actionHideControls, SIGNAL( triggered() ), this, SLOT( hideControls()));
+	connect( d->actionPackages, SIGNAL( triggered() ), this, SLOT( displayMapChooser()));
+	connect( d->actionModules, SIGNAL( triggered() ), this, SLOT( displayModuleChooser()));
+	connect( d->actionPreferencesGeneral, SIGNAL( triggered() ), this, SLOT( settingsGeneral()));
+	connect( d->actionPreferencesRenderer, SIGNAL( triggered() ), this, SLOT( settingsRenderer()));
+	connect( d->actionPreferencesRouter, SIGNAL( triggered() ), this, SLOT( settingsRouter()));
+	connect( d->actionPreferencesGpsLookup, SIGNAL( triggered() ), this, SLOT( settingsGPSLookup()));
+	connect( d->actionPreferencesAddressLookup, SIGNAL( triggered() ), this, SLOT( settingsAddressLookup()));
+	connect( d->actionPreferencesGpsReceiver, SIGNAL( triggered() ), this, SLOT( settingsGPS()));
 
 	// TODO: Clean up old stuff which is obsolete since the new user interface
 
@@ -293,7 +296,6 @@ void MainWindow::populateMenus()
 	d->menuBar->addMenu( d->menuView );
 #endif
 	d->menuBar->addMenu( d->menuSettings );
-
 }
 
 void MainWindow::populateToolbars()
@@ -347,7 +349,6 @@ void MainWindow::resizeIcons()
 		button->setIconSize( QSize( iconSize, iconSize ) );
 	foreach ( QToolBar* button, this->findChildren< QToolBar* >() )
 		button->setIconSize( QSize( iconSize, iconSize ) );
-	// m_ui->waypointsWidget->setMinimumSize( m_ui->waypointsWidget->widget()->sizeHint() );
 }
 
 void MainWindow::showInstructions()
@@ -579,8 +580,6 @@ void MainWindow::setModeSourceSelection()
 	d->actionTarget->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
-	m_ui->menuWidget->setVisible( false );
-
 	d->toolBarMethods->setDisabled( false );
 }
 
@@ -600,8 +599,6 @@ void MainWindow::setModeViaSelection()
 	d->actionSource->setChecked( false );
 	d->actionTarget->setChecked( false );
 	d->actionInstructions->setChecked( false );
-
-	m_ui->menuWidget->setVisible( false );
 
 	d->toolBarMethods->setDisabled( false );
 }
@@ -623,8 +620,6 @@ void MainWindow::setModeTargetSelection()
 	d->actionVia->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
-	m_ui->menuWidget->setVisible( false );
-
 	d->toolBarMethods->setDisabled( false );
 }
 
@@ -645,8 +640,6 @@ void MainWindow::setModeInstructions()
 	d->actionTarget->setChecked( false );
 	d->actionVia->setChecked( false );
 
-	m_ui->menuWidget->setVisible( false );
-
 	d->toolBarMethods->setDisabled( true );
 	instructionsChanged();
 }
@@ -662,8 +655,6 @@ void MainWindow::setModeless()
 	d->actionTarget->setChecked( false );
 	d->actionVia->setChecked( false );
 	d->actionInstructions->setChecked( false );
-
-	m_ui->menuWidget->setVisible( false );
 
 	d->toolBarMethods->setDisabled( false );
 }
