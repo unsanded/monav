@@ -54,8 +54,12 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 
 struct MainWindow::PrivateImplementation {
 
-	enum Mode {
-		Modeless, Source, Target, Via, Instructions
+	enum ApplicationMode {
+		Modeless, Source, Target, Instructions
+	};
+
+	enum ViaMode {
+		ViaNone, ViaInsert, ViaAppend
 	};
 
 	OverlayWidget* targetOverlay;
@@ -67,6 +71,7 @@ struct MainWindow::PrivateImplementation {
 
 	QMenu* menuFile;
 	QMenu* menuRouting;
+	QMenu* menuViaMode;
 	QMenu* menuMethods;
 	QMenu* menuView;
 	QMenu* menuPreferences;
@@ -80,7 +85,12 @@ struct MainWindow::PrivateImplementation {
 	QToolBar* toolBarHelp;
 
 	QAction* actionSource;
-	QAction* actionVia;
+	// QAction* actionVia;
+	QAction* actionViaModes;
+	QToolButton* buttonViaModes;
+	QAction* actionViaNone;
+	QAction* actionViaInsert;
+	QAction* actionViaAppend;
 	QAction* actionTarget;
 	QAction* actionInstructions;
 
@@ -109,7 +119,8 @@ struct MainWindow::PrivateImplementation {
 
 	int maxZoom;
 	bool fixed;
-	Mode mode;
+	ApplicationMode applicationMode;
+	ViaMode viaMode;
 
 	void resizeIcons();
 };
@@ -130,7 +141,9 @@ MainWindow::MainWindow( QWidget* parent ) :
 	// ensure that we're painting our background
 	setAutoFillBackground(true);
 
-	d->mode = PrivateImplementation::Modeless;
+	d->applicationMode = PrivateImplementation::Modeless;
+	// d->viaMode = PrivateImplementation::ViaNone;
+	setModeViaNone();
 	d->fixed = false;
 
 	QSettings settings( "MoNavClient" );
@@ -174,7 +187,10 @@ MainWindow::~MainWindow()
 void MainWindow::connectSlots()
 {
 	connect( d->actionSource, SIGNAL( triggered() ), this, SLOT( setModeSourceSelection()));
-	connect( d->actionVia, SIGNAL( triggered() ), this, SLOT( setModeViaSelection()));
+	// connect( d->actionVia, SIGNAL( triggered() ), this, SLOT( setModeViaSelection()));
+	connect( d->actionViaNone, SIGNAL( triggered() ), this, SLOT( setModeViaNone()));
+	connect( d->actionViaInsert, SIGNAL( triggered() ), this, SLOT( setModeViaInsert()));
+	connect( d->actionViaAppend, SIGNAL( triggered() ), this, SLOT( setModeViaAppend()));
 	connect( d->actionTarget, SIGNAL( triggered() ), this, SLOT( setModeTargetSelection()));
 	connect( d->actionInstructions, SIGNAL( triggered() ), this, SLOT( setModeInstructions()));
 
@@ -217,8 +233,19 @@ void MainWindow::connectSlots()
 void MainWindow::createActions()
 {
 	d->actionSource = new QAction( QIcon( ":/images/source.png" ), tr( "Source" ), this );
-	d->actionVia = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Via" ), this );
+
+	// d->actionVia = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Via" ), this );
+	d->actionViaModes = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Via Modes" ), this );
+	d->actionViaNone = new QAction( QIcon( ":/images/target.png" ), tr( "No Via" ), this );
+	d->actionViaInsert = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Insert Via" ), this );
+	d->actionViaAppend = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Append Via" ), this );
+
+	d->buttonViaModes = new QToolButton( this );
+	// d->buttonViaModes->setArrowType( Qt::DownArrow );
+
 	d->actionTarget = new QAction( QIcon( ":/images/target.png" ), tr( "Target" ), this );
+	d->buttonViaModes->setDefaultAction( d->actionTarget );
+
 	d->actionInstructions = new QAction( QIcon( ":/images/oxygen/emblem-unlocked.png" ), tr( "Instructions" ), this );
 
 	d->actionBookmark = new QAction( QIcon( ":/images/oxygen/bookmarks.png" ), tr( "Bookmark" ), this );
@@ -244,13 +271,19 @@ void MainWindow::createActions()
 
 	d->actionSource->setCheckable( true );
 	d->actionTarget->setCheckable( true );
-	d->actionVia->setCheckable( true );
+	// d->actionVia->setCheckable( true );
+	d->actionViaNone->setCheckable( true );
+	d->actionViaInsert->setCheckable( true );
+	d->actionViaAppend->setCheckable( true );
 	d->actionInstructions->setCheckable( true );
 
 	d->actionHideControls->setCheckable( true );
 
 	d->actionSource->setShortcut( Qt::Key_S );
-	d->actionVia->setShortcut( Qt::Key_V );
+	// d->actionVia->setShortcut( Qt::Key_V );
+	// d->actionViaNone->setShortcut( Qt::Key_V );
+	// d->actionViaInsert->setShortcut( Qt::Key_V );
+	// d->actionViaAppend->setShortcut( Qt::Key_V );
 	d->actionTarget->setShortcut( Qt::Key_T );
 	d->actionInstructions->setShortcut( Qt::Key_I );
 
@@ -276,6 +309,11 @@ void MainWindow::populateMenus()
 
 	d->menuFile = new QMenu( tr( "File" ), this );
 	d->menuRouting = new QMenu( tr( "Routing" ), this );
+
+	d->menuViaMode = new QMenu( tr( "Via Modes" ), this );
+	d->buttonViaModes->setMenu( d->menuViaMode );
+	d->actionViaModes->setMenu( d->menuViaMode );
+
 	d->menuMethods = new QMenu( tr( "Methods" ), this );
 	d->menuView = new QMenu( tr( "View" ), this );
 	d->menuPreferences = new QMenu( tr( "Settings" ), this );
@@ -284,10 +322,17 @@ void MainWindow::populateMenus()
 	d->menuFile->addAction( d->actionPackages );
 	d->menuFile->addAction( d->actionModules );
 
+	d->menuViaMode->addAction( d->actionViaNone );
+	d->menuViaMode->addAction( d->actionViaInsert );
+	d->menuViaMode->addAction( d->actionViaAppend );
+
 	d->menuRouting->addAction( d->actionSource );
-	d->menuRouting->addAction( d->actionVia );
+	// d->menuRouting->addAction( d->actionVia );
+	d->menuRouting->addAction( d->actionViaModes );
 	d->menuRouting->addAction( d->actionTarget );
 	d->menuRouting->addAction( d->actionInstructions );
+
+	// d->menuViaMode->addAction( d->actionTarget );
 
 	d->menuMethods->addAction( d->actionBookmark );
 	d->menuMethods->addAction( d->actionAddress );
@@ -338,8 +383,9 @@ void MainWindow::populateToolbars()
 	d->toolBarFile->addAction( d->actionModules );
 
 	d->toolBarRouting->addAction( d->actionSource );
-	d->toolBarRouting->addAction( d->actionVia );
-	d->toolBarRouting->addAction( d->actionTarget );
+	// d->toolBarRouting->addAction( d->actionVia );
+	// d->toolBarRouting->addAction( d->actionTarget );
+	d->toolBarRouting->addWidget( d->buttonViaModes );
 	d->toolBarRouting->addAction( d->actionInstructions );
 
 	d->toolBarMethods->addAction( d->actionBookmark );
@@ -605,19 +651,20 @@ void MainWindow::setModeSourceSelection()
 		return;
 	}
 
-	d->mode = PrivateImplementation::Source;
+	d->applicationMode = PrivateImplementation::Source;
 	d->fixed = false;
 	m_ui->paintArea->setFixed( false );
 	m_ui->paintArea->setKeepPositionVisible( false );
 	m_ui->infoWidget->hide();
 
-	d->actionVia->setChecked( false );
+	// d->actionVia->setChecked( false );
 	d->actionTarget->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
 	d->toolBarMethods->setDisabled( false );
 }
 
+/*
 void MainWindow::setModeViaSelection()
 {
 	if ( !d->actionVia->isChecked() ){
@@ -625,7 +672,7 @@ void MainWindow::setModeViaSelection()
 		return;
 	}
 
-	d->mode = PrivateImplementation::Via;
+	d->applicationMode = PrivateImplementation::Via;
 	d->fixed = false;
 	m_ui->paintArea->setFixed( false );
 	m_ui->paintArea->setKeepPositionVisible( false );
@@ -636,6 +683,31 @@ void MainWindow::setModeViaSelection()
 	d->actionInstructions->setChecked( false );
 
 	d->toolBarMethods->setDisabled( false );
+}
+*/
+
+void MainWindow::setModeViaNone()
+{
+	d->actionViaNone->setChecked( true );
+	d->actionViaInsert->setChecked( false );
+	d->actionViaAppend->setChecked( false );
+	d->viaMode = PrivateImplementation::ViaNone;
+}
+
+void MainWindow::setModeViaInsert()
+{
+	d->actionViaNone->setChecked( false );
+	d->actionViaInsert->setChecked( true );
+	d->actionViaAppend->setChecked( false );
+	d->viaMode = PrivateImplementation::ViaInsert;
+}
+
+void MainWindow::setModeViaAppend()
+{
+	d->actionViaNone->setChecked( false );
+	d->actionViaInsert->setChecked( false );
+	d->actionViaAppend->setChecked( true );
+	d->viaMode = PrivateImplementation::ViaAppend;
 }
 
 void MainWindow::setModeTargetSelection()
@@ -645,14 +717,14 @@ void MainWindow::setModeTargetSelection()
 		return;
 	}
 
-	d->mode = PrivateImplementation::Target;
+	d->applicationMode = PrivateImplementation::Target;
 	d->fixed = false;
 	m_ui->paintArea->setFixed( false );
 	m_ui->paintArea->setKeepPositionVisible( false );
 	m_ui->infoWidget->hide();
 
 	d->actionSource->setChecked( false );
-	d->actionVia->setChecked( false );
+	// d->actionVia->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
 	d->toolBarMethods->setDisabled( false );
@@ -665,15 +737,16 @@ void MainWindow::setModeInstructions()
 		return;
 	}
 
-	d->mode = PrivateImplementation::Instructions;
+	d->applicationMode = PrivateImplementation::Instructions;
 	d->fixed = true;
 	m_ui->paintArea->setFixed( true );
 	m_ui->paintArea->setKeepPositionVisible( true );
 	m_ui->infoWidget->show();
 
 	d->actionSource->setChecked( false );
+	// d->actionVia->setChecked( false );
 	d->actionTarget->setChecked( false );
-	d->actionVia->setChecked( false );
+
 
 	d->toolBarMethods->setDisabled( true );
 	instructionsChanged();
@@ -681,14 +754,14 @@ void MainWindow::setModeInstructions()
 
 void MainWindow::setModeless()
 {
-	d->mode = PrivateImplementation::Modeless;
+	d->applicationMode = PrivateImplementation::Modeless;
 	d->fixed = false;
 	m_ui->paintArea->setFixed( false );
 	m_ui->infoWidget->hide();
 
 	d->actionSource->setChecked( false );
 	d->actionTarget->setChecked( false );
-	d->actionVia->setChecked( false );
+	// d->actionVia->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
 	d->toolBarMethods->setDisabled( false );
@@ -697,13 +770,13 @@ void MainWindow::setModeless()
 void MainWindow::mouseClicked( ProjectedCoordinate clickPos )
 {
 	UnsignedCoordinate coordinate( clickPos );
-	if ( d->mode == PrivateImplementation::Source ) {
+	if ( d->applicationMode == PrivateImplementation::Source ) {
 		RoutingLogic::instance()->setSource( coordinate );
 	}
-	if ( d->mode == PrivateImplementation::Via ) {
-		RoutingLogic::instance()->setWaypoint( d->currentWaypoint, coordinate );
-	}
-	if ( d->mode == PrivateImplementation::Target ){
+	// if ( d->applicationMode == PrivateImplementation::Via ) {
+	// 	RoutingLogic::instance()->setWaypoint( d->currentWaypoint, coordinate );
+	// }
+	if ( d->applicationMode == PrivateImplementation::Target ){
 		RoutingLogic::instance()->setTarget( coordinate );
 	}
 }
@@ -733,12 +806,12 @@ void MainWindow::bookmarks()
 	if ( !BookmarksDialog::showBookmarks( &result, this ) )
 		return;
 
-	if ( d->mode == d->Source )
+	if ( d->applicationMode == d->Source )
 		RoutingLogic::instance()->setSource( result );
-	if ( d->mode == d->Target )
+	if ( d->applicationMode == d->Target )
 		RoutingLogic::instance()->setTarget( result );
-	if ( d->mode == d->Via )
-		addViapoint( result );
+	// if ( d->applicationMode == d->Via )
+	// 	addViapoint( result );
 	m_ui->paintArea->setKeepPositionVisible( false );
 	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
 }
@@ -751,12 +824,12 @@ void MainWindow::addresses()
 	if ( !AddressDialog::getAddress( &result, this ) )
 		return;
 
-	if ( d->mode == d->Source )
+	if ( d->applicationMode == d->Source )
 		RoutingLogic::instance()->setSource( result );
-	if ( d->mode == d->Target )
+	if ( d->applicationMode == d->Target )
 		RoutingLogic::instance()->setTarget( result );
-	if ( d->mode == d->Via )
-		addViapoint( result );
+	// if ( d->applicationMode == d->Via )
+	// 	addViapoint( result );
 	m_ui->paintArea->setKeepPositionVisible( false );
 	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
 }
@@ -768,12 +841,12 @@ void MainWindow::gpsLocation()
 		return;
 	GPSCoordinate gps( gpsInfo.position.ToGPSCoordinate().latitude, gpsInfo.position.ToGPSCoordinate().longitude );
 	UnsignedCoordinate result = UnsignedCoordinate( gps );
-	if ( d->mode == d->Source )
+	if ( d->applicationMode == d->Source )
 		RoutingLogic::instance()->setSource( result );
-	if ( d->mode == d->Target )
+	if ( d->applicationMode == d->Target )
 		RoutingLogic::instance()->setTarget( result );
-	if ( d->mode == d->Via )
-		addViapoint( result );
+	// if ( d->applicationMode == d->Via )
+	// 	addViapoint( result );
 
 	m_ui->paintArea->setCenter( ProjectedCoordinate( gps ) );
 	m_ui->paintArea->setKeepPositionVisible( true );
@@ -796,12 +869,12 @@ void MainWindow::gpsCoordinate()
 	GPSCoordinate gps( latitude, longitude );
 
 	UnsignedCoordinate result = UnsignedCoordinate( gps );
-	if ( d->mode == d->Source )
+	if ( d->applicationMode == d->Source )
 		RoutingLogic::instance()->setSource( result );
-	if ( d->mode == d->Target )
+	if ( d->applicationMode == d->Target )
 		RoutingLogic::instance()->setTarget( result );
-	if ( d->mode == d->Via )
-		addViapoint( result );
+	// if ( d->applicationMode == d->Via )
+	// 	addViapoint( result );
 
 	m_ui->paintArea->setCenter( ProjectedCoordinate( gps ) );
 	m_ui->paintArea->setKeepPositionVisible( false );
@@ -815,9 +888,9 @@ void MainWindow::gpsCoordinate()
 void MainWindow::remove()
 {
 	// TODO: RoutingLogic::instance()->clear() does not remove rendering waypoints and target.
-	if ( d->mode == d->Via )
-		subductRoutepoint();
-	else
+	// if ( d->applicationMode == d->Via )
+	// 	subductRoutepoint();
+	// else
 		RoutingLogic::instance()->clear();
 
 	// m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
