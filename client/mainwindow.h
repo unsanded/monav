@@ -58,9 +58,6 @@ protected slots:
 	void settingsAddressLookup();
 	void settingsGPS();
 
-	void subductRoutepoint();
-	void addViapoint( UnsignedCoordinate );
-
 	void bookmarks();
 	void addresses();
 	void remove();
@@ -68,7 +65,6 @@ protected slots:
 	void gpsCoordinate();
 
 	void setModeSourceSelection();
-	// void setModeViaSelection();
 	void setModeViaNone();
 	void setModeViaInsert();
 	void setModeViaAppend();
