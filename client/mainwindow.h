@@ -68,7 +68,10 @@ protected slots:
 	void gpsCoordinate();
 
 	void setModeSourceSelection();
-	void setModeViaSelection();
+	// void setModeViaSelection();
+	void setModeViaNone();
+	void setModeViaInsert();
+	void setModeViaAppend();
 	void setModeTargetSelection();
 	void setModeInstructions();
 	void setModeless();
