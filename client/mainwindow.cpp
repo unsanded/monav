@@ -68,6 +68,7 @@ struct MainWindow::PrivateImplementation {
 	QMenu* menuView;
 	QMenu* menuSettings;
 
+	QToolBar* toolBarFile;
 	QToolBar* toolBarRouting;
 	QToolBar* toolBarMethods;
 	QToolBar* toolBarView;
@@ -237,7 +238,7 @@ void MainWindow::createActions()
 	d->actionSource->setShortcut( Qt::Key_S );
 	d->actionVia->setShortcut( Qt::Key_V );
 	d->actionTarget->setShortcut( Qt::Key_T );
-	d->actionInstructions->setShortcut( Qt::Key_R );
+	d->actionInstructions->setShortcut( Qt::Key_I );
 
 	d->actionBookmark->setShortcut( Qt::Key_D );
 	d->actionAddress->setShortcut( Qt::Key_A );
@@ -276,12 +277,10 @@ void MainWindow::populateMenus()
 	d->menuMethods->addAction( d->actionGpsCoordinate );
 	d->menuMethods->addAction( d->actionRemove );
 
+	d->menuView->addAction( d->actionHideControls );
 	d->menuView->addAction( d->actionZoomIn );
 	d->menuView->addAction( d->actionZoomOut );
-	d->menuView->addAction( d->actionHideControls );
 
-	d->menuSettings->addAction( d->actionPackages );
-	d->menuSettings->addAction( d->actionModules );
 	d->menuSettings->addAction( d->actionPreferencesGeneral );
 	d->menuSettings->addAction( d->actionPreferencesRenderer );
 	d->menuSettings->addAction( d->actionPreferencesRouter );
@@ -303,13 +302,17 @@ void MainWindow::populateMenus()
 
 void MainWindow::populateToolbars()
 {
-	d->toolBarRouting = addToolBar( tr( "Route" ) );
+	d->toolBarFile = addToolBar( tr( "File" ) );
+	d->toolBarRouting = addToolBar( tr( "Routing" ) );
 	d->toolBarMethods = addToolBar( tr( "Method" ) );
 	d->toolBarView = addToolBar( tr( "Zoom" ) );
 	d->toolBarPreferences = addToolBar( tr( "Preferences" ) );
 #ifdef Q_WS_MAEMO_5
 	d->toolBarPreferences->setVisible( false );
 #endif
+
+	d->toolBarFile->addAction( d->actionPackages );
+	d->toolBarFile->addAction( d->actionModules );
 
 	d->toolBarRouting->addAction( d->actionSource );
 	d->toolBarRouting->addAction( d->actionVia );
@@ -323,12 +326,10 @@ void MainWindow::populateToolbars()
 #endif
 	d->toolBarMethods->addAction( d->actionRemove );
 
+	d->toolBarView->addAction( d->actionHideControls );
 	d->toolBarView->addAction( d->actionZoomIn );
 	d->toolBarView->addAction( d->actionZoomOut );
 
-	d->toolBarPreferences->addAction( d->actionHideControls );
-	d->toolBarPreferences->addAction( d->actionPackages );
-	d->toolBarPreferences->addAction( d->actionModules );
 	d->toolBarPreferences->addAction( d->actionPreferencesGeneral );
 	d->toolBarPreferences->addAction( d->actionPreferencesRenderer );
 	d->toolBarPreferences->addAction( d->actionPreferencesRouter );
@@ -339,6 +340,7 @@ void MainWindow::populateToolbars()
 
 void MainWindow::hideControls()
 {
+	d->toolBarFile->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarRouting->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarMethods->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarView->setVisible( !d->actionHideControls->isChecked() );
