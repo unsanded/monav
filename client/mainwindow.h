@@ -80,6 +80,9 @@ protected slots:
 	void displayModuleChooser();
 	void hideControls();
 
+	void about();
+	void projectPage();
+
 protected:
 
 	virtual void resizeEvent( QResizeEvent* event );

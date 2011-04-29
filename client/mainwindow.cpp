@@ -41,7 +41,9 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <QMessageBox>
 #include <QStyle>
 #include <QScrollArea>
-#include <QSignalMapper>
+// #include <QSignalMapper>
+#include <QUrl>
+#include <QDesktopServices>
 
 #ifdef Q_WS_MAEMO_5
 	#include "fullscreenexitbutton.h"
@@ -62,17 +64,20 @@ struct MainWindow::PrivateImplementation {
 	OverlayWidget* settingsOverlay;
 
 	QMenuBar* menuBar;
+
 	QMenu* menuFile;
 	QMenu* menuRouting;
 	QMenu* menuMethods;
 	QMenu* menuView;
-	QMenu* menuSettings;
+	QMenu* menuPreferences;
+	QMenu* menuHelp;
 
 	QToolBar* toolBarFile;
 	QToolBar* toolBarRouting;
 	QToolBar* toolBarMethods;
 	QToolBar* toolBarView;
 	QToolBar* toolBarPreferences;
+	QToolBar* toolBarHelp;
 
 	QAction* actionSource;
 	QAction* actionVia;
@@ -96,6 +101,9 @@ struct MainWindow::PrivateImplementation {
 	QAction* actionPreferencesGpsLookup;
 	QAction* actionPreferencesAddressLookup;
 	QAction* actionPreferencesGpsReceiver;
+
+	QAction* actionHelpAbout;
+	QAction* actionHelpProjectPage;
 
 	int currentWaypoint;
 
@@ -188,6 +196,9 @@ void MainWindow::connectSlots()
 	connect( d->actionPreferencesAddressLookup, SIGNAL( triggered() ), this, SLOT( settingsAddressLookup()));
 	connect( d->actionPreferencesGpsReceiver, SIGNAL( triggered() ), this, SLOT( settingsGPS()));
 
+	connect( d->actionHelpAbout, SIGNAL( triggered() ), this, SLOT( about()));
+	connect( d->actionHelpProjectPage, SIGNAL( triggered() ), this, SLOT( projectPage()));
+
 	// TODO: Clean up old stuff which is obsolete since the new user interface
 
 	MapData* mapData = MapData::instance();
@@ -220,13 +231,16 @@ void MainWindow::createActions()
 
 	d->actionHideControls = new QAction( QIcon( ":/images/map.png" ), tr( "Hide Controls" ), this );
 	d->actionPackages = new QAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Packages" ), this );
-	d->actionModules = new QAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Modules" ), this );
+	d->actionModules = new QAction( QIcon( ":/images/oxygen/map-modules.png" ), tr( "Map Modules" ), this );
 	d->actionPreferencesGeneral = new QAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "General" ), this );
 	d->actionPreferencesRenderer = new QAction( QIcon( ":/images/map.png" ), tr( "Renderer" ), this );
 	d->actionPreferencesRouter = new QAction( QIcon( ":/images/route.png" ), tr( "Router" ), this );
 	d->actionPreferencesGpsLookup = new QAction( QIcon( ":/images/satellite.png" ), tr( "GPS-Lookup" ), this );
 	d->actionPreferencesAddressLookup = new QAction( QIcon( ":/images/address.png" ), tr( "Address Lookup" ), this );
 	d->actionPreferencesGpsReceiver = new QAction( QIcon( ":/images/oxygen/hwinfo.png" ), tr( "GPS Receiver" ), this );
+
+	d->actionHelpAbout = new QAction( QIcon( ":/images/about.png" ), tr( "About" ), this );
+	d->actionHelpProjectPage = new QAction( QIcon( ":/images/home.png" ), tr( "Homepage" ), this );
 
 	d->actionSource->setCheckable( true );
 	d->actionTarget->setCheckable( true );
@@ -252,6 +266,8 @@ void MainWindow::createActions()
 	d->actionPackages->setShortcut( Qt::Key_P );
 	d->actionModules->setShortcut( Qt::Key_M );
 	d->actionPreferencesGeneral->setShortcut( Qt::Key_P );
+
+	d->actionHelpProjectPage->setShortcut( Qt::Key_H );
 }
 
 void MainWindow::populateMenus()
@@ -262,7 +278,8 @@ void MainWindow::populateMenus()
 	d->menuRouting = new QMenu( tr( "Routing" ), this );
 	d->menuMethods = new QMenu( tr( "Methods" ), this );
 	d->menuView = new QMenu( tr( "View" ), this );
-	d->menuSettings = new QMenu( tr( "Settings" ), this );
+	d->menuPreferences = new QMenu( tr( "Settings" ), this );
+	d->menuHelp = new QMenu( tr( "Help" ), this );
 
 	d->menuFile->addAction( d->actionPackages );
 	d->menuFile->addAction( d->actionModules );
@@ -281,15 +298,18 @@ void MainWindow::populateMenus()
 	d->menuView->addAction( d->actionZoomIn );
 	d->menuView->addAction( d->actionZoomOut );
 
-	d->menuSettings->addAction( d->actionPreferencesGeneral );
-	d->menuSettings->addAction( d->actionPreferencesRenderer );
-	d->menuSettings->addAction( d->actionPreferencesRouter );
-	d->menuSettings->addAction( d->actionPreferencesGpsLookup );
-	d->menuSettings->addAction( d->actionPreferencesAddressLookup );
-	d->menuSettings->addAction( d->actionPreferencesGpsReceiver );
+	d->menuPreferences->addAction( d->actionPreferencesGeneral );
+	d->menuPreferences->addAction( d->actionPreferencesRenderer );
+	d->menuPreferences->addAction( d->actionPreferencesRouter );
+	d->menuPreferences->addAction( d->actionPreferencesGpsLookup );
+	d->menuPreferences->addAction( d->actionPreferencesAddressLookup );
+	d->menuPreferences->addAction( d->actionPreferencesGpsReceiver );
 #ifdef Q_WS_MAEMO_5
-	d->menuSettings->addAction( d->actionGpsCoordinate );
+	d->menuPreferences->addAction( d->actionGpsCoordinate );
 #endif
+
+	d->menuHelp->addAction( d->actionHelpAbout );
+	d->menuHelp->addAction( d->actionHelpProjectPage );
 
 #ifndef Q_WS_MAEMO_5
 	d->menuBar->addMenu( d->menuFile );
@@ -297,7 +317,8 @@ void MainWindow::populateMenus()
 	d->menuBar->addMenu( d->menuMethods );
 	d->menuBar->addMenu( d->menuView );
 #endif
-	d->menuBar->addMenu( d->menuSettings );
+	d->menuBar->addMenu( d->menuPreferences );
+	d->menuBar->addMenu( d->menuHelp );
 }
 
 void MainWindow::populateToolbars()
@@ -307,8 +328,10 @@ void MainWindow::populateToolbars()
 	d->toolBarMethods = addToolBar( tr( "Method" ) );
 	d->toolBarView = addToolBar( tr( "Zoom" ) );
 	d->toolBarPreferences = addToolBar( tr( "Preferences" ) );
+	d->toolBarHelp = addToolBar( tr( "Help" ) );
 #ifdef Q_WS_MAEMO_5
 	d->toolBarPreferences->setVisible( false );
+	d->toolBarHelp->setVisible( false );
 #endif
 
 	d->toolBarFile->addAction( d->actionPackages );
@@ -336,6 +359,9 @@ void MainWindow::populateToolbars()
 	d->toolBarPreferences->addAction( d->actionPreferencesGpsLookup );
 	d->toolBarPreferences->addAction( d->actionPreferencesAddressLookup );
 	d->toolBarPreferences->addAction( d->actionPreferencesGpsReceiver );
+
+	d->toolBarHelp->addAction( d->actionHelpAbout );
+	d->toolBarHelp->addAction( d->actionHelpProjectPage );
 }
 
 void MainWindow::hideControls()
@@ -345,6 +371,7 @@ void MainWindow::hideControls()
 	d->toolBarMethods->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarView->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarPreferences->setVisible( !d->actionHideControls->isChecked() );
+	d->toolBarHelp->setVisible( !d->actionHideControls->isChecked() );
 }
 
 void MainWindow::resizeIcons()
@@ -818,5 +845,16 @@ void MainWindow::setZoom( int zoom )
 
 	m_ui->paintArea->setZoom( zoom );
 	GlobalSettings::setZoomMainMap( zoom );
+}
+
+void MainWindow::about()
+{
+	// TODO: Create a better dialog displaying better information, and read some of the data from an include file or define.
+	QMessageBox::about( this, tr("About MoNav"), "MoNav 0.4 is (c) 2011 by Christian Vetter and was released under the GNU GPL v3." );
+}
+
+void MainWindow::projectPage()
+{
+	QDesktopServices::openUrl( QUrl( tr("http://code.google.com/p/monav/") ) );
 }
 
