@@ -41,7 +41,6 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <QMessageBox>
 #include <QStyle>
 #include <QScrollArea>
-// #include <QSignalMapper>
 #include <QUrl>
 #include <QDesktopServices>
 
@@ -85,7 +84,6 @@ struct MainWindow::PrivateImplementation {
 	QToolBar* toolBarHelp;
 
 	QAction* actionSource;
-	// QAction* actionVia;
 	QAction* actionViaModes;
 	QToolButton* buttonViaModes;
 	QAction* actionViaNone;
@@ -142,7 +140,6 @@ MainWindow::MainWindow( QWidget* parent ) :
 	setAutoFillBackground(true);
 
 	d->applicationMode = PrivateImplementation::Modeless;
-	// d->viaMode = PrivateImplementation::ViaNone;
 	setModeViaNone();
 	d->fixed = false;
 
@@ -187,7 +184,6 @@ MainWindow::~MainWindow()
 void MainWindow::connectSlots()
 {
 	connect( d->actionSource, SIGNAL( triggered() ), this, SLOT( setModeSourceSelection()));
-	// connect( d->actionVia, SIGNAL( triggered() ), this, SLOT( setModeViaSelection()));
 	connect( d->actionViaNone, SIGNAL( triggered() ), this, SLOT( setModeViaNone()));
 	connect( d->actionViaInsert, SIGNAL( triggered() ), this, SLOT( setModeViaInsert()));
 	connect( d->actionViaAppend, SIGNAL( triggered() ), this, SLOT( setModeViaAppend()));
@@ -215,8 +211,6 @@ void MainWindow::connectSlots()
 	connect( d->actionHelpAbout, SIGNAL( triggered() ), this, SLOT( about()));
 	connect( d->actionHelpProjectPage, SIGNAL( triggered() ), this, SLOT( projectPage()));
 
-	// TODO: Clean up old stuff which is obsolete since the new user interface
-
 	MapData* mapData = MapData::instance();
 	connect( m_ui->paintArea, SIGNAL(zoomChanged(int)), this, SLOT(setZoom(int)) );
 	connect( m_ui->paintArea, SIGNAL(mouseClicked(ProjectedCoordinate)), this, SLOT(mouseClicked(ProjectedCoordinate)) );
@@ -234,14 +228,12 @@ void MainWindow::createActions()
 {
 	d->actionSource = new QAction( QIcon( ":/images/source.png" ), tr( "Source" ), this );
 
-	// d->actionVia = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Via" ), this );
 	d->actionViaModes = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Via Modes" ), this );
 	d->actionViaNone = new QAction( QIcon( ":/images/target.png" ), tr( "No Via" ), this );
 	d->actionViaInsert = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Insert Via" ), this );
 	d->actionViaAppend = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Append Via" ), this );
 
 	d->buttonViaModes = new QToolButton( this );
-	// d->buttonViaModes->setArrowType( Qt::DownArrow );
 
 	d->actionTarget = new QAction( QIcon( ":/images/target.png" ), tr( "Target" ), this );
 	d->buttonViaModes->setDefaultAction( d->actionTarget );
@@ -271,7 +263,6 @@ void MainWindow::createActions()
 
 	d->actionSource->setCheckable( true );
 	d->actionTarget->setCheckable( true );
-	// d->actionVia->setCheckable( true );
 	d->actionViaNone->setCheckable( true );
 	d->actionViaInsert->setCheckable( true );
 	d->actionViaAppend->setCheckable( true );
@@ -280,10 +271,6 @@ void MainWindow::createActions()
 	d->actionHideControls->setCheckable( true );
 
 	d->actionSource->setShortcut( Qt::Key_S );
-	// d->actionVia->setShortcut( Qt::Key_V );
-	// d->actionViaNone->setShortcut( Qt::Key_V );
-	// d->actionViaInsert->setShortcut( Qt::Key_V );
-	// d->actionViaAppend->setShortcut( Qt::Key_V );
 	d->actionTarget->setShortcut( Qt::Key_T );
 	d->actionInstructions->setShortcut( Qt::Key_I );
 
@@ -327,12 +314,9 @@ void MainWindow::populateMenus()
 	d->menuViaMode->addAction( d->actionViaAppend );
 
 	d->menuRouting->addAction( d->actionSource );
-	// d->menuRouting->addAction( d->actionVia );
 	d->menuRouting->addAction( d->actionViaModes );
 	d->menuRouting->addAction( d->actionTarget );
 	d->menuRouting->addAction( d->actionInstructions );
-
-	// d->menuViaMode->addAction( d->actionTarget );
 
 	d->menuMethods->addAction( d->actionBookmark );
 	d->menuMethods->addAction( d->actionAddress );
@@ -383,8 +367,6 @@ void MainWindow::populateToolbars()
 	d->toolBarFile->addAction( d->actionModules );
 
 	d->toolBarRouting->addAction( d->actionSource );
-	// d->toolBarRouting->addAction( d->actionVia );
-	// d->toolBarRouting->addAction( d->actionTarget );
 	d->toolBarRouting->addWidget( d->buttonViaModes );
 	d->toolBarRouting->addAction( d->actionInstructions );
 
@@ -657,34 +639,11 @@ void MainWindow::setModeSourceSelection()
 	m_ui->paintArea->setKeepPositionVisible( false );
 	m_ui->infoWidget->hide();
 
-	// d->actionVia->setChecked( false );
 	d->actionTarget->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
 	d->toolBarMethods->setDisabled( false );
 }
-
-/*
-void MainWindow::setModeViaSelection()
-{
-	if ( !d->actionVia->isChecked() ){
-		setModeless();
-		return;
-	}
-
-	d->applicationMode = PrivateImplementation::Via;
-	d->fixed = false;
-	m_ui->paintArea->setFixed( false );
-	m_ui->paintArea->setKeepPositionVisible( false );
-	m_ui->infoWidget->hide();
-
-	d->actionSource->setChecked( false );
-	d->actionTarget->setChecked( false );
-	d->actionInstructions->setChecked( false );
-
-	d->toolBarMethods->setDisabled( false );
-}
-*/
 
 void MainWindow::setModeViaNone()
 {
@@ -724,7 +683,6 @@ void MainWindow::setModeTargetSelection()
 	m_ui->infoWidget->hide();
 
 	d->actionSource->setChecked( false );
-	// d->actionVia->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
 	d->toolBarMethods->setDisabled( false );
@@ -744,7 +702,6 @@ void MainWindow::setModeInstructions()
 	m_ui->infoWidget->show();
 
 	d->actionSource->setChecked( false );
-	// d->actionVia->setChecked( false );
 	d->actionTarget->setChecked( false );
 
 
@@ -761,7 +718,6 @@ void MainWindow::setModeless()
 
 	d->actionSource->setChecked( false );
 	d->actionTarget->setChecked( false );
-	// d->actionVia->setChecked( false );
 	d->actionInstructions->setChecked( false );
 
 	d->toolBarMethods->setDisabled( false );
@@ -770,34 +726,27 @@ void MainWindow::setModeless()
 void MainWindow::mouseClicked( ProjectedCoordinate clickPos )
 {
 	UnsignedCoordinate coordinate( clickPos );
+	if ( !coordinate.IsValid() )
+		return;
+
 	if ( d->applicationMode == PrivateImplementation::Source ) {
 		RoutingLogic::instance()->setSource( coordinate );
 	}
-	// if ( d->applicationMode == PrivateImplementation::Via ) {
-	// 	RoutingLogic::instance()->setWaypoint( d->currentWaypoint, coordinate );
-	// }
-	if ( d->applicationMode == PrivateImplementation::Target ){
-		RoutingLogic::instance()->setTarget( coordinate );
-	}
-}
-
-void MainWindow::subductRoutepoint()
-{
-	RoutingLogic* routingLogic = RoutingLogic::instance();
-	QVector< UnsignedCoordinate > waypoints = routingLogic->waypoints();
-	if ( d->currentWaypoint >= waypoints.size() )
+	if ( d->applicationMode != PrivateImplementation::Target ){
 		return;
-	waypoints.remove( d->currentWaypoint );
-	routingLogic->setWaypoints( waypoints );
-}
+	}
 
-void MainWindow::addViapoint( UnsignedCoordinate coordinate )
-{
-	RoutingLogic* routingLogic = RoutingLogic::instance();
-	QVector< UnsignedCoordinate > waypoints = routingLogic->waypoints();
-	waypoints.clear();
-
-	routingLogic->setWaypoints( waypoints );
+	if ( d->viaMode == PrivateImplementation::ViaNone ){
+		RoutingLogic::instance()->setTarget( coordinate );
+		return;
+	}
+	if ( d->viaMode == PrivateImplementation::ViaAppend ){
+		RoutingLogic* routingLogic = RoutingLogic::instance();
+		QVector< UnsignedCoordinate > waypoints = routingLogic->waypoints();
+		waypoints.append( coordinate );
+		routingLogic->setWaypoints( waypoints );
+		return;
+	}
 }
 
 void MainWindow::bookmarks()
