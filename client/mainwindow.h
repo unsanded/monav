@@ -60,6 +60,7 @@ protected slots:
 
 	void bookmarks();
 	void addresses();
+	void alterRoute( UnsignedCoordinate );
 	void remove();
 	void gpsLocation();
 	void gpsCoordinate();

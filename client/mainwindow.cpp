@@ -726,27 +726,7 @@ void MainWindow::setModeless()
 void MainWindow::mouseClicked( ProjectedCoordinate clickPos )
 {
 	UnsignedCoordinate coordinate( clickPos );
-	if ( !coordinate.IsValid() )
-		return;
-
-	if ( d->applicationMode == PrivateImplementation::Source ) {
-		RoutingLogic::instance()->setSource( coordinate );
-	}
-	if ( d->applicationMode != PrivateImplementation::Target ){
-		return;
-	}
-
-	if ( d->viaMode == PrivateImplementation::ViaNone ){
-		RoutingLogic::instance()->setTarget( coordinate );
-		return;
-	}
-	if ( d->viaMode == PrivateImplementation::ViaAppend ){
-		RoutingLogic* routingLogic = RoutingLogic::instance();
-		QVector< UnsignedCoordinate > waypoints = routingLogic->waypoints();
-		waypoints.append( coordinate );
-		routingLogic->setWaypoints( waypoints );
-		return;
-	}
+	alterRoute( coordinate );
 }
 
 void MainWindow::bookmarks()
@@ -754,13 +734,8 @@ void MainWindow::bookmarks()
 	UnsignedCoordinate result;
 	if ( !BookmarksDialog::showBookmarks( &result, this ) )
 		return;
+	alterRoute( result );
 
-	if ( d->applicationMode == d->Source )
-		RoutingLogic::instance()->setSource( result );
-	if ( d->applicationMode == d->Target )
-		RoutingLogic::instance()->setTarget( result );
-	// if ( d->applicationMode == d->Via )
-	// 	addViapoint( result );
 	m_ui->paintArea->setKeepPositionVisible( false );
 	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
 }
@@ -772,13 +747,8 @@ void MainWindow::addresses()
 	UnsignedCoordinate result;
 	if ( !AddressDialog::getAddress( &result, this ) )
 		return;
+	alterRoute( result );
 
-	if ( d->applicationMode == d->Source )
-		RoutingLogic::instance()->setSource( result );
-	if ( d->applicationMode == d->Target )
-		RoutingLogic::instance()->setTarget( result );
-	// if ( d->applicationMode == d->Via )
-	// 	addViapoint( result );
 	m_ui->paintArea->setKeepPositionVisible( false );
 	m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
 }
@@ -790,15 +760,7 @@ void MainWindow::gpsLocation()
 		return;
 	GPSCoordinate gps( gpsInfo.position.ToGPSCoordinate().latitude, gpsInfo.position.ToGPSCoordinate().longitude );
 	UnsignedCoordinate result = UnsignedCoordinate( gps );
-	if ( d->applicationMode == d->Source )
-		RoutingLogic::instance()->setSource( result );
-	if ( d->applicationMode == d->Target )
-		RoutingLogic::instance()->setTarget( result );
-	// if ( d->applicationMode == d->Via )
-	// 	addViapoint( result );
-
-	m_ui->paintArea->setCenter( ProjectedCoordinate( gps ) );
-	m_ui->paintArea->setKeepPositionVisible( true );
+	alterRoute( result );
 
 	IRenderer* renderer = MapData::instance()->renderer();
 	if ( renderer == NULL )
@@ -816,14 +778,8 @@ void MainWindow::gpsCoordinate()
 	if ( !ok )
 		return;
 	GPSCoordinate gps( latitude, longitude );
-
 	UnsignedCoordinate result = UnsignedCoordinate( gps );
-	if ( d->applicationMode == d->Source )
-		RoutingLogic::instance()->setSource( result );
-	if ( d->applicationMode == d->Target )
-		RoutingLogic::instance()->setTarget( result );
-	// if ( d->applicationMode == d->Via )
-	// 	addViapoint( result );
+	alterRoute( result );
 
 	m_ui->paintArea->setCenter( ProjectedCoordinate( gps ) );
 	m_ui->paintArea->setKeepPositionVisible( false );
@@ -832,6 +788,72 @@ void MainWindow::gpsCoordinate()
 	if ( renderer == NULL )
 		return;
 	setZoom( renderer->GetMaxZoom() - 5 );
+
+}
+
+void MainWindow::alterRoute( UnsignedCoordinate coordinate )
+{
+	if ( !coordinate.IsValid() )
+		return;
+
+	if ( d->applicationMode == PrivateImplementation::Source ) {
+		RoutingLogic::instance()->setSource( coordinate );
+	}
+	if ( d->applicationMode != PrivateImplementation::Target ){
+		return;
+	}
+
+	RoutingLogic* routingLogic = RoutingLogic::instance();
+	QVector< UnsignedCoordinate > waypoints = routingLogic->waypoints();
+
+	if ( d->viaMode == PrivateImplementation::ViaNone ){
+		waypoints.clear();
+		waypoints.append( coordinate );
+	}
+	if ( d->viaMode == PrivateImplementation::ViaAppend ){
+		waypoints.append( coordinate );
+	}
+	if ( d->viaMode == PrivateImplementation::ViaInsert ){
+		if ( waypoints.size() == 0 ){
+			waypoints.append( coordinate );
+		}
+		else if ( waypoints.size() == 1 ){
+			waypoints.prepend( coordinate );
+		}
+		else{
+			// Waypoints do *not* contain the source point.
+			QVector< UnsignedCoordinate > routepoints = waypoints;
+			routepoints.prepend( routingLogic->source() );
+
+			// utils/coordinates.h:    double Distance( const GPSCoordinate &right ) const
+			// m_gpsInfoBuffer.at(i).position.ToGPSCoordinate() // position = UnsignedCoordinate
+			// waypoints.append( coordinate );
+			// GPSCoordinate gps( gpsInfo.position.ToGPSCoordinate().latitude, gpsInfo.position.ToGPSCoordinate().longitude );
+
+
+			// Get the nearest point
+			GPSCoordinate gpsPassed = coordinate.ToGPSCoordinate();
+			GPSCoordinate current;
+			double distance1 = 0;
+			int nearest = 0;
+			for ( int i = 0; i < routepoints.size(); i++ ){
+				current = routepoints[i].ToGPSCoordinate();
+				if ( distance1 == 0 || gpsPassed.Distance( current ) < distance1 ){
+					distance1 = gpsPassed.Distance( current );
+					nearest = i;
+				}
+			}
+			// Check whether the previous or next point is the nearest
+			double distance2 = 0;
+			distance2 = gpsPassed.Distance( routepoints[nearest - 1].ToGPSCoordinate() );
+			if ( gpsPassed.Distance( routepoints[nearest + 1].ToGPSCoordinate() ) < distance2 )
+				nearest +=1;
+			routepoints.insert( nearest, coordinate );
+			routepoints.pop_front();
+			waypoints = routepoints;
+		}
+	}
+	routingLogic->setWaypoints( waypoints );
 }
 
 void MainWindow::remove()
@@ -871,7 +893,7 @@ void MainWindow::setZoom( int zoom )
 
 void MainWindow::about()
 {
-	// TODO: Create a better dialog displaying better information, and read some of the data from an include file or define.
+	// TODO: Create a better dialog displaying more details, and read some of the data from an include file or define.
 	QMessageBox::about( this, tr("About MoNav"), "MoNav 0.4 is (c) 2011 by Christian Vetter and was released under the GNU GPL v3." );
 }
 
