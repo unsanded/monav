@@ -231,10 +231,10 @@ void MainWindow::createActions()
 {
 	d->actionSource = new QAction( QIcon( ":/images/source.png" ), tr( "Source" ), this );
 
-	d->actionViaModes = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Via Modes" ), this );
+	d->actionViaModes = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Mode" ), this );
 	d->actionViaNone = new QAction( QIcon( ":/images/target.png" ), tr( "Direct Route" ), this );
-	d->actionViaInsert = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Insert Point" ), this );
-	d->actionViaAppend = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Append Point" ), this );
+	d->actionViaInsert = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Insert" ), this );
+	d->actionViaAppend = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Append" ), this );
 
 	d->buttonViaModes = new QToolButton( this );
 
@@ -254,7 +254,7 @@ void MainWindow::createActions()
 	d->actionHideControls = new QAction( QIcon( ":/images/map.png" ), tr( "Hide Controls" ), this );
 	d->actionPackages = new QAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Packages" ), this );
 	d->actionModules = new QAction( QIcon( ":/images/oxygen/map-modules.png" ), tr( "Map Modules" ), this );
-	d->actionPreferencesGeneral = new QAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "General" ), this );
+	d->actionPreferencesGeneral = new QAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "Preferences" ), this );
 	d->actionPreferencesRenderer = new QAction( QIcon( ":/images/map.png" ), tr( "Renderer" ), this );
 	d->actionPreferencesRouter = new QAction( QIcon( ":/images/route.png" ), tr( "Router" ), this );
 	d->actionPreferencesGpsLookup = new QAction( QIcon( ":/images/satellite.png" ), tr( "GPS-Lookup" ), this );
@@ -288,9 +288,6 @@ void MainWindow::createActions()
 	d->actionHideControls->setShortcut( Qt::Key_H );
 	d->actionPackages->setShortcut( Qt::Key_P );
 	d->actionModules->setShortcut( Qt::Key_M );
-	d->actionPreferencesGeneral->setShortcut( Qt::Key_P );
-
-	d->actionHelpProjectPage->setShortcut( Qt::Key_H );
 }
 
 void MainWindow::populateMenus()
@@ -300,7 +297,7 @@ void MainWindow::populateMenus()
 	d->menuFile = new QMenu( tr( "File" ), this );
 	d->menuRouting = new QMenu( tr( "Routing" ), this );
 
-	d->menuViaMode = new QMenu( tr( "Via Modes" ), this );
+	d->menuViaMode = new QMenu( tr( "Via Mode" ), this );
 	d->buttonViaModes->setMenu( d->menuViaMode );
 	d->actionViaModes->setMenu( d->menuViaMode );
 
@@ -386,14 +383,9 @@ void MainWindow::populateToolbars()
 
 	d->toolBarMethods->addAction( d->actionBookmark );
 	d->toolBarMethods->addAction( d->actionAddress );
-#ifndef Q_WS_MAEMO_5
 	d->toolBarMethods->addAction( d->actionGpsCoordinate );
-#endif
 	d->toolBarMethods->addAction( d->actionRemove );
 
-#ifndef Q_WS_MAEMO_5
-	d->toolBarView->addAction( d->actionHideControls );
-#endif
 	d->toolBarView->addAction( d->actionZoomIn );
 	d->toolBarView->addAction( d->actionZoomOut );
 
@@ -407,29 +399,19 @@ void MainWindow::populateToolbars()
 	d->toolBarHelp->addAction( d->actionHelpAbout );
 	d->toolBarHelp->addAction( d->actionHelpProjectPage );
 
-#ifdef Q_WS_MAEMO_5
 	d->toolBarFile->setVisible( false );
 	d->toolBarPreferences->setVisible( false );
 	d->toolBarHelp->setVisible( false );
 	// A long klick on the toolbar on Maemo lists all toolbars and allows to switch them on and off.
 	// This conflicts with the long press on the target button.
 	setContextMenuPolicy( Qt::CustomContextMenu );
-#endif
 }
 
 void MainWindow::hideControls()
 {
-	d->toolBarFile->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarRouting->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarMethods->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarView->setVisible( !d->actionHideControls->isChecked() );
-	d->toolBarPreferences->setVisible( !d->actionHideControls->isChecked() );
-	d->toolBarHelp->setVisible( !d->actionHideControls->isChecked() );
-#ifdef Q_WS_MAEMO_5
-	d->toolBarFile->setVisible( false );
-	d->toolBarPreferences->setVisible( false );
-	d->toolBarHelp->setVisible( false );
-#endif
 }
 
 void MainWindow::resizeIcons()
