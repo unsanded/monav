@@ -75,6 +75,7 @@ struct MainWindow::PrivateImplementation {
 	QMenu* menuView;
 	QMenu* menuPreferences;
 	QMenu* menuHelp;
+	QMenu* menuMaemo;
 
 	QToolBar* toolBarFile;
 	QToolBar* toolBarRouting;
@@ -229,9 +230,9 @@ void MainWindow::createActions()
 	d->actionSource = new QAction( QIcon( ":/images/source.png" ), tr( "Source" ), this );
 
 	d->actionViaModes = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Via Modes" ), this );
-	d->actionViaNone = new QAction( QIcon( ":/images/target.png" ), tr( "No Via" ), this );
-	d->actionViaInsert = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Insert Via" ), this );
-	d->actionViaAppend = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Append Via" ), this );
+	d->actionViaNone = new QAction( QIcon( ":/images/target.png" ), tr( "Direct Route" ), this );
+	d->actionViaInsert = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Insert Point" ), this );
+	d->actionViaAppend = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Append Point" ), this );
 
 	d->buttonViaModes = new QToolButton( this );
 
@@ -305,6 +306,7 @@ void MainWindow::populateMenus()
 	d->menuView = new QMenu( tr( "View" ), this );
 	d->menuPreferences = new QMenu( tr( "Settings" ), this );
 	d->menuHelp = new QMenu( tr( "Help" ), this );
+	d->menuMaemo = new QMenu( tr( "Maemo Menu" ), this );
 
 	d->menuFile->addAction( d->actionPackages );
 	d->menuFile->addAction( d->actionModules );
@@ -333,21 +335,35 @@ void MainWindow::populateMenus()
 	d->menuPreferences->addAction( d->actionPreferencesGpsLookup );
 	d->menuPreferences->addAction( d->actionPreferencesAddressLookup );
 	d->menuPreferences->addAction( d->actionPreferencesGpsReceiver );
-#ifdef Q_WS_MAEMO_5
-	d->menuPreferences->addAction( d->actionGpsCoordinate );
-#endif
 
 	d->menuHelp->addAction( d->actionHelpAbout );
 	d->menuHelp->addAction( d->actionHelpProjectPage );
+
+	d->menuMaemo->addAction( d->actionHideControls );
+	d->menuMaemo->addAction( d->actionGpsCoordinate );
+	d->menuMaemo->addAction( d->actionPackages );
+	d->menuMaemo->addAction( d->actionModules );
+	d->menuMaemo->addAction( d->actionPreferencesGeneral );
+	d->menuMaemo->addAction( d->actionPreferencesGpsReceiver  );
+	d->menuMaemo->addAction( d->actionPreferencesRenderer );
+	d->menuMaemo->addAction( d->actionPreferencesRouter );
+	d->menuMaemo->addAction( d->actionPreferencesGpsLookup );
+	d->menuMaemo->addAction( d->actionPreferencesAddressLookup );
+	d->menuMaemo->addAction( d->actionHelpProjectPage );
+	d->menuMaemo->addAction( d->actionHelpAbout );
 
 #ifndef Q_WS_MAEMO_5
 	d->menuBar->addMenu( d->menuFile );
 	d->menuBar->addMenu( d->menuRouting );
 	d->menuBar->addMenu( d->menuMethods );
 	d->menuBar->addMenu( d->menuView );
-#endif
 	d->menuBar->addMenu( d->menuPreferences );
 	d->menuBar->addMenu( d->menuHelp );
+#endif
+
+#ifdef Q_WS_MAEMO_5
+	d->menuBar->addMenu( d->menuMaemo );
+#endif
 }
 
 void MainWindow::populateToolbars()
