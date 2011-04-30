@@ -374,10 +374,6 @@ void MainWindow::populateToolbars()
 	d->toolBarView = addToolBar( tr( "Zoom" ) );
 	d->toolBarPreferences = addToolBar( tr( "Preferences" ) );
 	d->toolBarHelp = addToolBar( tr( "Help" ) );
-#ifdef Q_WS_MAEMO_5
-	d->toolBarPreferences->setVisible( false );
-	d->toolBarHelp->setVisible( false );
-#endif
 
 	d->toolBarFile->addAction( d->actionPackages );
 	d->toolBarFile->addAction( d->actionModules );
@@ -393,7 +389,9 @@ void MainWindow::populateToolbars()
 #endif
 	d->toolBarMethods->addAction( d->actionRemove );
 
+#ifndef Q_WS_MAEMO_5
 	d->toolBarView->addAction( d->actionHideControls );
+#endif
 	d->toolBarView->addAction( d->actionZoomIn );
 	d->toolBarView->addAction( d->actionZoomOut );
 
@@ -406,6 +404,15 @@ void MainWindow::populateToolbars()
 
 	d->toolBarHelp->addAction( d->actionHelpAbout );
 	d->toolBarHelp->addAction( d->actionHelpProjectPage );
+
+#ifdef Q_WS_MAEMO_5
+	d->toolBarFile->setVisible( false );
+	d->toolBarPreferences->setVisible( false );
+	d->toolBarHelp->setVisible( false );
+	// A long klick on the toolbar on Maemo lists all toolbars and allows to switch them on and off.
+	// This conflicts with the long press on the target button.
+	setContextMenuPolicy( Qt::CustomContextMenu );
+#endif
 }
 
 void MainWindow::hideControls()
@@ -416,6 +423,11 @@ void MainWindow::hideControls()
 	d->toolBarView->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarPreferences->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarHelp->setVisible( !d->actionHideControls->isChecked() );
+#ifdef Q_WS_MAEMO_5
+	d->toolBarFile->setVisible( false );
+	d->toolBarPreferences->setVisible( false );
+	d->toolBarHelp->setVisible( false );
+#endif
 }
 
 void MainWindow::resizeIcons()
