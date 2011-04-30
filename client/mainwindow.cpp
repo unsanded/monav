@@ -877,7 +877,7 @@ void MainWindow::remove()
 	}
 	else if ( d->applicationMode == PrivateImplementation::Modeless ){
 		if ( QMessageBox::warning(this, tr("Route Removal"), tr("This will remove the entire route.\nDo you want to continue?"),
-			QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Ok) ){
+			QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Ok) == QMessageBox::Cancel ){
 			return;
 		}
 		else{
