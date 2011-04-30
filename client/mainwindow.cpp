@@ -61,7 +61,7 @@ struct MainWindow::PrivateImplementation {
 		ViaNone, ViaInsert, ViaAppend
 	};
 
-	// QVector<int> undoHistory;
+	QVector<int> undoHistory;
 
 	OverlayWidget* targetOverlay;
 	OverlayWidget* sourceOverlay;
@@ -821,20 +821,25 @@ void MainWindow::alterRoute( UnsignedCoordinate coordinate )
 
 	if ( d->viaMode == PrivateImplementation::ViaNone ){
 		waypoints.clear();
+		d->undoHistory.clear();
 		waypoints.append( coordinate );
+		d->undoHistory.append(0);
 	}
 	if ( d->viaMode == PrivateImplementation::ViaAppend ){
-		qDebug() << "Waypoints size: " << waypoints.size();
 		waypoints.append( coordinate );
-		qDebug() << "Waypoints size: " << waypoints.size();
+		d->undoHistory.append( waypoints.size() -1 );
 	}
 	if ( d->viaMode == PrivateImplementation::ViaInsert ){
 		if ( waypoints.size() == 0 ){
 			waypoints.append( coordinate );
+			d->undoHistory.clear();
+			d->undoHistory.append(0);
 		}
+		/*
 		else if ( waypoints.size() == 1 ){
 			waypoints.prepend( coordinate );
 		}
+		*/
 		else{
 			// Waypoints do *not* contain the source point.
 			QVector< UnsignedCoordinate > routepoints = waypoints;
@@ -866,6 +871,7 @@ void MainWindow::alterRoute( UnsignedCoordinate coordinate )
 			routepoints.insert( nearest, coordinate );
 			routepoints.pop_front();
 			waypoints = routepoints;
+			d->undoHistory.append( nearest -1 );
 		}
 	}
 	routingLogic->setWaypoints( waypoints );
@@ -873,7 +879,37 @@ void MainWindow::alterRoute( UnsignedCoordinate coordinate )
 
 void MainWindow::remove()
 {
-	QVector< UnsignedCoordinate > waypoints;
+	QVector< UnsignedCoordinate > waypoints = RoutingLogic::instance()->waypoints();
+
+	if ( waypoints.size() < 1 ){
+		return;
+	}
+	else if ( d->applicationMode == PrivateImplementation::Instructions ){
+		return;
+	}
+	else if ( d->applicationMode == PrivateImplementation::Modeless ){
+		if ( QMessageBox::warning(this, tr("Route Removal"), tr("This will remove the entire route.\nDo you want to continue?"),
+			QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Ok) ){
+			return;
+		}
+		else{
+			waypoints.clear();
+		}
+	}
+	else if ( d->undoHistory.size() < 1 && waypoints.size() > 0 ){
+		// Removing waypoints in case the route was loaded at startup.
+		waypoints.pop_back();
+	}
+	else if ( d->undoHistory.last() > waypoints.size() -1 ){
+		// This should not happen. Theoretically.
+		qDebug() << "\nAttempt to access waypoint" << d->undoHistory.last() << "of" << waypoints.size() << "\n";
+		return;
+	}
+	else{
+		waypoints.remove( d->undoHistory.last() );
+		d->undoHistory.remove( d->undoHistory.size() -1 );
+	}
+
 	RoutingLogic::instance()->setWaypoints( waypoints );
 }
 
