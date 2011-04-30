@@ -835,38 +835,26 @@ void MainWindow::alterRoute( UnsignedCoordinate coordinate )
 			d->undoHistory.clear();
 			d->undoHistory.append(0);
 		}
-		/*
-		else if ( waypoints.size() == 1 ){
-			waypoints.prepend( coordinate );
-		}
-		*/
 		else{
 			// Waypoints do *not* contain the source point.
 			QVector< UnsignedCoordinate > routepoints = waypoints;
 			routepoints.prepend( routingLogic->source() );
 
-			// utils/coordinates.h:    double Distance( const GPSCoordinate &right ) const
-			// m_gpsInfoBuffer.at(i).position.ToGPSCoordinate() // position = UnsignedCoordinate
-			// waypoints.append( coordinate );
-			// GPSCoordinate gps( gpsInfo.position.ToGPSCoordinate().latitude, gpsInfo.position.ToGPSCoordinate().longitude );
-
-
 			// Get the nearest point
 			GPSCoordinate gpsPassed = coordinate.ToGPSCoordinate();
 			GPSCoordinate current;
-			double distance1 = 0;
+			double distance = 0;
 			int nearest = 0;
 			for ( int i = 0; i < routepoints.size(); i++ ){
 				current = routepoints[i].ToGPSCoordinate();
-				if ( distance1 == 0 || gpsPassed.Distance( current ) < distance1 ){
-					distance1 = gpsPassed.Distance( current );
+				if ( distance == 0 || gpsPassed.Distance( current ) < distance ){
+					distance = gpsPassed.Distance( current );
 					nearest = i;
 				}
 			}
 			// Check whether the previous or next point is the nearest
-			double distance2 = 0;
-			distance2 = gpsPassed.Distance( routepoints[nearest - 1].ToGPSCoordinate() );
-			if ( gpsPassed.Distance( routepoints[nearest + 1].ToGPSCoordinate() ) < distance2 )
+			distance = gpsPassed.Distance( routepoints[nearest - 1].ToGPSCoordinate() );
+			if ( gpsPassed.Distance( routepoints[nearest + 1].ToGPSCoordinate() ) < distance )
 				nearest +=1;
 			routepoints.insert( nearest, coordinate );
 			routepoints.pop_front();
