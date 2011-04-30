@@ -61,6 +61,8 @@ struct MainWindow::PrivateImplementation {
 		ViaNone, ViaInsert, ViaAppend
 	};
 
+	QVector<int> undoHistory;
+
 	OverlayWidget* targetOverlay;
 	OverlayWidget* sourceOverlay;
 	OverlayWidget* gotoOverlay;
@@ -837,16 +839,20 @@ void MainWindow::alterRoute( UnsignedCoordinate coordinate )
 	if ( d->viaMode == PrivateImplementation::ViaNone ){
 		waypoints.clear();
 		waypoints.append( coordinate );
+		d->undoHistory.append( waypoints.size() -1 );
 	}
 	if ( d->viaMode == PrivateImplementation::ViaAppend ){
 		waypoints.append( coordinate );
+		d->undoHistory.append( waypoints.size() -1 );
 	}
 	if ( d->viaMode == PrivateImplementation::ViaInsert ){
 		if ( waypoints.size() == 0 ){
 			waypoints.append( coordinate );
+			d->undoHistory.append( waypoints.size() -1 );
 		}
 		else if ( waypoints.size() == 1 ){
 			waypoints.prepend( coordinate );
+			d->undoHistory.append( 0 );
 		}
 		else{
 			// Waypoints do *not* contain the source point.
@@ -879,6 +885,7 @@ void MainWindow::alterRoute( UnsignedCoordinate coordinate )
 			routepoints.insert( nearest, coordinate );
 			routepoints.pop_front();
 			waypoints = routepoints;
+			d->undoHistory.append( nearest -1 );
 		}
 	}
 	routingLogic->setWaypoints( waypoints );
@@ -886,13 +893,8 @@ void MainWindow::alterRoute( UnsignedCoordinate coordinate )
 
 void MainWindow::remove()
 {
-	// TODO: RoutingLogic::instance()->clear() does not remove rendering waypoints and target.
-	// if ( d->applicationMode == d->Via )
-	// 	subductRoutepoint();
-	// else
-		RoutingLogic::instance()->clear();
-
-	// m_ui->paintArea->setCenter( result.ToProjectedCoordinate() );
+	QVector< UnsignedCoordinate > waypoints;
+	RoutingLogic::instance()->setWaypoints( waypoints );
 }
 
 void MainWindow::addZoom()
