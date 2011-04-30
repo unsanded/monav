@@ -211,7 +211,6 @@ void RoutingLogic::setWaypoints( QVector<UnsignedCoordinate> waypoints )
 		computeRoute();
 		emit waypointsChanged();
 	}
-	qDebug() << "Waypoints set. Size:" << d->waypoints.size();
 }
 
 void RoutingLogic::setWaypoint( int id, UnsignedCoordinate coordinate )
