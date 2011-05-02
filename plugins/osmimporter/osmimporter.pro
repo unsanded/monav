@@ -1,6 +1,8 @@
 TEMPLATE = lib
 CONFIG += plugin static
 
+QT += network
+
 PROTOS = ../../utils/osm/osmformat.proto ../../utils/osm/fileformat.proto
 include(../../utils/osm/protobuf.pri)
 
@@ -22,9 +24,11 @@ HEADERS += osmimporter.h \
 	 ../../utils/osm/xmlreader.h \
 	 ../../utils/osm/ientityreader.h \
 	 ../../utils/osm/pbfreader.h \
-	 ../../utils/osm/types.h
+	 ../../utils/osm/types.h \
+    srtmdata.h
 SOURCES += osmimporter.cpp \
-	 types.cpp
+	 types.cpp \
+    srtmdata.cpp
 DESTDIR = ../../bin/plugins_preprocessor
 unix {
 	QMAKE_CXXFLAGS_RELEASE -= -O2

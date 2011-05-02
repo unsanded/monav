@@ -4,6 +4,7 @@
 TEMPLATE = app
 CONFIG += link_pkgconfig
 CONFIG += console
+QT += network
 QT -= gui
 
 DEFINES+=_7ZIP_ST
@@ -47,4 +48,4 @@ unix {
 		 -fopenmp
 }
 LIBS += -L../bin/plugins_preprocessor -lmapnikrenderer -lcontractionhierarchies -lgpsgrid -losmrenderer -lqtilerenderer -lunicodetournamenttrie -losmimporter -ltestimporter
-LIBS += -fopenmp -lmapnik -lbz2 -lz
+LIBS += -fopenmp -lmapnik -lbz2 -lz -lzzip

@@ -52,6 +52,8 @@ public:
 	struct Settings {
 		QString speedProfile;
 		QStringList languageSettings;
+		QString srtmDir;
+		long long srtmCache;
 	};
 
 	OSMImporter();
