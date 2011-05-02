@@ -223,7 +223,6 @@ void RoutingLogic::setWaypoint( int id, UnsignedCoordinate coordinate )
 		d->waypoints.pop_back();
 
 	computeRoute();
-
 	emit waypointsChanged();
 }
 
