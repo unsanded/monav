@@ -783,11 +783,6 @@ bool OSMImporter::remapEdges( QString filename, const std::vector< UnsignedCoord
 					NodeID to = way[nextRoutingNode];
 					GPSCoordinate fromCoordinate = nodeCoordinates[from].ToGPSCoordinate();
 					GPSCoordinate toCoordinate = nodeCoordinates[to].ToGPSCoordinate();
-					if ( !srtmData.isNull() )
-					{
-						srtmData->getAltitude( fromCoordinate.latitude, fromCoordinate.longitude );
-						srtmData->getAltitude( toCoordinate.latitude, toCoordinate.longitude );
-					}
 
 					double distance = fromCoordinate.Distance( toCoordinate );
 
@@ -819,6 +814,13 @@ bool OSMImporter::remapEdges( QString filename, const std::vector< UnsignedCoord
 						if ( radius < 1000 && radius > 2.5 && maxSpeed < segmentSpeed ) // NAN and inf not possible
 							segmentSpeed = maxSpeed; // turn radius and maximum tangential acceleration limit turning speed
 						lastAngle = toAngle + M_PI;
+					}
+
+					if ( !srtmData.isNull() && distance > 0 )
+					{
+						double fromAltitude = srtmData->getAltitude( fromCoordinate.latitude, fromCoordinate.longitude );
+						double toAltitude = srtmData->getAltitude( toCoordinate.latitude, toCoordinate.longitude );
+						segmentSpeed = m_profile.getModifiedSpeed( segmentSpeed, ( toAltitude - fromAltitude ) * 100 / distance );
 					}
 
 					seconds += distance * 3.6 / segmentSpeed;
