@@ -3,6 +3,7 @@
 #include <QTextStream>
 #include <QFile>
 #include <QSettings>
+#include <math.h>
 
 namespace MoNav {
 
@@ -17,6 +18,13 @@ namespace MoNav {
 		tangentialAcceleration = 1.0;
 		pedestrian = 10;
 		otherCars = 10;
+
+		maxDownSpeed = 1;
+		maxDown = -100;
+		downDeadZone = -100;
+		upDeadzone = 100;
+		upHalfSpeed = 100;
+		maxUp = 100;
 
 		loadAccessTree( ":/speed profiles/accessTree" );
 		setAccess( "motorcar" );
@@ -154,6 +162,13 @@ namespace MoNav {
 			nodeModificators.push_back( mod );
 		}
 
+		maxDownSpeed = settings.value( "maxDownSpeed", 1.0 ).toDouble();
+		maxDown = settings.value( "maxDown", -100 ).toInt();
+		downDeadZone = settings.value( "downDeadzone", -100 ).toInt();
+		upDeadzone = settings.value( "upDeadzone", 100 ).toInt();
+		upHalfSpeed = settings.value( "upHalfSpeed", 100 ).toInt();
+		maxUp = settings.value( "maxUp", 100 ).toInt();
+
 		if ( !settings.status() == QSettings::NoError ) {
 			qCritical() << "error accessing file:" << filename << settings.status();
 			return false;
@@ -227,6 +242,13 @@ namespace MoNav {
 			settings.setValue( QString( "nodeModificator.%1.modificatorValue" ).arg( i ), mod.modificatorValue );
 		}
 
+		settings.setValue( "maxDownSpeed", maxDownSpeed );
+		settings.setValue( "maxDown", maxDown );
+		settings.setValue( "downDeadzone", downDeadZone );
+		settings.setValue( "upDeadzone", upDeadzone );
+		settings.setValue( "upHalfSpeed", upHalfSpeed );
+		settings.setValue( "maxUp", maxUp );
+
 		if ( !settings.status() == QSettings::NoError ) {
 			qCritical() << "error accessing file:" << filename;
 			return false;
@@ -235,5 +257,29 @@ namespace MoNav {
 		return true;
 	}
 
+}
+
+double MoNav::SpeedProfile::getModifiedSpeed( double speed, double incline )
+{
+	if ( incline < downDeadZone ) {
+		if ( incline < maxDown )
+			return -1;
+		if ( maxDown < downDeadZone )
+			return maxDownSpeed * ( incline - downDeadZone ) / ( maxDown - downDeadZone ) * speed;
+		return speed;
+	}
+	if ( incline > downDeadZone ) {
+		if ( incline > maxUp )
+			return -1;
+		if ( upHalfSpeed > upDeadzone )
+		{
+			double newSpeed = speed / pow( 2, ( incline - upDeadzone ) / ( upHalfSpeed - upDeadzone ) );
+			if ( newSpeed < 1 )
+				newSpeed = 1;
+			return newSpeed;
+		}
+	}
+
+	return speed;
 }
 

@@ -99,11 +99,20 @@ namespace MoNav {
 		bool ignoreOneway;
 		bool ignoreMaxspeed;
 
+		// incline / decline handling
+		double maxDownSpeed;
+		int maxDown;
+		int downDeadZone;
+		int upDeadzone;
+		int upHalfSpeed;
+		int maxUp;
+
 		SpeedProfile();
 		bool load( QString filename );
 		bool save( QString filename );
 		bool setAccess( QString type );
 		QStringList accessTypes();
+		double getModifiedSpeed( double speed, double incline );
 
 	private:
 
