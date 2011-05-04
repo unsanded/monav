@@ -27,18 +27,12 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 
 #define DIALOGUPDATEINTERVAL 5
 
-/*
-struct TripinfoDialog::PrivateImplementation
-{
-};
-*/
 
 TripinfoDialog::TripinfoDialog( QWidget* parent ) :
 		QWidget( parent ),
 		m_ui( new Ui::TripinfoDialog )
 {
 	m_ui->setupUi( this );
-	// d = new PrivateImplementation;
 	m_lastUpdateTime = QDateTime::currentDateTime().addSecs( - DIALOGUPDATEINTERVAL );
 	connect( m_ui->cancel, SIGNAL(clicked()), this, SIGNAL(cancelled()) );
 	updateInformation();
@@ -46,7 +40,6 @@ TripinfoDialog::TripinfoDialog( QWidget* parent ) :
 
 TripinfoDialog::~TripinfoDialog()
 {
-	// delete d;
 	delete m_ui;
 }
 
@@ -102,7 +95,6 @@ void TripinfoDialog::updateInformation()
 
 	QVector<double> trackElevations;
 	trackElevations = Logger::instance()->trackElevations();
-	qDebug() << "Track Elevation points:" << trackElevations.size();
 
 	// Drawing the track's height profile
 	int marginLeft = 5;
@@ -110,7 +102,6 @@ void TripinfoDialog::updateInformation()
 	int marginTop = 5;
 	int marginBottom = 5;
 
-	// QPixmap pixmap( 320, 200);
 	QPixmap pixmap( m_ui->displayTrackProfile->width(), m_ui->displayTrackProfile->height());
 	pixmap.fill( QColor( 255, 255, 255, 128 ) );
 	m_ui->displayTrackProfile->setPixmap( pixmap );
@@ -137,113 +128,9 @@ void TripinfoDialog::updateInformation()
 	painter.drawPolyline( polygon );
 	painter.end();
 
-	// Ugly hack to mirror the image
-	QImage mirroredImage = pixmap.toImage().mirrored( false, true );
-	pixmap = QPixmap::fromImage( mirroredImage );
-	// m_ui->displayTrackProfile->setScaledContents( false );
-	m_ui->displayTrackProfile->setPixmap( pixmap );
-	qDebug() << "Label:" <<  m_ui->displayTrackProfile->width() << m_ui->displayTrackProfile->height();
-	qDebug() << "Image:" <<  m_ui->displayTrackProfile->pixmap()->width() << m_ui->displayTrackProfile->pixmap()->height();
-}
-
-/*
-void TripinfoDialog::trackTime( int time )
-{
-	int hours = time / 3600;
-	int minutes = time % 3600 / 60;
-	m_ui->displayTraveledTime->setText( QString::number( hours ).append( tr( ":" ) ).append( QString::number( minutes ) ).append( tr( "h" ) ) );
-}
-*/
-/*
-void TripinfoDialog::trackDistance( double distance )
-{
-	m_ui->displayTraveledDistance->setText( QString::number( distance /1000, 'f', 1 ).append( "km" ) );
-}
-*/
-/*
-void TripinfoDialog::elevations( QVector<double> eleVations )
-{
-	double minEle = -20000.0;
-	double maxEle = -20000.0;
-	for ( int i = 0; i < eleVations.size(); i++ ){
-
-		if( QString::number( eleVations.at(i) ) == "nan" ){
-			continue;
-		}
-	qDebug() << eleVations.at(i);
-		if( minEle == -20000.0 || eleVations.at(i) < minEle ){
-			minEle = eleVations.at(i);
-		}
-		if( maxEle == -20000.0 || eleVations.at(i) > maxEle ){
-			maxEle = eleVations.at(i);
-		}
-	}
-	if( minEle == -20000.0 )	int flushSecondsPassed = m_lastFlushTime.secsTo( QDateTime::currentDateTime() );
-	if ( flushSecondsPassed >= 300 )
-		minEle = 0.0;
-	if( maxEle == -20000.0 )
-		maxEle = 0.0;
-	m_ui->displayMaxElevation->setText( QString::number( maxEle ).append( tr( "m" ) ) );
-	m_ui->displayMinElevation->setText( QString::number( minEle ).append( tr( "m" ) ) );
-
-	// Drawing the track's height profile
-	int marginLeft = 5;
-	int marginRight = 5;
-	int marginTop = 5;
-	int marginBottom = 5;
-
-	QPixmap pixmap( 320, 200);
-	pixmap.fill( QColor( 255, 255, 255 ) );
-	m_ui->displayTrackProfile->setPixmap( pixmap );
-
-	double scaleX = 1.0;
-	scaleX = double( m_ui->displayTrackProfile->pixmap()->width() - marginLeft - marginRight ) / double(eleVations.size());
-
-	double scaleY = 1.0;
-	double metersDelta = maxEle - minEle;
-	scaleY = (m_ui->displayTrackProfile->pixmap()->height() - marginTop - marginBottom) / metersDelta;
-
-
-qDebug() << "\nPixmap width:" << m_ui->displayTrackProfile->pixmap()->width();
-qDebug() << "Label width:" << m_ui->displayTrackProfile->width();
-qDebug() << "Amount of points:" << eleVations.size();
-qDebug() << "Factor:" << scaleX;
-
-qDebug() << "\nPixmap height:" << m_ui->displayTrackProfile->pixmap()->height();
-qDebug() << "Label height:" << m_ui->displayTrackProfile->height();
-qDebug() << "Ele Delta:" << metersDelta;
-qDebug() << "Factor:" << scaleY << "\n";
-
-
-	QPolygonF polygon;
-	for( int i = 0; i < eleVations.size(); i++ ){
-		if( QString::number( eleVations.at(i) ) == "nan" ){
-			continue;
-		}
-		polygon << QPointF( (i * scaleX) + marginLeft, (eleVations.at(i) * scaleY) +marginBottom );
-	}
-
-	QPainter painter;
-	painter.begin( &pixmap );
-	// painter.shear( 1, 0 );
-	painter.setPen( QColor( 178, 034, 034 ) );
-	painter.drawPolyline( polygon );
-	painter.end();
-
-	// Ugly hack to mirror the image
+	// Ugly hack to flip the image
 	QImage mirroredImage = pixmap.toImage().mirrored( false, true );
 	pixmap = QPixmap::fromImage( mirroredImage );
 	m_ui->displayTrackProfile->setPixmap( pixmap );
 }
-*/
-/*
-void TripinfoDialog::routeChanged()
-{
-	updateInformation();
-}
 
-void TripinfoDialog::trackChanged()
-{
-	updateInformation();
-}
-*/

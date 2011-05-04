@@ -112,9 +112,7 @@ void Logger::positionChanged()
 	if ( !gpsInfo.position.IsValid() )
 		return;
 
-	// TODO: Filter inaccurate data: Position and timestamp eqal the last received event, or the precision is worse than x meters.
-	qDebug() << "Horizontal accuracy:" << gpsInfo.horizontalAccuracy;
-	qDebug() << "Vertical accuracy:" << gpsInfo.verticalAccuracy;
+	// TODO: Filter inaccurate data: Position and timestamp equal the last received event, or the precision is worse than x meters.
 	// Indoor results: Horizontal accuracy: 652.64 , Vertical accuracy: 32767.5
 	// Outdoor results: Horizontal accuracy: Between 27 and 37 , Vertical accuracy: Between 35 and 50
 
@@ -349,7 +347,6 @@ int Logger::trackDuration()
 		}
 		else{
 			startTime = m_gpsInfoBuffer.at(i).timestamp;
-			// qDebug() << "\nStart time:" << startTime.toString( "dd.MM.yyyy hh:mm:ss" );
 			break;
 		}
 	}
@@ -360,7 +357,6 @@ int Logger::trackDuration()
 		}
 		else{
 			endTime = m_gpsInfoBuffer.at(i).timestamp;
-			// qDebug() <<  "End time:" << endTime.toString( "dd.MM.yyyy hh:mm:ss\n" );
 			break;
 		}
 	}
