@@ -44,6 +44,11 @@ public:
 	void setLoggingEnabled(bool);
 	QString directory();
 	void setDirectory(QString);
+	double trackDistance();
+	double trackMinElevation();
+	double trackMaxElevation();
+	QVector<double> trackElevations();
+	int trackDuration();
 
 	QVector< int > polygonEndpointsTracklog();
 	QVector< UnsignedCoordinate > polygonCoordsTracklog();
@@ -64,6 +69,10 @@ protected:
 	bool writeGpxLog();
 	QFile m_logFile;
 	QDateTime m_lastFlushTime;
+	double m_trackDistance;
+	double m_trackMinElevation;
+	double m_trackMaxElevation;
+	QVector<double> m_trackElevations;
 	bool m_loggingEnabled;
 	QString m_tracklogPath;
 	QString m_tracklogPrefix;

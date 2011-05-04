@@ -49,6 +49,10 @@ void Logger::initialize()
 	QSettings settings( "MoNavClient" );
 	m_loggingEnabled = settings.value( "LoggingEnabled", false ).toBool();
 	m_tracklogPath = settings.value( "LogFilePath", QDir::homePath() ).toString();
+	m_trackDistance = 0.0;
+	m_trackMinElevation = -20000.0;
+	m_trackMaxElevation = -20000.0;
+	m_trackElevations.clear();
 
 	m_tracklogPrefix = tr( "MoNav Track" );
 	QString tracklogFilename = m_tracklogPrefix;
@@ -107,6 +111,28 @@ void Logger::positionChanged()
 	const RoutingLogic::GPSInfo& gpsInfo = RoutingLogic::instance()->gpsInfo();
 	if ( !gpsInfo.position.IsValid() )
 		return;
+
+	// TODO: Filter inaccurate data: Position and timestamp eqal the last received event, or the precision is worse than x meters.
+	qDebug() << "Horizontal accuracy:" << gpsInfo.horizontalAccuracy;
+	qDebug() << "Vertical accuracy:" << gpsInfo.verticalAccuracy;
+	// Indoor results: Horizontal accuracy: 652.64 , Vertical accuracy: 32767.5
+	// Outdoor results: Horizontal accuracy: Between 27 and 37 , Vertical accuracy: Between 35 and 50
+
+	// Filling local cache variables
+	if( m_gpsInfoBuffer.size() > 0 && m_gpsInfoBuffer.last().position.IsValid() && gpsInfo.position.IsValid() ){
+		m_trackDistance += gpsInfo.position.ToGPSCoordinate().Distance( m_gpsInfoBuffer.last().position.ToGPSCoordinate() );
+	}
+
+	if( m_trackMinElevation == -20000.0 || gpsInfo.altitude < m_trackMinElevation ){
+		m_trackMinElevation = gpsInfo.altitude;
+	}
+	if( m_trackMaxElevation == -20000.0 || gpsInfo.altitude > m_trackMaxElevation ){
+		m_trackMaxElevation = gpsInfo.altitude;
+	}
+	if( QString::number( gpsInfo.altitude ) != "nan" ){
+		m_trackElevations.append( gpsInfo.altitude );
+	}
+
 	m_gpsInfoBuffer.append(gpsInfo);
 	int flushSecondsPassed = m_lastFlushTime.secsTo( QDateTime::currentDateTime() );
 	if ( flushSecondsPassed >= 300 )
@@ -186,6 +212,8 @@ bool Logger::writeGpxLog()
 
 bool Logger::readGpxLog()
 {
+	// TODO: There's a lot of duplicated code in positionChanged()
+
 	m_gpsInfoBuffer.clear();
 
 	if ( !m_logFile.open( QIODevice::ReadOnly | QIODevice::Text ) )
@@ -245,6 +273,20 @@ bool Logger::readGpxLog()
 			gpsInfo.position = UnsignedCoordinate( GPSCoordinate( latString.toDouble(), lonString.toDouble() ) );
 			gpsInfo.altitude = eleString.toDouble();
 			gpsInfo.timestamp = QDateTime::fromString( timeString, "yyyy-MM-ddTHH:mm:ss" );
+
+			if( m_gpsInfoBuffer.size() > 0 && m_gpsInfoBuffer.last().position.IsValid() && gpsInfo.position.IsValid() ){
+				m_trackDistance += gpsInfo.position.ToGPSCoordinate().Distance( m_gpsInfoBuffer.last().position.ToGPSCoordinate() );
+			}
+
+			if( m_trackMinElevation == -20000.0 || gpsInfo.altitude < m_trackMinElevation ){
+				m_trackMinElevation = gpsInfo.altitude;
+			}
+			if( m_trackMaxElevation == -20000.0 || gpsInfo.altitude > m_trackMaxElevation ){
+				m_trackMaxElevation = gpsInfo.altitude;
+			}
+			if( QString::number( gpsInfo.altitude ) != "nan" ){
+				m_trackElevations.append( gpsInfo.altitude );
+			}
 			m_gpsInfoBuffer.append(gpsInfo);
 		}
 		if (lineBuffer.contains("</trkseg>"))
@@ -274,6 +316,62 @@ void Logger::clearTracklog()
 	writeGpxLog();
 	initialize();
 	readGpxLog();
+}
+
+
+double Logger::trackDistance()
+{
+	return m_trackDistance;
+}
+
+
+double Logger::trackMinElevation()
+{
+	return m_trackMinElevation;
+}
+
+
+double Logger::trackMaxElevation()
+{
+	return m_trackMaxElevation;
+}
+
+
+int Logger::trackDuration()
+{
+	QDateTime startTime;
+	QDateTime endTime;
+
+	for (int i = 0; i < m_gpsInfoBuffer.size(); i++)
+	{
+		if( !m_gpsInfoBuffer.at(i).position.IsValid() ){
+			continue;
+		}
+		else{
+			startTime = m_gpsInfoBuffer.at(i).timestamp;
+			// qDebug() << "\nStart time:" << startTime.toString( "dd.MM.yyyy hh:mm:ss" );
+			break;
+		}
+	}
+	for (int i = m_gpsInfoBuffer.size() -1; i >= 0; i--)
+	{
+		if( !m_gpsInfoBuffer.at(i).position.IsValid() ){
+			continue;
+		}
+		else{
+			endTime = m_gpsInfoBuffer.at(i).timestamp;
+			// qDebug() <<  "End time:" << endTime.toString( "dd.MM.yyyy hh:mm:ss\n" );
+			break;
+		}
+	}
+	return startTime.secsTo( endTime );
+}
+
+
+QVector<double> Logger::trackElevations()
+{
+	// TODO: Make it const
+	return m_trackElevations;
 }
 
 

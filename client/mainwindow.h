@@ -42,6 +42,7 @@ protected slots:
 	void mapLoaded();
 	void modulesLoaded();
 	void modulesCancelled();
+	void tripinfoCancelled();
 
 	void dataLoaded();
 
@@ -78,6 +79,7 @@ protected slots:
 
 	void displayMapChooser();
 	void displayModuleChooser();
+	void displayTripinfo();
 	void hideControls();
 
 	void about();

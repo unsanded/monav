@@ -29,6 +29,7 @@ SOURCES += main.cpp \
     placechooser.cpp \
     globalsettings.cpp \
     streetchooser.cpp \
+    tripinfodialog.cpp \
     worldmapchooser.cpp
 
 HEADERS += \
@@ -59,6 +60,7 @@ HEADERS += \
     placechooser.h \
     globalsettings.h \
     streetchooser.h \
+    tripinfodialog.h \
     worldmapchooser.h
 
 FORMS += \
@@ -72,7 +74,8 @@ FORMS += \
     mainwindow.ui \
     mapmoduleswidget.ui \
     placechooser.ui \
-    streetchooser.ui
+    streetchooser.ui \
+    tripinfodialog.ui
 
 DESTDIR = ../bin
 

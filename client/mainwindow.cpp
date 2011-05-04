@@ -22,6 +22,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include "mapdata.h"
 #include "mappackageswidget.h"
 #include "mapmoduleswidget.h"
+#include "tripinfodialog.h"
 #include "overlaywidget.h"
 #include "generalsettingsdialog.h"
 
@@ -106,6 +107,7 @@ struct MainWindow::PrivateImplementation {
 	QAction* actionHideControls;
 	QAction* actionPackages;
 	QAction* actionModules;
+	QAction* actionTripinfo;
 	QAction* actionPreferencesGeneral;
 	QAction* actionPreferencesRenderer;
 	QAction* actionPreferencesRouter;
@@ -204,6 +206,7 @@ void MainWindow::connectSlots()
 	connect( d->actionHideControls, SIGNAL( triggered() ), this, SLOT( hideControls()));
 	connect( d->actionPackages, SIGNAL( triggered() ), this, SLOT( displayMapChooser()));
 	connect( d->actionModules, SIGNAL( triggered() ), this, SLOT( displayModuleChooser()));
+	connect( d->actionTripinfo, SIGNAL( triggered() ), this, SLOT( displayTripinfo()));
 	connect( d->actionPreferencesGeneral, SIGNAL( triggered() ), this, SLOT( settingsGeneral()));
 	connect( d->actionPreferencesRenderer, SIGNAL( triggered() ), this, SLOT( settingsRenderer()));
 	connect( d->actionPreferencesRouter, SIGNAL( triggered() ), this, SLOT( settingsRouter()));
@@ -254,6 +257,7 @@ void MainWindow::createActions()
 	d->actionHideControls = new QAction( QIcon( ":/images/map.png" ), tr( "Hide Controls" ), this );
 	d->actionPackages = new QAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Packages" ), this );
 	d->actionModules = new QAction( QIcon( ":/images/oxygen/map-modules.png" ), tr( "Map Modules" ), this );
+	d->actionTripinfo = new QAction( QIcon( ":/images/oxygen/tripinfo.png" ), tr( "Trip Information" ), this );
 	d->actionPreferencesGeneral = new QAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "Preferences" ), this );
 	d->actionPreferencesRenderer = new QAction( QIcon( ":/images/map.png" ), tr( "Renderer" ), this );
 	d->actionPreferencesRouter = new QAction( QIcon( ":/images/route.png" ), tr( "Router" ), this );
@@ -288,6 +292,7 @@ void MainWindow::createActions()
 	d->actionHideControls->setShortcut( Qt::Key_H );
 	d->actionPackages->setShortcut( Qt::Key_P );
 	d->actionModules->setShortcut( Qt::Key_M );
+	d->actionTripinfo->setShortcut( Qt::Key_I );
 }
 
 void MainWindow::populateMenus()
@@ -309,6 +314,7 @@ void MainWindow::populateMenus()
 
 	d->menuFile->addAction( d->actionPackages );
 	d->menuFile->addAction( d->actionModules );
+	d->menuFile->addAction( d->actionTripinfo );
 
 	d->menuViaMode->addAction( d->actionViaNone );
 	d->menuViaMode->addAction( d->actionViaInsert );
@@ -339,7 +345,9 @@ void MainWindow::populateMenus()
 	d->menuHelp->addAction( d->actionHelpProjectPage );
 
 	d->menuMaemo->addAction( d->actionHideControls );
+	d->menuMaemo->addAction( d->actionTripinfo );
 	d->menuMaemo->addAction( d->actionGpsCoordinate );
+	d->menuMaemo->addAction( new QAction(this) );
 	d->menuMaemo->addAction( d->actionPackages );
 	d->menuMaemo->addAction( d->actionModules );
 	d->menuMaemo->addAction( d->actionPreferencesGeneral );
@@ -376,6 +384,7 @@ void MainWindow::populateToolbars()
 
 	d->toolBarFile->addAction( d->actionPackages );
 	d->toolBarFile->addAction( d->actionModules );
+	d->toolBarFile->addAction( d->actionTripinfo );
 
 	d->toolBarRouting->addAction( d->actionSource );
 	d->toolBarRouting->addWidget( d->buttonViaModes );
@@ -455,6 +464,31 @@ void MainWindow::displayModuleChooser()
 	connect( widget, SIGNAL(cancelled()), this, SLOT(modulesCancelled()) );
 }
 
+void MainWindow::displayTripinfo()
+{
+	TripinfoDialog* widget = new TripinfoDialog();
+	int index = m_ui->stacked->addWidget( widget );
+	m_ui->stacked->setCurrentIndex( index );
+	widget->show();
+	// TODO: Ensure the title is reset after closing this (and other) dialog within stacked :)
+	setWindowTitle( "MoNav - Trip Information" );
+	// TODO: Listen for trackChanged() and routedChanged() events only. Then get the data needed from Logger and RoutingLogic
+	connect( widget, SIGNAL(cancelled()), this, SLOT(tripinfoCancelled()) );
+	/*
+	connect( Logger::instance(), SIGNAL(trackTime(int)), widget, SLOT(trackTime(int)) );
+	connect( Logger::instance(), SIGNAL(trackDistance(double)), widget, SLOT(trackDistance(double)) );
+	connect( Logger::instance(), SIGNAL(elevations(QVector<double>)), widget, SLOT(elevations(QVector<double>)) );
+	Logger::instance()->computeTrackTime();
+	Logger::instance()->computeTrackDistance();
+	Logger::instance()->computeElevations();
+
+	connect( RoutingLogic::instance(), SIGNAL(routeChanged()), widget, SLOT(routeChanged()) );
+	connect( Logger::instance(), SIGNAL(trackChanged()), widget, SLOT(trackChanged()) );
+	*/
+	connect( RoutingLogic::instance(), SIGNAL(routeChanged()), widget, SLOT(updateInformation()) );
+	connect( Logger::instance(), SIGNAL(trackChanged()), widget, SLOT(updateInformation()) );
+}
+
 void MainWindow::mapLoaded()
 {
 	MapData* mapData = MapData::instance();
@@ -484,6 +518,27 @@ void MainWindow::modulesCancelled()
 		if ( !mapData->loadLast() )
 			displayMapChooser();
 	}
+}
+
+void MainWindow::tripinfoCancelled()
+{
+	if ( m_ui->stacked->count() <= 1 )
+		return;
+
+	QWidget* widget = m_ui->stacked->currentWidget();
+qDebug() << "About to deleteLater()";
+	widget->deleteLater();
+qDebug() << "After deleteLater()";
+
+	QString mainWindowTitle = "MoNav";
+	MapData* mapData = MapData::instance();
+	if ( mapData != 0 ){
+		mainWindowTitle.append( " - " );
+		mainWindowTitle.append( mapData->information().name );
+qDebug() << "Window title set.";
+	}
+
+	this->setWindowTitle( mainWindowTitle );
 }
 
 void MainWindow::modulesLoaded()
