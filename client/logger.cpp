@@ -49,6 +49,7 @@ void Logger::initialize()
 	QSettings settings( "MoNavClient" );
 	m_loggingEnabled = settings.value( "LoggingEnabled", false ).toBool();
 	m_tracklogPath = settings.value( "LogFilePath", QDir::homePath() ).toString();
+	m_maxSpeed = 0.0;
 	m_trackDistance = 0.0;
 	m_trackMinElevation = -20000.0;
 	m_trackMaxElevation = -20000.0;
@@ -103,6 +104,33 @@ QVector< UnsignedCoordinate > Logger::polygonCoordsTracklog()
 }
 
 
+void Logger::readGpsInfo( RoutingLogic::GPSInfo gpsInfo )
+{
+	// Filling local cache variables
+	if( m_gpsInfoBuffer.size() > 0 && m_gpsInfoBuffer.last().position.IsValid() && gpsInfo.position.IsValid() ){
+		m_trackDistance += gpsInfo.position.ToGPSCoordinate().Distance( m_gpsInfoBuffer.last().position.ToGPSCoordinate() );
+	}
+
+	if( m_trackMinElevation == -20000.0 || gpsInfo.altitude < m_trackMinElevation ){
+		if( QString::number( gpsInfo.altitude ) != "nan" ){
+			m_trackMinElevation = gpsInfo.altitude;
+		}
+	}
+	if( m_trackMaxElevation == -20000.0 || gpsInfo.altitude > m_trackMaxElevation ){
+		if( QString::number( gpsInfo.altitude ) != "nan" ){
+			m_trackMaxElevation = gpsInfo.altitude;
+		}
+	}
+	if( gpsInfo.groundSpeed > m_maxSpeed ){
+		m_maxSpeed = gpsInfo.groundSpeed;
+	}
+	if( QString::number( gpsInfo.altitude ) != "nan" ){
+		m_trackElevations.append( gpsInfo.altitude );
+	}
+	m_gpsInfoBuffer.append(gpsInfo);
+}
+
+
 void Logger::positionChanged()
 {
 	if ( !m_loggingEnabled )
@@ -112,26 +140,20 @@ void Logger::positionChanged()
 	if ( !gpsInfo.position.IsValid() )
 		return;
 
-	// TODO: Filter inaccurate data: Position and timestamp equal the last received event, or the precision is worse than x meters.
+	// Filter inaccurate data.
+	// Position and/or timestamp equal the last received event
+	if ( m_gpsInfoBuffer.last().position == gpsInfo.position )
+		return;
+
+	// Precision is worse than x meters.
 	// Indoor results: Horizontal accuracy: 652.64 , Vertical accuracy: 32767.5
 	// Outdoor results: Horizontal accuracy: Between 27 and 37 , Vertical accuracy: Between 35 and 50
+	if ( gpsInfo.horizontalAccuracy > 50 )
+		return;
 
-	// Filling local cache variables
-	if( m_gpsInfoBuffer.size() > 0 && m_gpsInfoBuffer.last().position.IsValid() && gpsInfo.position.IsValid() ){
-		m_trackDistance += gpsInfo.position.ToGPSCoordinate().Distance( m_gpsInfoBuffer.last().position.ToGPSCoordinate() );
-	}
+	// TODO: Call by reference, not value
+	readGpsInfo( gpsInfo );
 
-	if( m_trackMinElevation == -20000.0 || gpsInfo.altitude < m_trackMinElevation ){
-		m_trackMinElevation = gpsInfo.altitude;
-	}
-	if( m_trackMaxElevation == -20000.0 || gpsInfo.altitude > m_trackMaxElevation ){
-		m_trackMaxElevation = gpsInfo.altitude;
-	}
-	if( QString::number( gpsInfo.altitude ) != "nan" ){
-		m_trackElevations.append( gpsInfo.altitude );
-	}
-
-	m_gpsInfoBuffer.append(gpsInfo);
 	int flushSecondsPassed = m_lastFlushTime.secsTo( QDateTime::currentDateTime() );
 	if ( flushSecondsPassed >= 300 )
 		writeGpxLog();
@@ -139,12 +161,102 @@ void Logger::positionChanged()
 }
 
 
+bool Logger::readGpxLog()
+{
+	m_gpsInfoBuffer.clear();
+
+	if ( !m_logFile.open( QIODevice::ReadOnly | QIODevice::Text ) ){
+		return false;
+	}
+
+	QString lineBuffer;
+	QString latString;
+	QString lonString;
+	QString eleString;
+	QString timeString;
+	QStringList tempList;
+	bool insideTrackpoint = false;
+	while ( !m_logFile.atEnd() )
+	{
+		lineBuffer = m_logFile.readLine();
+		lineBuffer = lineBuffer.simplified();
+		if (!insideTrackpoint)
+		{
+			latString = "";
+			lonString = "";
+			eleString = "";
+			timeString = "";
+		}
+		if (lineBuffer.contains("<trkpt"))
+		{
+			insideTrackpoint = true;
+			tempList = lineBuffer.split("\"");
+			latString = tempList.at(1);
+			lonString = tempList.at(3);
+		}
+		if (lineBuffer.contains("<ele>"))
+		{
+			lineBuffer = lineBuffer.remove("<ele>");
+			lineBuffer = lineBuffer.remove("</ele>");
+			eleString = lineBuffer;
+		}
+		if (lineBuffer.contains("<time>"))
+		{
+			lineBuffer = lineBuffer.remove("<time>");
+			lineBuffer = lineBuffer.remove("</time>");
+			timeString = lineBuffer;
+		}
+		if (lineBuffer.contains("</trkpt>"))
+		{
+			RoutingLogic::GPSInfo gpsInfo;
+			gpsInfo.position = UnsignedCoordinate( GPSCoordinate() );
+			gpsInfo.altitude = -1;
+			gpsInfo.groundSpeed = -1;
+			gpsInfo.verticalSpeed = -1;
+			gpsInfo.heading = -1;
+			gpsInfo.horizontalAccuracy = -1;
+			gpsInfo.verticalAccuracy = -1;
+			QDateTime invalidTime;
+			gpsInfo.timestamp = invalidTime;
+			gpsInfo.position = UnsignedCoordinate( GPSCoordinate( latString.toDouble(), lonString.toDouble() ) );
+			gpsInfo.altitude = eleString.toDouble();
+			gpsInfo.timestamp = QDateTime::fromString( timeString, "yyyy-MM-ddTHH:mm:ss" );
+
+			// TODO: Call by reference, not value
+			readGpsInfo( gpsInfo );
+		}
+		if (lineBuffer.contains("</trkseg>"))
+		{
+			// An invalid object is used to mark the trackseg's end
+			RoutingLogic::GPSInfo gpsInfo;
+			gpsInfo.position = UnsignedCoordinate( GPSCoordinate() );
+			gpsInfo.altitude = -1;
+			gpsInfo.groundSpeed = -1;
+			gpsInfo.verticalSpeed = -1;
+			gpsInfo.heading = -1;
+			gpsInfo.horizontalAccuracy = -1;
+			gpsInfo.verticalAccuracy = -1;
+			QDateTime invalidTime;
+			gpsInfo.timestamp = invalidTime;
+			m_gpsInfoBuffer.append(gpsInfo);
+		}
+	}
+	m_logFile.close();
+	emit trackChanged();
+	return true;
+}
+
+
 bool Logger::writeGpxLog()
 {
-
 	QString backupFilename = m_logFile.fileName().remove( m_logFile.fileName().size() -4, 4 ).append( "-bck.gpx" );
+
+	// Necessary, as the following copy call would return false in case the file already exists
 	if ( m_logFile.exists() && m_logFile.exists(backupFilename))
 		m_logFile.remove( backupFilename );
+	// Security net to avoid data loss in case the battery drained etc.
+	// Always do this before opening the file, as it gets closed otherwise.
+	m_logFile.copy( backupFilename );
 
 	if ( !m_logFile.open( QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate ) ){
 		m_loggingEnabled = false;
@@ -208,106 +320,6 @@ bool Logger::writeGpxLog()
 }
 
 
-bool Logger::readGpxLog()
-{
-	// TODO: There's a lot of duplicated code in positionChanged()
-
-	m_gpsInfoBuffer.clear();
-
-	if ( !m_logFile.open( QIODevice::ReadOnly | QIODevice::Text ) )
-	{
-		return false;
-	}
-
-	QString lineBuffer;
-	QString latString;
-	QString lonString;
-	QString eleString;
-	QString timeString;
-	QStringList tempList;
-	bool insideTrackpoint = false;
-	while ( !m_logFile.atEnd() )
-	{
-		lineBuffer = m_logFile.readLine();
-		lineBuffer = lineBuffer.simplified();
-		if (!insideTrackpoint)
-		{
-			latString = "";
-			lonString = "";
-			eleString = "";
-			timeString = "";
-		}
-		if (lineBuffer.contains("<trkpt"))
-		{
-			insideTrackpoint = true;
-			tempList = lineBuffer.split("\"");
-			latString = tempList.at(1);
-			lonString = tempList.at(3);
-		}
-		if (lineBuffer.contains("<ele>"))
-		{
-			lineBuffer = lineBuffer.remove("<ele>");
-			lineBuffer = lineBuffer.remove("</ele>");
-			eleString = lineBuffer;
-		}
-		if (lineBuffer.contains("<time>"))
-		{
-			lineBuffer = lineBuffer.remove("<time>");
-			lineBuffer = lineBuffer.remove("</time>");
-			timeString = lineBuffer;
-		}
-		if (lineBuffer.contains("</trkpt>"))
-		{
-			RoutingLogic::GPSInfo gpsInfo;
-			gpsInfo.position = UnsignedCoordinate( GPSCoordinate() );
-			gpsInfo.altitude = -1;
-			gpsInfo.groundSpeed = -1;
-			gpsInfo.verticalSpeed = -1;
-			gpsInfo.heading = -1;
-			gpsInfo.horizontalAccuracy = -1;
-			gpsInfo.verticalAccuracy = -1;
-			QDateTime invalidTime;
-			gpsInfo.timestamp = invalidTime;
-			gpsInfo.position = UnsignedCoordinate( GPSCoordinate( latString.toDouble(), lonString.toDouble() ) );
-			gpsInfo.altitude = eleString.toDouble();
-			gpsInfo.timestamp = QDateTime::fromString( timeString, "yyyy-MM-ddTHH:mm:ss" );
-
-			if( m_gpsInfoBuffer.size() > 0 && m_gpsInfoBuffer.last().position.IsValid() && gpsInfo.position.IsValid() ){
-				m_trackDistance += gpsInfo.position.ToGPSCoordinate().Distance( m_gpsInfoBuffer.last().position.ToGPSCoordinate() );
-			}
-
-			if( m_trackMinElevation == -20000.0 || gpsInfo.altitude < m_trackMinElevation ){
-				m_trackMinElevation = gpsInfo.altitude;
-			}
-			if( m_trackMaxElevation == -20000.0 || gpsInfo.altitude > m_trackMaxElevation ){
-				m_trackMaxElevation = gpsInfo.altitude;
-			}
-			if( QString::number( gpsInfo.altitude ) != "nan" ){
-				m_trackElevations.append( gpsInfo.altitude );
-			}
-			m_gpsInfoBuffer.append(gpsInfo);
-		}
-		if (lineBuffer.contains("</trkseg>"))
-		{
-			RoutingLogic::GPSInfo gpsInfo;
-			gpsInfo.position = UnsignedCoordinate( GPSCoordinate() );
-			gpsInfo.altitude = -1;
-			gpsInfo.groundSpeed = -1;
-			gpsInfo.verticalSpeed = -1;
-			gpsInfo.heading = -1;
-			gpsInfo.horizontalAccuracy = -1;
-			gpsInfo.verticalAccuracy = -1;
-			QDateTime invalidTime;
-			gpsInfo.timestamp = invalidTime;
-			m_gpsInfoBuffer.append(gpsInfo);
-		}
-	}
-	m_logFile.close();
-	emit trackChanged();
-	return true;
-}
-
-
 void Logger::clearTracklog()
 {
 	m_gpsInfoBuffer.clear();
@@ -323,15 +335,27 @@ double Logger::trackDistance()
 }
 
 
+double Logger::maxSpeed()
+{
+	return m_maxSpeed;
+}
+
+
 double Logger::trackMinElevation()
 {
-	return m_trackMinElevation;
+	if( m_trackMinElevation == -20000 )
+		return 0;
+	else
+		return m_trackMinElevation;
 }
 
 
 double Logger::trackMaxElevation()
 {
-	return m_trackMaxElevation;
+	if( m_trackMinElevation == -20000 )
+		return 0;
+	else
+		return m_trackMaxElevation;
 }
 
 

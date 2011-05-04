@@ -101,27 +101,41 @@
         </widget>
        </item>
        <item row="4" column="0">
-        <widget class="QLabel" name="labellMaxElevation">
+        <widget class="QLabel" name="labellMaxSpeed">
          <property name="text">
-          <string>Max. Elevation:</string>
+          <string>Max. Speed:</string>
          </property>
         </widget>
        </item>
        <item row="4" column="1">
-        <widget class="QLabel" name="displayMaxElevation">
+        <widget class="QLabel" name="displayMaxSpeed">
          <property name="text">
           <string>n/a</string>
          </property>
         </widget>
        </item>
        <item row="5" column="0">
+        <widget class="QLabel" name="labellMaxElevation">
+         <property name="text">
+          <string>Max. Elevation:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="5" column="1">
+        <widget class="QLabel" name="displayMaxElevation">
+         <property name="text">
+          <string>n/a</string>
+         </property>
+        </widget>
+       </item>
+       <item row="6" column="0">
         <widget class="QLabel" name="labellMinElevation">
          <property name="text">
           <string>Min. Elevation:</string>
          </property>
         </widget>
        </item>
-       <item row="5" column="1">
+       <item row="6" column="1">
         <widget class="QLabel" name="displayMinElevation">
          <property name="text">
           <string>n/a</string>
@@ -137,7 +151,7 @@
        </property>
        <property name="sizeHint" stdset="0">
         <size>
-         <width>7</width>
+         <width>13</width>
          <height>20</height>
         </size>
        </property>

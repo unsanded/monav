@@ -44,6 +44,7 @@ public:
 	void setLoggingEnabled(bool);
 	QString directory();
 	void setDirectory(QString);
+	double maxSpeed();
 	double trackDistance();
 	double trackMinElevation();
 	double trackMaxElevation();
@@ -65,10 +66,12 @@ signals:
 protected:
 
 	explicit Logger( QObject* parent = 0 );
+	void readGpsInfo( RoutingLogic::GPSInfo );
 	bool readGpxLog();
 	bool writeGpxLog();
 	QFile m_logFile;
 	QDateTime m_lastFlushTime;
+	double m_maxSpeed;
 	double m_trackDistance;
 	double m_trackMinElevation;
 	double m_trackMaxElevation;
