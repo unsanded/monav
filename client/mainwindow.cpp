@@ -249,7 +249,7 @@ void MainWindow::createActions()
 	d->actionBookmark = new QAction( QIcon( ":/images/oxygen/bookmarks.png" ), tr( "Bookmark" ), this );
 	d->actionAddress = new QAction( QIcon( ":/images/address.png" ), tr( "Address" ), this );
 	d->actionGpsCoordinate = new QAction( QIcon( ":/images/oxygen/network-wireless.png" ), tr( "GPS-Coordinate" ), this );
-	d->actionRemove = new QAction( QIcon( ":/images/notok.png" ), tr( "Delete" ), this );
+	d->actionRemove = new QAction( QIcon( ":/images/remove.png" ), tr( "Delete" ), this );
 
 	d->actionZoomIn = new QAction( QIcon( ":/images/oxygen/zoom-in.png" ), tr( "Zoom In" ), this );
 	d->actionZoomOut = new QAction( QIcon( ":/images/oxygen/zoom-out.png" ), tr( "Zoom Out" ), this );

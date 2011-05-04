@@ -59,7 +59,7 @@ void TripinfoDialog::updateInformation()
 
 	double groundSpeed = 0.0;
 	groundSpeed = RoutingLogic::instance()->groundSpeed();
-	m_ui->displayGroundSpeed->setText( QString::number( groundSpeed ).append( tr( "km/h" ) ) );
+	m_ui->displayGroundSpeed->setText( QString::number( groundSpeed, 'f', 1 ).append( tr( "km/h" ) ) );
 
 	double trackDistance = 0;
 	trackDistance = Logger::instance()->trackDistance();
@@ -80,16 +80,19 @@ void TripinfoDialog::updateInformation()
 		minutestring.append( "h" );
 	}
 	else{
-		minutestring.append( "m" );
+		minutestring.append( "min" );
 	}
 	m_ui->displayTraveledTime->setText( hourstring + minutestring );
 
+	double maxSpeed = 0.0;
 	double minElevation = 0.0;
 	double maxElevation = 0.0;
 
+	maxSpeed = Logger::instance()->maxSpeed();
 	minElevation = Logger::instance()->trackMinElevation();
 	maxElevation = Logger::instance()->trackMaxElevation();
 
+	m_ui->displayMaxSpeed->setText( QString::number( maxSpeed, 'f', 1 ).append( tr( "km/h" ) ) );
 	m_ui->displayMinElevation->setText( QString::number( minElevation ).append( tr( "m" ) ) );
 	m_ui->displayMaxElevation->setText( QString::number( maxElevation ).append( tr( "m" ) ) );
 
@@ -115,10 +118,6 @@ void TripinfoDialog::updateInformation()
 
 	QPolygonF polygon;
 	for( int i = 0; i < trackElevations.size(); i++ ){
-		// TODO: Get rid of this time consuming check?
-		if( QString::number( trackElevations.at(i) ) == "nan" ){
-			continue;
-		}
 		polygon << QPointF( (i * scaleX) + marginLeft, (trackElevations.at(i) * scaleY) -marginBottom );
 	}
 
