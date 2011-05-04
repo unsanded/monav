@@ -37,19 +37,11 @@ public:
 	~TripinfoDialog();
 
 public slots:
-	// void routeChanged();
-	// void trackChanged();
 	void updateInformation();
 
 signals:
 
 	void cancelled();
-	// void selected();
-
-protected slots:
-
-	// void populateData();
-	// void select();
 
 protected:
 
@@ -57,9 +49,6 @@ protected:
 	PrivateImplementation* d;
 	Ui::TripinfoDialog* m_ui;
 	QDateTime m_lastUpdateTime;
-	// void trackTime(int);
-	// void trackDistance(double);
-	// void elevations(QVector<double>);
 };
 
 #endif // TRIPINFODIALOG_H

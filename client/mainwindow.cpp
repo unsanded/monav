@@ -470,21 +470,8 @@ void MainWindow::displayTripinfo()
 	int index = m_ui->stacked->addWidget( widget );
 	m_ui->stacked->setCurrentIndex( index );
 	widget->show();
-	// TODO: Ensure the title is reset after closing this (and other) dialog within stacked :)
 	setWindowTitle( "MoNav - Trip Information" );
-	// TODO: Listen for trackChanged() and routedChanged() events only. Then get the data needed from Logger and RoutingLogic
 	connect( widget, SIGNAL(cancelled()), this, SLOT(tripinfoCancelled()) );
-	/*
-	connect( Logger::instance(), SIGNAL(trackTime(int)), widget, SLOT(trackTime(int)) );
-	connect( Logger::instance(), SIGNAL(trackDistance(double)), widget, SLOT(trackDistance(double)) );
-	connect( Logger::instance(), SIGNAL(elevations(QVector<double>)), widget, SLOT(elevations(QVector<double>)) );
-	Logger::instance()->computeTrackTime();
-	Logger::instance()->computeTrackDistance();
-	Logger::instance()->computeElevations();
-
-	connect( RoutingLogic::instance(), SIGNAL(routeChanged()), widget, SLOT(routeChanged()) );
-	connect( Logger::instance(), SIGNAL(trackChanged()), widget, SLOT(trackChanged()) );
-	*/
 	connect( RoutingLogic::instance(), SIGNAL(routeChanged()), widget, SLOT(updateInformation()) );
 	connect( Logger::instance(), SIGNAL(trackChanged()), widget, SLOT(updateInformation()) );
 }
@@ -526,18 +513,14 @@ void MainWindow::tripinfoCancelled()
 		return;
 
 	QWidget* widget = m_ui->stacked->currentWidget();
-qDebug() << "About to deleteLater()";
 	widget->deleteLater();
-qDebug() << "After deleteLater()";
 
 	QString mainWindowTitle = "MoNav";
 	MapData* mapData = MapData::instance();
 	if ( mapData != 0 ){
 		mainWindowTitle.append( " - " );
 		mainWindowTitle.append( mapData->information().name );
-qDebug() << "Window title set.";
 	}
-
 	this->setWindowTitle( mainWindowTitle );
 }
 
