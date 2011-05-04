@@ -188,6 +188,25 @@ QVector< IRouter::Node > RoutingLogic::route() const
 	return d->pathNodes;
 }
 
+double RoutingLogic::routeDistance()
+{
+	double distance = 0.0;
+	GPSCoordinate current;
+	GPSCoordinate next;
+	for( int i = 0; i < d->pathNodes.size() -1; i++ ){
+		// TODO: Better use an iterator?
+		current = d->pathNodes[i].coordinate.ToGPSCoordinate();
+		next = d->pathNodes[i +1].coordinate.ToGPSCoordinate();
+		distance += current.Distance( next );
+	}
+	return distance;
+}
+
+double RoutingLogic::groundSpeed()
+{
+	return d->gpsInfo.groundSpeed;
+}
+
 void RoutingLogic::clear()
 {
 	d->waypoints.clear();
