@@ -354,8 +354,6 @@ void MainWindow::populateMenus()
 
 	d->menuMaemo->addAction( d->actionHideControls );
 	d->menuMaemo->addAction( d->actionTripinfo );
-	d->menuMaemo->addAction( d->actionGpsCoordinate );
-	d->menuMaemo->addAction( new QAction(this) );
 	d->menuMaemo->addAction( d->actionPackages );
 	d->menuMaemo->addAction( d->actionModules );
 	d->menuMaemo->addAction( d->actionPreferencesGeneral );
