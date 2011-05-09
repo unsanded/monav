@@ -86,10 +86,15 @@ struct MainWindow::PrivateImplementation {
 	QToolBar* toolBarView;
 	QToolBar* toolBarPreferences;
 	QToolBar* toolBarHelp;
+	QToolBar* toolBarMaemo;
 
 	QAction* actionSource;
 	QAction* actionViaModes;
 	QToolButton* buttonViaModes;
+	// This is a hack.
+	// When only creating one button, it disappears as soon it gets stuffed into more than one toolbar.
+	// This means currently we will need a button for each toolbar, e.g. desktop, maemo5, android and the like.
+	QToolButton* buttonViaModesMaemo;
 	QAction* actionViaNone;
 	QAction* actionViaInsert;
 	QAction* actionViaAppend;
@@ -240,9 +245,11 @@ void MainWindow::createActions()
 	d->actionViaAppend = new QAction( QIcon( ":/images/viapoint.png" ), tr( "Append" ), this );
 
 	d->buttonViaModes = new QToolButton( this );
+	d->buttonViaModesMaemo = new QToolButton( this );
 
 	d->actionTarget = new QAction( QIcon( ":/images/target.png" ), tr( "Target" ), this );
 	d->buttonViaModes->setDefaultAction( d->actionTarget );
+	d->buttonViaModesMaemo->setDefaultAction( d->actionTarget );
 
 	d->actionInstructions = new QAction( QIcon( ":/images/oxygen/emblem-unlocked.png" ), tr( "Instructions" ), this );
 
@@ -257,7 +264,7 @@ void MainWindow::createActions()
 	d->actionHideControls = new QAction( QIcon( ":/images/map.png" ), tr( "Hide Controls" ), this );
 	d->actionPackages = new QAction( QIcon( ":/images/oxygen/folder-tar.png" ), tr( "Map Packages" ), this );
 	d->actionModules = new QAction( QIcon( ":/images/oxygen/map-modules.png" ), tr( "Map Modules" ), this );
-	d->actionTripinfo = new QAction( QIcon( ":/images/oxygen/tripinfo.png" ), tr( "Trip Information" ), this );
+	d->actionTripinfo = new QAction( QIcon( ":/images/tripinfo.png" ), tr( "Trip Information" ), this );
 	d->actionPreferencesGeneral = new QAction( QIcon( ":/images/oxygen/preferences-system.png" ), tr( "Preferences" ), this );
 	d->actionPreferencesRenderer = new QAction( QIcon( ":/images/map.png" ), tr( "Renderer" ), this );
 	d->actionPreferencesRouter = new QAction( QIcon( ":/images/route.png" ), tr( "Router" ), this );
@@ -304,6 +311,7 @@ void MainWindow::populateMenus()
 
 	d->menuViaMode = new QMenu( tr( "Via Mode" ), this );
 	d->buttonViaModes->setMenu( d->menuViaMode );
+	d->buttonViaModesMaemo->setMenu( d->menuViaMode );
 	d->actionViaModes->setMenu( d->menuViaMode );
 
 	d->menuMethods = new QMenu( tr( "Methods" ), this );
@@ -375,12 +383,26 @@ void MainWindow::populateMenus()
 
 void MainWindow::populateToolbars()
 {
-	d->toolBarFile = addToolBar( tr( "File" ) );
-	d->toolBarRouting = addToolBar( tr( "Routing" ) );
-	d->toolBarMethods = addToolBar( tr( "Method" ) );
-	d->toolBarView = addToolBar( tr( "Zoom" ) );
-	d->toolBarPreferences = addToolBar( tr( "Preferences" ) );
-	d->toolBarHelp = addToolBar( tr( "Help" ) );
+	d->toolBarFile = new QToolBar( tr( "File" ) );
+	d->toolBarRouting = new QToolBar( tr( "Routing" ) );
+	d->toolBarMethods = new QToolBar( tr( "Method" ) );
+	d->toolBarView = new QToolBar( tr( "Zoom" ) );
+	d->toolBarPreferences = new QToolBar( tr( "Preferences" ) );
+	d->toolBarHelp = new QToolBar( tr( "Help" ) );
+	d->toolBarMaemo = new QToolBar( tr( "Maemo" ) );
+
+#ifndef Q_WS_MAEMO_5
+	addToolBar( d->toolBarFile );
+	addToolBar( d->toolBarRouting );
+	addToolBar( d->toolBarMethods );
+	addToolBar( d->toolBarView );
+	addToolBar( d->toolBarPreferences );
+	addToolBar( d->toolBarHelp );
+#endif
+
+#ifdef Q_WS_MAEMO_5
+	addToolBar( d->toolBarMaemo );
+#endif
 
 	d->toolBarFile->addAction( d->actionPackages );
 	d->toolBarFile->addAction( d->actionModules );
@@ -408,9 +430,16 @@ void MainWindow::populateToolbars()
 	d->toolBarHelp->addAction( d->actionHelpAbout );
 	d->toolBarHelp->addAction( d->actionHelpProjectPage );
 
-	d->toolBarFile->setVisible( false );
-	d->toolBarPreferences->setVisible( false );
-	d->toolBarHelp->setVisible( false );
+	d->toolBarMaemo->addAction( d->actionSource );
+	d->toolBarMaemo->addWidget( d->buttonViaModesMaemo );
+	d->toolBarMaemo->addAction( d->actionInstructions );
+	d->toolBarMaemo->addAction( d->actionBookmark );
+	d->toolBarMaemo->addAction( d->actionAddress );
+	d->toolBarMaemo->addAction( d->actionGpsCoordinate );
+	d->toolBarMaemo->addAction( d->actionRemove );
+	d->toolBarMaemo->addAction( d->actionZoomIn );
+	d->toolBarMaemo->addAction( d->actionZoomOut );
+
 	// A long klick on the toolbar on Maemo lists all toolbars and allows to switch them on and off.
 	// This conflicts with the long press on the target button.
 	setContextMenuPolicy( Qt::CustomContextMenu );
@@ -418,9 +447,41 @@ void MainWindow::populateToolbars()
 
 void MainWindow::hideControls()
 {
+	// TODO: The following calls should determine whether there are any settings at all,
+	// e.g. MapData::instance()->settingsAvailable()
+/*
+	if ( MapData::instance()->renderer() == NULL )
+		d->actionPreferencesRenderer->setEnabled ( false );
+	else
+		d->actionPreferencesRenderer->setEnabled ( true );
+
+	if ( MapData::instance()->router() == NULL )
+		d->actionPreferencesRouter->setEnabled ( false );
+	else
+		d->actionPreferencesRouter->setEnabled ( true );
+
+	if( MapData::instance()->gpsLookup() == NULL )
+		d->actionPreferencesGpsLookup->setEnabled ( false );
+	else
+		d->actionPreferencesGpsLookup->setEnabled ( true );
+
+	if ( MapData::instance()->addressLookup() == NULL )
+		d->actionPreferencesAddressLookup->setEnabled ( false );
+	else
+		d->actionPreferencesAddressLookup->setEnabled ( true );
+*/
+
+#ifndef Q_WS_MAEMO_5
+	d->toolBarFile->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarRouting->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarMethods->setVisible( !d->actionHideControls->isChecked() );
 	d->toolBarView->setVisible( !d->actionHideControls->isChecked() );
+	d->toolBarPreferences->setVisible( !d->actionHideControls->isChecked() );
+	d->toolBarHelp->setVisible( !d->actionHideControls->isChecked() );
+#endif
+#ifdef Q_WS_MAEMO_5
+	d->toolBarMaemo->setVisible( !d->actionHideControls->isChecked() );
+#endif
 }
 
 void MainWindow::resizeIcons()
