@@ -255,7 +255,7 @@ bool RendererBase::Paint( QPainter* painter, const PaintRequest& request )
 				ProjectedCoordinate pos = request.polygonCoordsStreet[position].ToProjectedCoordinate();
 				line.push_back( ProjectedCoordinate( ( pos.x - request.center.x ) * zoomFactor, ( pos.y - request.center.y ) * zoomFactor ) );
 			}
-			drawPolyline( painter, boundingBox, line, QColor( 255, 255, 0, 128 ) );
+			drawPolyline( painter, boundingBox, line, QColor( 0, 250, 154, 128 ) );
 		}
 	}
 	if ( request.polygonEndpointsTracklog.size() > 0 && request.polygonCoordsTracklog.size() > 0 ) {
