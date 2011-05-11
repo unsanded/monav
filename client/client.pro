@@ -90,7 +90,9 @@ maemo5 {
 	QT += maemo5
 }
 
+TRANSLATIONS += ../translations/de_DE.ts
 RESOURCES += images.qrc
+RESOURCES += translations.qrc
 RC_FILE = ../images/WindowsResources.rc
 
 LIBS += -L../bin/plugins_client -lmapnikrendererclient -lcontractionhierarchiesclient -lgpsgridclient -losmrendererclient -lunicodetournamenttrieclient -lqtilerendererclient

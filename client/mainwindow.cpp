@@ -1025,7 +1025,7 @@ void MainWindow::setZoom( int zoom )
 void MainWindow::about()
 {
 	// TODO: Create a better dialog displaying more details, and read some of the data from an include file or define.
-	QMessageBox::about( this, tr("About MoNav"), "MoNav 0.4 is (c) 2011 by the MoNav authors and was released under the GNU GPL v3." );
+	QMessageBox::about( this, tr("About MoNav"), tr( "MoNav 0.4 is (c) 2011 by the MoNav authors and was released under the GNU GPL v3." ) );
 }
 
 void MainWindow::projectPage()
