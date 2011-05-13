@@ -296,9 +296,12 @@ bool Logger::writeGpxLog()
 		}
 		if (m_gpsInfoBuffer.at(i).position.IsValid() && insideTracksegment)
 		{
-			QString lat = QString::number(m_gpsInfoBuffer.at(i).position.ToGPSCoordinate().latitude).prepend("      <trkpt lat=\"").append("\"");
-			QString lon = QString::number(m_gpsInfoBuffer.at(i).position.ToGPSCoordinate().longitude).prepend(" lon=\"").append("\">\n");
-			QString ele = QString::number(m_gpsInfoBuffer.at(i).altitude).prepend("        <ele>").append("</ele>\n");
+			double latitude = m_gpsInfoBuffer.at(i).position.ToGPSCoordinate().latitude;
+			double longitude = m_gpsInfoBuffer.at(i).position.ToGPSCoordinate().longitude;
+			double elevation = m_gpsInfoBuffer.at(i).altitude;
+			QString lat = QString::number( latitude, 'f', 6 ).prepend("      <trkpt lat=\"").append("\"");
+			QString lon = QString::number( longitude, 'f', 6 ).prepend(" lon=\"").append("\">\n");
+			QString ele = QString::number( elevation, 'f', 2 ).prepend("        <ele>").append("</ele>\n");
 			QString time = m_gpsInfoBuffer.at(i).timestamp.toString( "yyyy-MM-ddThh:mm:ss" ).prepend("        <time>").append("</time>\n");
 			gpxStream << lat.toUtf8();
 			gpxStream << lon.toUtf8();
