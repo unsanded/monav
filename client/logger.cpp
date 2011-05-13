@@ -391,9 +391,8 @@ int Logger::trackDuration()
 }
 
 
-QVector<double> Logger::trackElevations()
+const QVector<double>& Logger::trackElevations()
 {
-	// TODO: Make it const
 	return m_trackElevations;
 }
 
