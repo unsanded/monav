@@ -48,7 +48,7 @@ public:
 	double trackDistance();
 	double trackMinElevation();
 	double trackMaxElevation();
-	QVector<double> trackElevations();
+	const QVector<double>& trackElevations();
 	int trackDuration();
 
 	QVector< int > polygonEndpointsTracklog();

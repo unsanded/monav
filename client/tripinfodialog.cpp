@@ -96,8 +96,7 @@ void TripinfoDialog::updateInformation()
 	m_ui->displayMinElevation->setText( QString::number( minElevation ).append( tr( "m" ) ) );
 	m_ui->displayMaxElevation->setText( QString::number( maxElevation ).append( tr( "m" ) ) );
 
-	QVector<double> trackElevations;
-	trackElevations = Logger::instance()->trackElevations();
+	const QVector<double>& trackElevations = Logger::instance()->trackElevations();
 
 	// Drawing the track's height profile
 	int marginLeft = 5;
