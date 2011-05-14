@@ -23,6 +23,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <QWidget>
 #include <QDebug>
 #include <QDateTime>
+#include <QTreeWidgetItem>
 
 namespace Ui {
 	class TripinfoDialog;
@@ -49,6 +50,7 @@ protected:
 	PrivateImplementation* d;
 	Ui::TripinfoDialog* m_ui;
 	QDateTime m_lastUpdateTime;
+	QList<QTreeWidgetItem*> m_listItems;
 };
 
 #endif // TRIPINFODIALOG_H
