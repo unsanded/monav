@@ -33,6 +33,28 @@ TripinfoDialog::TripinfoDialog( QWidget* parent ) :
 		m_ui( new Ui::TripinfoDialog )
 {
 	m_ui->setupUi( this );
+qDebug() << "Konstruktor start";
+	QStringList itemNames;
+	itemNames << tr( "Ground Speed:" );
+	itemNames << tr( "Max. Speed:" );
+	itemNames << tr( "Average Speed:" );
+	itemNames << tr( "Remaining Distance:" );
+	itemNames << tr( "Track Length:" );
+	itemNames << tr( "Track Time:" );
+	itemNames << tr( "Max. Elevation:" );
+	itemNames << tr( "Min. Elevation:" );
+	for( int i = 0; i < itemNames.size(); i++){
+		m_listItems.append( new QTreeWidgetItem(0) );
+	}
+	for( int i = 0; i < m_listItems.size(); i++){
+		m_listItems[i]->setText( 0, itemNames[i] );
+		m_listItems[i]->setText( 1, "-" );
+	}
+	m_ui->treeWidget->setColumnCount( 2 );
+	m_ui->treeWidget->addTopLevelItems( m_listItems );
+	m_ui->treeWidget->resizeColumnToContents( 0 );
+	m_ui->treeWidget->setHeaderHidden ( true );
+qDebug() << "Konstruktor end";
 	m_lastUpdateTime = QDateTime::currentDateTime().addSecs( - DIALOGUPDATEINTERVAL );
 	connect( m_ui->cancel, SIGNAL(clicked()), this, SIGNAL(cancelled()) );
 	updateInformation();
@@ -45,14 +67,86 @@ TripinfoDialog::~TripinfoDialog()
 
 void TripinfoDialog::updateInformation()
 {
-
 	// Limit the amount of recalculations
 	if( m_lastUpdateTime.secsTo( QDateTime::currentDateTime() ) < DIALOGUPDATEINTERVAL ){
 		return;
 	}
-
 	m_lastUpdateTime = QDateTime::currentDateTime();
 
+	double theValue = 0.0;
+	QStringList theValues;
+
+	theValue = RoutingLogic::instance()->groundSpeed();
+	theValues.append( QString::number( theValue /1000, 'f', 1 ).append( "km/h" ) );
+
+	theValue = Logger::instance()->maxSpeed();
+	theValues.append( QString::number( theValue /1000, 'f', 1 ).append( "km/h" ) );
+
+	theValue = Logger::instance()->averageSpeed();
+	theValues.append( QString::number( theValue /1000, 'f', 1 ).append( "km/h" ) );
+
+	theValue = RoutingLogic::instance()->routeDistance();
+	theValues.append( QString::number( theValue /1000, 'f', 1 ).append( "km" ) );
+
+	theValue = Logger::instance()->trackDistance();
+	theValues.append( QString::number( theValue /1000, 'f', 1 ).append( "km" ) );
+
+	theValue = Logger::instance()->trackDuration();
+	theValues.append( QString::number( theValue /1000, 'f', 0 ).append( "min" ) );
+
+	theValue = Logger::instance()->trackMaxElevation();
+	theValues.append( QString::number( theValue /1000, 'f', 0 ).append( "m" ) );
+
+	theValue = Logger::instance()->trackMinElevation();
+	theValues.append( QString::number( theValue /1000, 'f', 0 ).append( "m" ) );
+
+
+qDebug() << "Sizes:" << m_listItems.size() << theValues.size();
+	if( m_listItems.size() == theValues.size() ){
+		for( int i = 0; i < m_listItems.size(); i++ ){
+			m_listItems[i]->setText( 1, theValues[i] );
+		}
+	}
+
+
+/*
+	theValue = RoutingLogic::instance()->routeDistance();
+	if( 0 < m_listItems.size() )
+		m_listItems[0]->setText( 1, QString::number( theValue /1000, 'f', 1 ).append( "km" ) );
+
+	theValue = RoutingLogic::instance()->groundSpeed();
+	if( 1 < m_listItems.size() )
+		m_listItems[1]->setText( 1, QString::number( theValue /1000, 'f', 1 ).append( "km/h" ) );
+
+	theValue = Logger::instance()->averageSpeed();
+	if( 2 < m_listItems.size() )
+		m_listItems[2]->setText( 1, QString::number( theValue /1000, 'f', 1 ).append( "km/h" ) );
+
+	theValue = Logger::instance()->trackDistance();
+	if( 3 < m_listItems.size() )
+		m_listItems[3]->setText( 1, QString::number( theValue /1000, 'f', 1 ).append( "km" ) );
+
+	theValue = Logger::instance()->trackDuration();
+	if( 4 < m_listItems.size() )
+		m_listItems[4]->setText( 1, QString::number( theValue /1000, 'f', 1 ).append( "min" ) );
+
+	theValue = Logger::instance()->maxSpeed();
+	if( 5 < m_listItems.size() )
+		m_listItems[5]->setText( 1, QString::number( theValue /1000, 'f', 1 ).append( "km/h" ) );
+
+	theValue = Logger::instance()->trackMaxElevation();
+	if( 6 < m_listItems.size() )
+		m_listItems[6]->setText( 1, QString::number( theValue /1000, 'f', 1 ).append( "m" ) );
+
+	theValue = Logger::instance()->trackMinElevation();
+	if( 7 < m_listItems.size() )
+		m_listItems[7]->setText( 1, QString::number( theValue /1000, 'f', 1 ).append( "m" ) );
+*/
+
+	m_ui->treeWidget->resizeColumnToContents( 1 );
+	m_ui->displayTrackProfile->setMinimumSize( 300, 150 );
+
+/*
 	double routeDistance = 0;
 	routeDistance = RoutingLogic::instance()->routeDistance();
 	m_ui->displayRemainingDistance->setText( QString::number( routeDistance /1000, 'f', 1 ).append( "km" ) );
@@ -83,6 +177,7 @@ void TripinfoDialog::updateInformation()
 		minutestring.append( "min" );
 	}
 	m_ui->displayTraveledTime->setText( hourstring + minutestring );
+*/
 
 	double maxSpeed = 0.0;
 	double minElevation = 0.0;
@@ -92,9 +187,9 @@ void TripinfoDialog::updateInformation()
 	minElevation = Logger::instance()->trackMinElevation();
 	maxElevation = Logger::instance()->trackMaxElevation();
 
-	m_ui->displayMaxSpeed->setText( QString::number( maxSpeed, 'f', 1 ).append( tr( "km/h" ) ) );
-	m_ui->displayMinElevation->setText( QString::number( minElevation ).append( tr( "m" ) ) );
-	m_ui->displayMaxElevation->setText( QString::number( maxElevation ).append( tr( "m" ) ) );
+	// m_ui->displayMaxSpeed->setText( QString::number( maxSpeed, 'f', 1 ).append( tr( "km/h" ) ) );
+	// m_ui->displayMinElevation->setText( QString::number( minElevation ).append( tr( "m" ) ) );
+	// m_ui->displayMaxElevation->setText( QString::number( maxElevation ).append( tr( "m" ) ) );
 
 	const QVector<double>& trackElevations = Logger::instance()->trackElevations();
 

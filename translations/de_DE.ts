@@ -654,76 +654,54 @@ Fortfahren?</translation>
         <translation>Reiseinformationen</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="50"/>
+        <location filename="../client/tripinfodialog.ui" line="29"/>
+        <source>No elevation data available yet.</source>
+        <translation>Es liegen keine Daten vor.</translation>
+    </message>
+    <message>
+        <location filename="../client/tripinfodialog.cpp" line="38"/>
         <source>Remaining Distance:</source>
         <translation>Reststrecke:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="57"/>
-        <location filename="../client/tripinfodialog.ui" line="71"/>
-        <location filename="../client/tripinfodialog.ui" line="85"/>
-        <location filename="../client/tripinfodialog.ui" line="99"/>
-        <location filename="../client/tripinfodialog.ui" line="113"/>
-        <location filename="../client/tripinfodialog.ui" line="127"/>
-        <location filename="../client/tripinfodialog.ui" line="141"/>
-        <source>n/a</source>
-        <translation></translation>
-    </message>
-    <message>
+        <location filename="../client/tripinfodialog.cpp" line="39"/>
         <source>Ground Speed:</source>
-        <translation type="obsolete">Geschwindigkeit:</translation>
+        <translation>Geschwindigkeit:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="64"/>
+        <location filename="../client/tripinfodialog.cpp" line="40"/>
         <source>Average Speed:</source>
-        <translation>Durchschnittsgeschwindigkeit:</translation>
+        <translation>Durchschnittsgeschw.:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="78"/>
+        <location filename="../client/tripinfodialog.cpp" line="41"/>
         <source>Track Length:</source>
-        <translation>Zurückgelegt:</translation>
+        <translation>Zurückgelegte Strecke:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="92"/>
+        <location filename="../client/tripinfodialog.cpp" line="42"/>
         <source>Track Time:</source>
         <translation>Reisezeit:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="106"/>
+        <location filename="../client/tripinfodialog.cpp" line="43"/>
         <source>Max. Speed:</source>
         <translation>Maximalgeschwindigkeit:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="120"/>
+        <location filename="../client/tripinfodialog.cpp" line="44"/>
         <source>Max. Elevation:</source>
         <translation>Max. Höhe:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="134"/>
+        <location filename="../client/tripinfodialog.cpp" line="45"/>
         <source>Min. Elevation:</source>
         <translation>Min. Höhe:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="223"/>
+        <location filename="../client/tripinfodialog.ui" line="36"/>
         <source>Close</source>
         <translation>Schließen</translation>
-    </message>
-    <message>
-        <location filename="../client/tripinfodialog.cpp" line="62"/>
-        <location filename="../client/tripinfodialog.cpp" line="95"/>
-        <source>km/h</source>
-        <translation></translation>
-    </message>
-    <message>
-        <location filename="../client/tripinfodialog.cpp" line="79"/>
-        <source>:</source>
-        <translation></translation>
-    </message>
-    <message>
-        <location filename="../client/tripinfodialog.cpp" line="96"/>
-        <location filename="../client/tripinfodialog.cpp" line="97"/>
-        <source>m</source>
-        <translation></translation>
     </message>
 </context>
 </TS>
