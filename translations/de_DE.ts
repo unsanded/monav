@@ -237,6 +237,11 @@
         <source>MoNav Track</source>
         <translation></translation>
     </message>
+    <message>
+        <location filename="../client/logger.cpp" line="261"/>
+        <source>-bck</source>
+        <translation>-sicherung</translation>
+    </message>
 </context>
 <context>
     <name>MainWindow</name>
@@ -659,12 +664,12 @@ Fortfahren?</translation>
         <translation>Es liegen keine Daten vor.</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.cpp" line="38"/>
+        <location filename="../client/tripinfodialog.cpp" line="41"/>
         <source>Remaining Distance:</source>
         <translation>Reststrecke:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.cpp" line="39"/>
+        <location filename="../client/tripinfodialog.cpp" line="38"/>
         <source>Ground Speed:</source>
         <translation>Geschwindigkeit:</translation>
     </message>
@@ -674,27 +679,42 @@ Fortfahren?</translation>
         <translation>Durchschnittsgeschw.:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.cpp" line="41"/>
+        <location filename="../client/tripinfodialog.cpp" line="42"/>
         <source>Track Length:</source>
         <translation>Zurückgelegte Strecke:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.cpp" line="42"/>
+        <location filename="../client/tripinfodialog.cpp" line="43"/>
         <source>Track Time:</source>
         <translation>Reisezeit:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.cpp" line="43"/>
+        <location filename="../client/tripinfodialog.cpp" line="39"/>
         <source>Max. Speed:</source>
-        <translation>Maximalgeschwindigkeit:</translation>
+        <translation>Maximalgeschw.:</translation>
     </message>
     <message>
         <location filename="../client/tripinfodialog.cpp" line="44"/>
+        <source>Remaining Time:</source>
+        <translation>Restzeit:</translation>
+    </message>
+    <message>
+        <location filename="../client/tripinfodialog.cpp" line="45"/>
+        <source>Departure:</source>
+        <translation>Abreise:</translation>
+    </message>
+    <message>
+        <location filename="../client/tripinfodialog.cpp" line="46"/>
+        <source>Arrival:</source>
+        <translation>Ankunft:</translation>
+    </message>
+    <message>
+        <location filename="../client/tripinfodialog.cpp" line="47"/>
         <source>Max. Elevation:</source>
         <translation>Max. Höhe:</translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.cpp" line="45"/>
+        <location filename="../client/tripinfodialog.cpp" line="48"/>
         <source>Min. Elevation:</source>
         <translation>Min. Höhe:</translation>
     </message>

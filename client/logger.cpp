@@ -123,7 +123,7 @@ void Logger::readGpsInfo( RoutingLogic::GPSInfo gpsInfo )
 			m_trackMaxElevation = gpsInfo.altitude;
 		}
 	}
-	if( QString::number( gpsInfo.altitude ) != "nan" ){
+	if( QString::number( gpsInfo.altitude ) != "nan" && gpsInfo.verticalAccuracy < 50 ){
 		m_trackElevations.append( gpsInfo.altitude );
 	}
 	if( gpsInfo.groundSpeed > m_maxSpeed ){
@@ -224,7 +224,7 @@ bool Logger::readGpxLog()
 			gpsInfo.timestamp = invalidTime;
 			gpsInfo.position = UnsignedCoordinate( GPSCoordinate( latString.toDouble(), lonString.toDouble() ) );
 			gpsInfo.altitude = eleString.toDouble();
-			gpsInfo.timestamp = QDateTime::fromString( timeString, "yyyy-MM-ddTHH:mm:ss" );
+			gpsInfo.timestamp = QDateTime::fromString( timeString, "yyyy-MM-ddThh:mm:ss" );
 
 			// TODO: Call by reference, not value
 			readGpsInfo( gpsInfo );
@@ -309,7 +309,7 @@ bool Logger::writeGpxLog()
 			QString time = m_gpsInfoBuffer.at(i).timestamp.toString( "yyyy-MM-ddThh:mm:ss" ).prepend("        <time>").append("</time>\n");
 			gpxStream << lat.toUtf8();
 			gpxStream << lon.toUtf8();
-			if (!ele.contains("nan"))
+			if ( !ele.contains("nan") && m_gpsInfoBuffer.at(i).verticalAccuracy < 50 )
 				gpxStream << ele.toUtf8();
 			gpxStream << time.toUtf8();
 			gpxStream << QString("      </trkpt>\n").toUtf8();
@@ -372,6 +372,18 @@ double Logger::trackMaxElevation()
 double Logger::averageSpeed()
 {
 	return m_sumSpeeds / m_validPoints;
+}
+
+
+QDateTime Logger::trackStartTime()
+{
+	for( int i = 0; i < m_gpsInfoBuffer.size(); i++ ){
+		if( m_gpsInfoBuffer.at(i).position.IsValid() ){
+			return m_gpsInfoBuffer.at(i).timestamp;
+		}
+	}
+	// In case thre aren't any valid trackpoints, return an invalid date object
+	return QDateTime();
 }
 
 
