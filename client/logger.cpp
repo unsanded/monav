@@ -50,6 +50,8 @@ void Logger::initialize()
 	m_loggingEnabled = settings.value( "LoggingEnabled", false ).toBool();
 	m_tracklogPath = settings.value( "LogFilePath", QDir::homePath() ).toString();
 	m_maxSpeed = 0.0;
+	m_sumSpeeds = 0.0;
+	m_validPoints = 0;
 	m_trackDistance = 0.0;
 	m_trackMinElevation = -20000.0;
 	m_trackMaxElevation = -20000.0;
@@ -121,12 +123,14 @@ void Logger::readGpsInfo( RoutingLogic::GPSInfo gpsInfo )
 			m_trackMaxElevation = gpsInfo.altitude;
 		}
 	}
-	if( gpsInfo.groundSpeed > m_maxSpeed ){
-		m_maxSpeed = gpsInfo.groundSpeed;
-	}
 	if( QString::number( gpsInfo.altitude ) != "nan" ){
 		m_trackElevations.append( gpsInfo.altitude );
 	}
+	if( gpsInfo.groundSpeed > m_maxSpeed ){
+		m_maxSpeed = gpsInfo.groundSpeed;
+	}
+	m_sumSpeeds += gpsInfo.groundSpeed;
+	m_validPoints++;
 	m_gpsInfoBuffer.append(gpsInfo);
 }
 
@@ -359,6 +363,12 @@ double Logger::trackMaxElevation()
 		return 0;
 	else
 		return m_trackMaxElevation;
+}
+
+
+double Logger::averageSpeed()
+{
+	return m_sumSpeeds / m_validPoints;
 }
 
 

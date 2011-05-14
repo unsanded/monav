@@ -59,14 +59,14 @@
         </widget>
        </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="labelGroundSpeed">
+        <widget class="QLabel" name="labelAverageSpeed">
          <property name="text">
-          <string>Ground Speed:</string>
+          <string>Average Speed:</string>
          </property>
         </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QLabel" name="displayGroundSpeed">
+        <widget class="QLabel" name="displayAverageSpeed">
          <property name="text">
           <string>n/a</string>
          </property>

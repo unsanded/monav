@@ -233,7 +233,7 @@
 <context>
     <name>Logger</name>
     <message>
-        <location filename="../client/logger.cpp" line="58"/>
+        <location filename="../client/logger.cpp" line="60"/>
         <source>MoNav Track</source>
         <translation></translation>
     </message>
@@ -670,9 +670,13 @@ Fortfahren?</translation>
         <translation></translation>
     </message>
     <message>
-        <location filename="../client/tripinfodialog.ui" line="64"/>
         <source>Ground Speed:</source>
-        <translation>Geschwindigkeit:</translation>
+        <translation type="obsolete">Geschwindigkeit:</translation>
+    </message>
+    <message>
+        <location filename="../client/tripinfodialog.ui" line="64"/>
+        <source>Average Speed:</source>
+        <translation>Durchschnittsgeschwindigkeit:</translation>
     </message>
     <message>
         <location filename="../client/tripinfodialog.ui" line="78"/>

@@ -57,9 +57,9 @@ void TripinfoDialog::updateInformation()
 	routeDistance = RoutingLogic::instance()->routeDistance();
 	m_ui->displayRemainingDistance->setText( QString::number( routeDistance /1000, 'f', 1 ).append( "km" ) );
 
-	double groundSpeed = 0.0;
-	groundSpeed = RoutingLogic::instance()->groundSpeed();
-	m_ui->displayGroundSpeed->setText( QString::number( groundSpeed, 'f', 1 ).append( tr( "km/h" ) ) );
+	double averageSpeed = 0.0;
+	averageSpeed = Logger::instance()->averageSpeed();
+	m_ui->displayAverageSpeed->setText( QString::number( averageSpeed, 'f', 1 ).append( tr( "km/h" ) ) );
 
 	double trackDistance = 0;
 	trackDistance = Logger::instance()->trackDistance();

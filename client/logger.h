@@ -48,6 +48,7 @@ public:
 	double trackDistance();
 	double trackMinElevation();
 	double trackMaxElevation();
+	double averageSpeed();
 	const QVector<double>& trackElevations();
 	int trackDuration();
 
@@ -72,6 +73,8 @@ protected:
 	QFile m_logFile;
 	QDateTime m_lastFlushTime;
 	double m_maxSpeed;
+	double m_sumSpeeds;
+	int m_validPoints;
 	double m_trackDistance;
 	double m_trackMinElevation;
 	double m_trackMaxElevation;
