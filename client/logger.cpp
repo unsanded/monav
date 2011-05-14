@@ -253,23 +253,23 @@ bool Logger::readGpxLog()
 
 bool Logger::writeGpxLog()
 {
-	QString backupFilename = m_logFile.fileName().remove( m_logFile.fileName().size() -4, 4 ).append( "-bck.gpx" );
-
-	// Necessary, as the following copy call would return false in case the file already exists
-	if ( m_logFile.exists() && m_logFile.exists(backupFilename))
-		m_logFile.remove( backupFilename );
-	// Security net to avoid data loss in case the battery drained etc.
-	// Always do this before opening the file, as it gets closed otherwise.
+	QDateTime currentDateTime = QDateTime::currentDateTime();
+	// Create a backup while writing to avoid data loss in case the battery drained etc.
+	QString backupFilename;
+	backupFilename = m_logFile.fileName().remove( m_logFile.fileName().size() -4, 4 );
+	backupFilename.append( currentDateTime.toString( "-hhmmss" ) );
+	backupFilename = backupFilename.append( tr( "-bck" ) );
+	backupFilename = backupFilename.append( ".gpx" );
+	// Always do this before opening the logfile, as the logfile got closed otherwise.
 	m_logFile.copy( backupFilename );
 
 	if ( !m_logFile.open( QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate ) ){
 		m_loggingEnabled = false;
-		qDebug() << "Logger: Cannot write " << m_logFile.fileName() << ". Logging disabled.";
+		qCritical() << "Logger: Cannot write " << m_logFile.fileName() << ". Logging disabled.";
 		return false;
 	}
 
 	QString trackName = m_tracklogPrefix;
-	QDateTime currentDateTime = QDateTime::currentDateTime();
 	trackName.append( currentDateTime.toString( " yyyy-MM-dd" ) );
 	trackName.prepend("  <name>");
 	trackName.append("</name>\n");
@@ -322,6 +322,9 @@ bool Logger::writeGpxLog()
 	gpxStream << QString("  </trk>\n").toUtf8();
 	gpxStream << QString("</gpx>\n").toUtf8();
 	m_logFile.close();
+	if( QFile::exists ( backupFilename ) )
+		m_logFile.remove( backupFilename );
+
 	m_lastFlushTime = QDateTime::currentDateTime();
 	return true;
 }
