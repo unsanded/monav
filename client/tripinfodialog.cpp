@@ -58,6 +58,7 @@ TripinfoDialog::TripinfoDialog( QWidget* parent ) :
 	m_ui->treeWidget->setHeaderHidden ( true );
 	m_lastUpdateTime = QDateTime::currentDateTime().addSecs( - DIALOGUPDATEINTERVAL );
 	connect( m_ui->cancel, SIGNAL(clicked()), this, SIGNAL(cancelled()) );
+	m_ui->displayTrackProfile->setMinimumSize( 300, 150 );
 	updateInformation();
 }
 
@@ -105,42 +106,29 @@ void TripinfoDialog::updateInformation()
 			m_listItems[i]->setText( 1, theValues[i] );
 		}
 	}
-	m_ui->treeWidget->resizeColumnToContents( 1 );
-
+	// m_ui->treeWidget->resizeColumnToContents( 1 );
 
 	// Drawing the track's height profile
-	m_ui->displayTrackProfile->setMinimumSize( 300, 150 );
-
-	double maxSpeed = 0.0;
-	double minElevation = 0.0;
-	double maxElevation = 0.0;
-
-	maxSpeed = Logger::instance()->maxSpeed();
-	minElevation = Logger::instance()->trackMinElevation();
-	maxElevation = Logger::instance()->trackMaxElevation();
-
-	const QVector<double>& trackElevations = Logger::instance()->trackElevations();
-
-
-	int marginLeft = 5;
-	int marginRight = 5;
-	int marginTop = 5;
-	int marginBottom = 5;
-
+	// m_ui->displayTrackProfile->setMinimumSize( 300, 150 );
 	QPixmap pixmap( m_ui->displayTrackProfile->width(), m_ui->displayTrackProfile->height());
 	pixmap.fill( QColor( 255, 255, 255, 128 ) );
-	m_ui->displayTrackProfile->setPixmap( pixmap );
 
-	double scaleX = 1.0;
-	scaleX = double( m_ui->displayTrackProfile->pixmap()->width() - marginLeft - marginRight ) / double( trackElevations.size() );
-
+	const QVector<double>& trackElevations = Logger::instance()->trackElevations();
+	double minElevation = Logger::instance()->trackMinElevation();
+	double maxElevation = Logger::instance()->trackMaxElevation();
 	double metersDelta = maxElevation - minElevation;
+	int margin = 5;
+	double scaleX = 1.0;
 	double scaleY = 1.0;
-	scaleY = ( m_ui->displayTrackProfile->pixmap()->height() - marginTop - marginBottom) / metersDelta;
+
+	// scaleX = double( m_ui->displayTrackProfile->pixmap()->width() - margin-margin ) / double( trackElevations.size() );
+	// scaleY = ( m_ui->displayTrackProfile->pixmap()->height() -margin-margin ) / metersDelta;
+	scaleX = double( m_ui->displayTrackProfile->width() - margin-margin ) / double( trackElevations.size() );
+	scaleY = ( m_ui->displayTrackProfile->height() -margin-margin ) / metersDelta;
 
 	QPolygonF polygon;
 	for( int i = 0; i < trackElevations.size(); i++ ){
-		polygon << QPointF( (i * scaleX) + marginLeft, (trackElevations.at(i) * scaleY) -marginBottom );
+		polygon << QPointF( (i * scaleX) +margin, (trackElevations.at(i) * scaleY) -margin );
 	}
 
 	QPainter painter;
@@ -192,8 +180,6 @@ QString TripinfoDialog::dateString( QDateTime date )
 	if( !date.isValid() )
 		return "-";
 
-	// date.toString( Qt::ISODate ) might be an option, but returns a long string which is not sufficient for small displays
-	// return date.toString( "yyyyMMdd hh:mm" );
 	return date.toString( "ddd hh:mm" );
 }
 
