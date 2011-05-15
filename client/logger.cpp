@@ -374,7 +374,10 @@ double Logger::trackMaxElevation()
 
 double Logger::averageSpeed()
 {
-	return m_sumSpeeds / m_validPoints;
+	double speed = 0.0;
+	if( m_sumSpeeds > 0 && m_validPoints > 0 )
+		speed = m_sumSpeeds / m_validPoints;
+	return speed;
 }
 
 

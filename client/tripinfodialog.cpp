@@ -75,28 +75,33 @@ void TripinfoDialog::updateInformation()
 	}
 	m_lastUpdateTime = QDateTime::currentDateTime();
 
-	double routeDistance = 0.0;
+	double routeDistance = RoutingLogic::instance()->routeDistance();
+	double averageSpeed = Logger::instance()->averageSpeed();
+	double remainingTime = 0.0;
 	QStringList theValues;
 
 	theValues.append( speedString( RoutingLogic::instance()->groundSpeed() ) );
 	theValues.append( speedString( Logger::instance()->maxSpeed() ) );
-	theValues.append( speedString( Logger::instance()->averageSpeed() ) );
-	theValues.append( distanceString( RoutingLogic::instance()->routeDistance() ) );
+	theValues.append( speedString( averageSpeed ) );
+	theValues.append( distanceString( routeDistance ) );
 	theValues.append( distanceString( Logger::instance()->trackDistance() ) );
 	theValues.append( dateString( Logger::instance()->trackStartTime() ) );
 	theValues.append( timeString( Logger::instance()->trackDuration() ) );
-	double averageSpeed = Logger::instance()->averageSpeed();
-	double remainingTime = 0.0;
-	// Avoid an division by zero
-	if( averageSpeed != 0 ){
-		remainingTime = ((routeDistance*60)/(averageSpeed*1000));
+
+	// Avoid a division by zero
+	if( averageSpeed != 0.0 && routeDistance != 0.0 ){
+		remainingTime = ((routeDistance*3600)/(averageSpeed*1000)); // distance in meters. speed in kmh.
 	}
 	theValues.append( timeString( remainingTime ) );
 
-	if( remainingTime < 1 )
-		theValues.append( dateString( QDateTime() ) );
-	else
-		theValues.append( dateString( QDateTime::currentDateTime().addSecs( (int)remainingTime*60 ) ) );
+	if( remainingTime < 1 ){
+		// Passing an invalid time object
+		QDateTime dateTime;
+		theValues.append( dateString( dateTime ) );
+	}
+	else{
+		theValues.append( dateString( QDateTime::currentDateTime().addSecs( (int)remainingTime ) ) );
+	}
 
 	theValues.append( elevationString( Logger::instance()->trackMaxElevation() ) );
 	theValues.append( elevationString( Logger::instance()->trackMinElevation() ) );
@@ -106,10 +111,8 @@ void TripinfoDialog::updateInformation()
 			m_listItems[i]->setText( 1, theValues[i] );
 		}
 	}
-	// m_ui->treeWidget->resizeColumnToContents( 1 );
 
 	// Drawing the track's height profile
-	// m_ui->displayTrackProfile->setMinimumSize( 300, 150 );
 	QPixmap pixmap( m_ui->displayTrackProfile->width(), m_ui->displayTrackProfile->height());
 	pixmap.fill( QColor( 255, 255, 255, 128 ) );
 
@@ -121,8 +124,6 @@ void TripinfoDialog::updateInformation()
 	double scaleX = 1.0;
 	double scaleY = 1.0;
 
-	// scaleX = double( m_ui->displayTrackProfile->pixmap()->width() - margin-margin ) / double( trackElevations.size() );
-	// scaleY = ( m_ui->displayTrackProfile->pixmap()->height() -margin-margin ) / metersDelta;
 	scaleX = double( m_ui->displayTrackProfile->width() - margin-margin ) / double( trackElevations.size() );
 	scaleY = ( m_ui->displayTrackProfile->height() -margin-margin ) / metersDelta;
 
@@ -146,7 +147,7 @@ void TripinfoDialog::updateInformation()
 
 QString TripinfoDialog::speedString( double speed )
 {
-	if( speed < 1 )
+	if( speed < 1 || QString::number( speed ).contains( "nan" ) )
 		return "-";
 	QString speedSignature = "km/h";
 	if( m_locale.measurementSystem() == QLocale::ImperialSystem ){
@@ -180,7 +181,7 @@ QString TripinfoDialog::dateString( QDateTime date )
 	if( !date.isValid() )
 		return "-";
 
-	return date.toString( "ddd hh:mm" );
+	return date.toString( "ddd hh:mm'h'" );
 }
 
 
@@ -188,10 +189,10 @@ QString TripinfoDialog::timeString( double time )
 {
 	// QTime might be a better choice, but can only cope with up to 24 hours, then it flips.
 	QString timeString;
-	if( time < 1 )
+	if( time < 1 || QString::number( time ).contains( "nan" ) )
 		timeString = "-";
 	else if( time < 600 ){
-		timeString = QString::number( time/60, 'f', 1 ).prepend( "0" ).append( "min" );
+		timeString = QString::number( time/60, 'f', 1 ).append( "min" );
 	}
 	else if( time < 3600 ){
 		timeString = QString::number( time/60, 'f', 0 ).append( "min" );
