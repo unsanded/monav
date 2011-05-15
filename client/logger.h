@@ -44,6 +44,13 @@ public:
 	void setLoggingEnabled(bool);
 	QString directory();
 	void setDirectory(QString);
+	double maxSpeed();
+	double trackDistance();
+	double trackMinElevation();
+	double trackMaxElevation();
+	double averageSpeed();
+	const QVector<double>& trackElevations();
+	int trackDuration();
 
 	QVector< int > polygonEndpointsTracklog();
 	QVector< UnsignedCoordinate > polygonCoordsTracklog();
@@ -63,10 +70,18 @@ signals:
 protected:
 
 	explicit Logger( QObject* parent = 0 );
+	void readGpsInfo( RoutingLogic::GPSInfo );
 	bool readGpxLog();
 	bool writeGpxLog();
 	QFile m_logFile;
 	QDateTime m_lastFlushTime;
+	double m_maxSpeed;
+	double m_sumSpeeds;
+	int m_validPoints;
+	double m_trackDistance;
+	double m_trackMinElevation;
+	double m_trackMaxElevation;
+	QVector<double> m_trackElevations;
 	bool m_loggingEnabled;
 	QString m_tracklogPath;
 	QString m_tracklogPrefix;
