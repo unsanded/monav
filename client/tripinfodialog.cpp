@@ -25,7 +25,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include "tripinfodialog.h"
 #include "ui_tripinfodialog.h"
 
-#define DIALOGUPDATEINTERVAL 5
+#define DIALOGUPDATEINTERVAL 3
 
 
 TripinfoDialog::TripinfoDialog( QWidget* parent ) :
@@ -74,108 +74,41 @@ void TripinfoDialog::updateInformation()
 	}
 	m_lastUpdateTime = QDateTime::currentDateTime();
 
-	double theValue = 0.0;
-	double averageSpeed = 0.0;
 	double routeDistance = 0.0;
-	double remainingTime = 0.0;
 	QStringList theValues;
 
-	theValue = RoutingLogic::instance()->groundSpeed();
-	// Snails have bad luck:
-	if( theValue < 1 )
-		theValues.append( "-" );
-	else
-		theValues.append( QString::number( theValue, 'f', 1 ).append( "km/h" ) );
-
-	theValue = Logger::instance()->maxSpeed();
-	if( theValue < 1 )
-		theValues.append( "-" );
-	else
-		theValues.append( QString::number( theValue, 'f', 1 ).append( "km/h" ) );
-
-	averageSpeed = Logger::instance()->averageSpeed();
-	if( averageSpeed < 1 )
-		theValues.append( "-" );
-	else
-		theValues.append( QString::number( averageSpeed, 'f', 1 ).append( "km/h" ) );
-
-	routeDistance = RoutingLogic::instance()->routeDistance();
-	if( routeDistance < 1 )
-		theValues.append( "-" );
-	else
-		theValues.append( QString::number( routeDistance/1000, 'f', 1 ).append( "km" ) );
-
-	theValue = Logger::instance()->trackDistance();
-	if( theValue < 1 )
-		theValues.append( "-" );
-	else
-		theValues.append( QString::number( theValue/1000, 'f', 1 ).append( "km" ) );
-
-	QDateTime startTime = Logger::instance()->trackStartTime();
-	if( !startTime.isValid() )
-		theValues.append( "-" );
-	else
-		theValues.append( startTime.toString( "yyyyMMdd hh:mm" ) );
-
-	theValue = Logger::instance()->trackDuration();
-	if( theValue < 1 )
-		theValues.append( "-" );
-	else if( theValue < 600 ){
-		theValues.append( QString::number( theValue/60, 'f', 1 ).append( "min" ) );
-	}
-	else if( theValue < 3600 ){
-		theValues.append( QString::number( theValue/60, 'f', 0 ).append( "min" ) );
-	}
-	else{
-		int hours = theValue / 3600;
-		int minutes = (int)theValue % 3600 / 60;
-		theValues.append( QString::number( hours ).append( ":" ) );
-		theValues.last().append( QString::number( minutes ).append( "h" ) );
-	}
-
+	theValues.append( speedString( RoutingLogic::instance()->groundSpeed() ) );
+	theValues.append( speedString( Logger::instance()->maxSpeed() ) );
+	theValues.append( speedString( Logger::instance()->averageSpeed() ) );
+	theValues.append( distanceString( RoutingLogic::instance()->routeDistance() ) );
+	theValues.append( distanceString( Logger::instance()->trackDistance() ) );
+	theValues.append( dateString( Logger::instance()->trackStartTime() ) );
+	theValues.append( timeString( Logger::instance()->trackDuration() ) );
+	double averageSpeed = Logger::instance()->averageSpeed();
+	double remainingTime = 0.0;
 	// Avoid an division by zero
-	if( averageSpeed == 0 ){
-		remainingTime = 0;
+	if( averageSpeed != 0 ){
+		remainingTime = ((routeDistance*60)/(averageSpeed*1000));
 	}
-	else{
-	remainingTime = ((routeDistance*60)/(averageSpeed*1000));
-	}
+	theValues.append( timeString( remainingTime ) );
 
-	if( remainingTime < 1 ){
-		theValues.append( "-" );
-	}
-	else if( remainingTime < 60 ){
-		theValues.append( QString::number( remainingTime, 'f', 0 ).append( "min" ) );
-	}
-	else{
-		int hours = remainingTime / 60;
-		int minutes = (int)remainingTime % 60;
-		theValues.append( QString::number( hours ).append( ":" ) );
-		theValues.last().append( QString::number( minutes ).append( "h" ) );
-	}
+	if( remainingTime < 1 )
+		theValues.append( dateString( QDateTime() ) );
+	else
+		theValues.append( dateString( QDateTime::currentDateTime().addSecs( (int)remainingTime*60 ) ) );
 
-
-	if( remainingTime < 1 ){
-		theValues.append( "-" );
-	}
-	else{
-		QDateTime arrivalTime = QDateTime::currentDateTime().addSecs( (int)remainingTime*60 );
-		theValues.append( arrivalTime.toString( "yyyyMMdd hh:mm" ) );
-	}
-
-	theValue = Logger::instance()->trackMaxElevation();
-	theValues.append( QString::number( theValue, 'f', 0 ).append( "m" ) );
-
-	theValue = Logger::instance()->trackMinElevation();
-	theValues.append( QString::number( theValue, 'f', 0 ).append( "m" ) );
+	theValues.append( elevationString( Logger::instance()->trackMaxElevation() ) );
+	theValues.append( elevationString( Logger::instance()->trackMinElevation() ) );
 
 	if( m_listItems.size() == theValues.size() ){
 		for( int i = 0; i < m_listItems.size(); i++ ){
 			m_listItems[i]->setText( 1, theValues[i] );
 		}
 	}
-
 	m_ui->treeWidget->resizeColumnToContents( 1 );
+
+
+	// Drawing the track's height profile
 	m_ui->displayTrackProfile->setMinimumSize( 300, 150 );
 
 	double maxSpeed = 0.0;
@@ -188,7 +121,7 @@ void TripinfoDialog::updateInformation()
 
 	const QVector<double>& trackElevations = Logger::instance()->trackElevations();
 
-	// Drawing the track's height profile
+
 	int marginLeft = 5;
 	int marginRight = 5;
 	int marginTop = 5;
@@ -220,5 +153,87 @@ void TripinfoDialog::updateInformation()
 	QImage mirroredImage = pixmap.toImage().mirrored( false, true );
 	pixmap = QPixmap::fromImage( mirroredImage );
 	m_ui->displayTrackProfile->setPixmap( pixmap );
+}
+
+
+QString TripinfoDialog::speedString( double speed )
+{
+	if( speed < 1 )
+		return "-";
+	QString speedSignature = "km/h";
+	if( m_locale.measurementSystem() == QLocale::ImperialSystem ){
+		speedSignature = "mph";
+		speed *= 0.62;
+	}
+	return QString::number( speed, 'f', 1 ).append( speedSignature );
+}
+
+
+QString TripinfoDialog::distanceString( double distance )
+{
+	if( distance < 1 )
+		return "-";
+	QString distanceSignature = "km";
+	if( m_locale.measurementSystem() == QLocale::ImperialSystem ){
+		distanceSignature = "mi";
+		distance *= 0.62;
+	}
+	QString distString = QString::number( distance/1000, 'f', 1 );
+	if( distString.contains( "nan" ) )
+		distString = "-";
+	else
+		distString.append( distanceSignature );
+		return distString;
+}
+
+
+QString TripinfoDialog::dateString( QDateTime date )
+{
+	if( !date.isValid() )
+		return "-";
+
+	// date.toString( Qt::ISODate ) might be an option, but returns a long string which is not sufficient for small displays
+	// return date.toString( "yyyyMMdd hh:mm" );
+	return date.toString( "ddd hh:mm" );
+}
+
+
+QString TripinfoDialog::timeString( double time )
+{
+	// QTime might be a better choice, but can only cope with up to 24 hours, then it flips.
+	QString timeString;
+	if( time < 1 )
+		timeString = "-";
+	else if( time < 600 ){
+		timeString = QString::number( time/60, 'f', 1 ).prepend( "0" ).append( "min" );
+	}
+	else if( time < 3600 ){
+		timeString = QString::number( time/60, 'f', 0 ).append( "min" );
+	}
+	else{
+		int hours = time / 3600;
+		int minutes = (int)time % 3600 / 60;
+		timeString = QString::number( hours ).append( ":" );
+		if( minutes < 10 )
+			timeString.append( "0" );
+		timeString.append( QString::number( minutes ).append( "h" ) );
+	}
+	return timeString;
+}
+
+
+QString TripinfoDialog::elevationString( double elevation )
+{
+	QString elevationSignature = "m";
+	if( m_locale.measurementSystem() == QLocale::ImperialSystem ){
+		elevation *= 3.2808399;
+		elevationSignature = "ft";
+	}
+	QString eleString = QString::number( elevation );
+	if( eleString.contains( "nan" ) )
+		eleString = "-";
+	else
+		eleString.append( elevationSignature );
+	return eleString;
 }
 
