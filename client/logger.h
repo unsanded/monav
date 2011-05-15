@@ -49,6 +49,7 @@ public:
 	double trackMinElevation();
 	double trackMaxElevation();
 	double averageSpeed();
+	QDateTime trackStartTime();
 	const QVector<double>& trackElevations();
 	int trackDuration();
 
