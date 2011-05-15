@@ -46,11 +46,18 @@ signals:
 
 protected:
 
+	QString speedString( double kmh );
+	QString distanceString( double meters );
+	QString dateString( QDateTime datetime );
+	QString timeString( double seconds );
+	QString elevationString( double meters );
+
 	struct PrivateImplementation;
 	PrivateImplementation* d;
 	Ui::TripinfoDialog* m_ui;
 	QDateTime m_lastUpdateTime;
 	QList<QTreeWidgetItem*> m_listItems;
+	QLocale m_locale;
 };
 
 #endif // TRIPINFODIALOG_H
