@@ -20,6 +20,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include "logger.h"
 #include "routinglogic.h"
 #include "utils/qthelpers.h"
+#include <QXmlStreamReader>
 
 Logger* Logger::instance()
 {
@@ -176,76 +177,82 @@ bool Logger::readGpxLog()
 		return false;
 	}
 
-	QString lineBuffer;
-	QString latString;
-	QString lonString;
-	QString eleString;
-	QString timeString;
-	QStringList tempList;
-	bool insideTrackpoint = false;
-	while ( !m_logFile.atEnd() )
-	{
-		lineBuffer = m_logFile.readLine();
-		lineBuffer = lineBuffer.simplified();
-		if (!insideTrackpoint)
-		{
-			latString = "";
-			lonString = "";
-			eleString = "";
-			timeString = "";
-		}
-		if (lineBuffer.contains("<trkpt"))
-		{
-			insideTrackpoint = true;
-			tempList = lineBuffer.split("\"");
-			latString = tempList.at(1);
-			lonString = tempList.at(3);
-		}
-		if (lineBuffer.contains("<ele>"))
-		{
-			lineBuffer = lineBuffer.remove("<ele>");
-			lineBuffer = lineBuffer.remove("</ele>");
-			eleString = lineBuffer;
-		}
-		if (lineBuffer.contains("<time>"))
-		{
-			lineBuffer = lineBuffer.remove("<time>");
-			lineBuffer = lineBuffer.remove("</time>");
-			timeString = lineBuffer;
-		}
-		if (lineBuffer.contains("</trkpt>"))
-		{
-			RoutingLogic::GPSInfo gpsInfo;
-			gpsInfo.position = UnsignedCoordinate( GPSCoordinate() );
-			gpsInfo.altitude = -1;
-			gpsInfo.groundSpeed = -1;
-			gpsInfo.verticalSpeed = -1;
-			gpsInfo.heading = -1;
-			gpsInfo.horizontalAccuracy = -1;
-			gpsInfo.verticalAccuracy = -1;
-			QDateTime invalidTime;
-			gpsInfo.timestamp = invalidTime;
-			gpsInfo.position = UnsignedCoordinate( GPSCoordinate( latString.toDouble(), lonString.toDouble() ) );
-			gpsInfo.altitude = eleString.toDouble();
-			gpsInfo.timestamp = QDateTime::fromString( timeString, "yyyy-MM-ddThh:mm:ss" );
+	QXmlStreamReader gpxReader( &m_logFile );
+	QXmlStreamAttributes currentAttributes;
+	QXmlStreamAttribute currentAttribute;
+	QString currentValue;
+	double lat = 200.0;
+	double lon = 200.0;
+	RoutingLogic::GPSInfo gpsInfo;
+	GPSCoordinate gpsCoordinate;
 
-			// TODO: Call by reference, not value
-			readGpsInfo( gpsInfo );
-		}
-		if (lineBuffer.contains("</trkseg>"))
+	enum FileStatus{ insideFile = 0, insideGpx = 1, insideTrack = 2, insideTracksegment = 3, insideTrackpoint = 4, insideWaypoint = 5 };
+	FileStatus fileStatus = insideFile;
+
+	// Reading the file "line by line"
+	while ( !gpxReader.atEnd() )
+	{
+		gpxReader.readNext();
+		if( gpxReader.hasError() )
 		{
-			// An invalid object is used to mark the trackseg's end
-			RoutingLogic::GPSInfo gpsInfo;
-			gpsInfo.position = UnsignedCoordinate( GPSCoordinate() );
-			gpsInfo.altitude = -1;
-			gpsInfo.groundSpeed = -1;
-			gpsInfo.verticalSpeed = -1;
-			gpsInfo.heading = -1;
-			gpsInfo.horizontalAccuracy = -1;
-			gpsInfo.verticalAccuracy = -1;
-			QDateTime invalidTime;
-			gpsInfo.timestamp = invalidTime;
-			m_gpsInfoBuffer.append(gpsInfo);
+			qCritical() << tr( "There was an error reading the tracklog file" ) << m_logFile.fileName();
+			m_logFile.close();
+			return false;
+		}
+
+		if ( gpxReader.isStartElement() && gpxReader.name().toString() == "trkseg" )
+		{
+			fileStatus = insideTracksegment;
+			continue;
+		}
+		if ( gpxReader.isEndElement() && gpxReader.name().toString() == "trkseg" )
+		{
+			fileStatus = insideTrack;
+			// Append an/the currently invalid element to the list. Better save than sorry:
+			gpsInfo = RoutingLogic::GPSInfo();
+			m_gpsInfoBuffer.append( gpsInfo );
+			continue;
+		}
+
+		if ( gpxReader.isStartElement() && gpxReader.name().toString() == "trkpt" )
+		{
+			fileStatus = insideTrackpoint;
+			currentAttributes = gpxReader.attributes();
+			for( int i = 0; i < currentAttributes.size(); i++ ){
+				if( currentAttributes[i].name() == "lat" )
+					lat = currentAttributes[i].value().toString().toDouble();
+				if( currentAttributes[i].name() == "lon" )
+					lon = currentAttributes[i].value().toString().toDouble();
+			}
+			gpsCoordinate.latitude = lat;
+			gpsCoordinate.longitude = lon;
+			gpsInfo.position = UnsignedCoordinate( gpsCoordinate );
+			continue;
+		}
+		if ( gpxReader.isStartElement() && fileStatus == insideTrackpoint && gpxReader.name().toString() == "ele")
+		{
+			gpsInfo.altitude = gpxReader.readElementText().toDouble();
+			continue;
+		}
+		if ( gpxReader.isStartElement() && fileStatus == insideTrackpoint && gpxReader.name().toString() == "time")
+		{
+			gpsInfo.timestamp = QDateTime::fromString( gpxReader.readElementText() );
+			continue;
+		}
+		if ( gpxReader.isStartElement() && fileStatus == insideTrackpoint && gpxReader.name().toString() == "speed")
+		{
+			gpsInfo.groundSpeed = gpxReader.readElementText().toDouble();
+			continue;
+		}
+		if ( gpxReader.isEndElement() && gpxReader.name().toString() == "trkpt" )
+		{
+			fileStatus = insideTracksegment;
+			if( gpsInfo.position.IsValid() ){
+				m_gpsInfoBuffer.append( gpsInfo );
+			}
+			// Reinitialize the object to make it invalid.
+			gpsInfo = RoutingLogic::GPSInfo();
+			continue;
 		}
 	}
 	m_logFile.close();
@@ -254,6 +261,12 @@ bool Logger::readGpxLog()
 }
 
 
+bool Logger::writeGpxLog()
+{
+	return true;
+}
+
+/*
 bool Logger::writeGpxLog()
 {
 	QDateTime currentDateTime = QDateTime::currentDateTime();
@@ -331,6 +344,7 @@ bool Logger::writeGpxLog()
 	m_lastFlushTime = QDateTime::currentDateTime();
 	return true;
 }
+*/
 
 
 void Logger::clearTracklog()
