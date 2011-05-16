@@ -195,7 +195,7 @@ bool Logger::readGpxLog()
 		gpxReader.readNext();
 		if( gpxReader.hasError() )
 		{
-			qCritical() << tr( "There was an error reading the tracklog file" ) << m_logFile.fileName();
+			qCritical() << tr( "Error while reading\n%1\n%2" ).arg( m_logFile.fileName() ).arg( gpxReader.errorString() );
 			m_logFile.close();
 			return false;
 		}
@@ -263,12 +263,6 @@ bool Logger::readGpxLog()
 
 bool Logger::writeGpxLog()
 {
-	return true;
-}
-
-/*
-bool Logger::writeGpxLog()
-{
 	QDateTime currentDateTime = QDateTime::currentDateTime();
 	// Create a backup while writing to avoid data loss in case the battery drained etc.
 	QString backupFilename;
@@ -287,64 +281,55 @@ bool Logger::writeGpxLog()
 
 	QString trackName = m_tracklogPrefix;
 	trackName.append( currentDateTime.toString( " yyyy-MM-dd" ) );
-	trackName.prepend("  <name>");
-	trackName.append("</name>\n");
 
-	QTextStream gpxStream(&m_logFile);
-	gpxStream << QString("<?xml version=\"1.0\"?>\n").toUtf8();
-	gpxStream << QString("<gpx version=\"1.0\" creator=\"MoNav Tracklogger\" xmlns=\"http://www.topografix.com/GPX/1/0\">\n").toUtf8();
-	gpxStream << QString("  <trk>\n").toUtf8();
-	gpxStream << trackName;
+	enum FileStatus{ insideFile = 0, insideGpx = 1, insideTrack = 2, insideTracksegment = 3, insideTrackpoint = 4, insideWaypoint = 5 };
+	FileStatus fileStatus = insideFile;
 
-	bool insideTracksegment = false;
-	for (int i = 0; i < m_gpsInfoBuffer.size(); i++)
+	QXmlStreamWriter gpxWriter(&m_logFile);
+	gpxWriter.setAutoFormatting(true);
+	gpxWriter.writeStartDocument();
+	gpxWriter.writeStartElement( "gpx" );
+	gpxWriter.writeAttribute( "creator", "MoNav Tracklogger" );
+	gpxWriter.writeAttribute( "version", "1.0" );
+	gpxWriter.writeNamespace( "http://www.topografix.com/GPX/1/0 http://www.topografix.com/GPX/1/0/gpx.xsd","schemaLocation" );
+	fileStatus = insideGpx;
+	gpxWriter.writeStartElement( "trk" );
+	gpxWriter.writeTextElement( "name", trackName );
+	fileStatus = insideTrack;
+
+	for( int i = 0; i < m_gpsInfoBuffer.size(); i++ )
 	{
-			if (!m_gpsInfoBuffer.at(i).position.IsValid() && insideTracksegment)
-		{
-			gpxStream << "    </trkseg>\n";
-			insideTracksegment = false;
-			continue;
+		if( !m_gpsInfoBuffer[i].position.IsValid() && fileStatus == insideTracksegment ){
+			gpxWriter.writeEndElement();
+			fileStatus = insideTrack;
 		}
-		if (!m_gpsInfoBuffer.at(i).position.IsValid() && !insideTracksegment)
-		{
-			continue;
+		if( m_gpsInfoBuffer[i].position.IsValid() && fileStatus == insideTrack ){
+			gpxWriter.writeStartElement( "trkseg" );
+			fileStatus = insideTracksegment;
 		}
-		if (m_gpsInfoBuffer.at(i).position.IsValid() && !insideTracksegment)
-		{
-			gpxStream << "    <trkseg>\n";
-			insideTracksegment = true;
-		}
-		if (m_gpsInfoBuffer.at(i).position.IsValid() && insideTracksegment)
-		{
-			double latitude = m_gpsInfoBuffer.at(i).position.ToGPSCoordinate().latitude;
-			double longitude = m_gpsInfoBuffer.at(i).position.ToGPSCoordinate().longitude;
-			double elevation = m_gpsInfoBuffer.at(i).altitude;
-			QString lat = QString::number( latitude, 'f', 6 ).prepend("      <trkpt lat=\"").append("\"");
-			QString lon = QString::number( longitude, 'f', 6 ).prepend(" lon=\"").append("\">\n");
-			QString ele = QString::number( elevation, 'f', 2 ).prepend("        <ele>").append("</ele>\n");
-			QString time = m_gpsInfoBuffer.at(i).timestamp.toString( "yyyy-MM-ddThh:mm:ss" ).prepend("        <time>").append("</time>\n");
-			gpxStream << lat.toUtf8();
-			gpxStream << lon.toUtf8();
-			if ( !ele.contains("nan") && m_gpsInfoBuffer.at(i).verticalAccuracy < 50 )
-				gpxStream << ele.toUtf8();
-			gpxStream << time.toUtf8();
-			gpxStream << QString("      </trkpt>\n").toUtf8();
+		if( m_gpsInfoBuffer[i].position.IsValid() && fileStatus == insideTracksegment ){
+			gpxWriter.writeStartElement( "trkpt" );
+			gpxWriter.writeAttribute( "lat", QString::number( m_gpsInfoBuffer[i].position.ToGPSCoordinate().latitude, 'f', 6 ) );
+			gpxWriter.writeAttribute( "lon", QString::number( m_gpsInfoBuffer[i].position.ToGPSCoordinate().longitude, 'f', 6 ) );
+			if( !QString::number( m_gpsInfoBuffer[i].altitude ).contains( "nan" ) )
+				gpxWriter.writeTextElement( "ele", QString::number( m_gpsInfoBuffer[i].altitude, 'f', 0 ) );
+			if( !QString::number( m_gpsInfoBuffer[i].groundSpeed ).contains( "nan" ) )
+				gpxWriter.writeTextElement( "speed", QString::number( m_gpsInfoBuffer[i].groundSpeed, 'f', 6 ) );
+			if( m_gpsInfoBuffer[i].timestamp.isValid() )
+				gpxWriter.writeTextElement( "time", m_gpsInfoBuffer[i].timestamp.toString() );
+			gpxWriter.writeEndElement();
 		}
 	}
-	if (insideTracksegment)
-	{
-		gpxStream << QString("    </trkseg>\n").toUtf8();
-	}
-	gpxStream << QString("  </trk>\n").toUtf8();
-	gpxStream << QString("</gpx>\n").toUtf8();
+
+	gpxWriter.writeEndDocument();
 	m_logFile.close();
+	// Remove the backup copy in case everything seems to be ok
 	if( QFile::exists ( backupFilename ) )
 		m_logFile.remove( backupFilename );
 
 	m_lastFlushTime = QDateTime::currentDateTime();
 	return true;
 }
-*/
 
 
 void Logger::clearTracklog()
