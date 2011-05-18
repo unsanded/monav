@@ -45,12 +45,13 @@ public:
 	QString directory();
 	void setDirectory(QString);
 	double maxSpeed();
+
 	double trackDistance();
 	double trackMinElevation();
 	double trackMaxElevation();
 	double averageSpeed();
 	QDateTime trackStartTime();
-	const QVector<double>& trackElevations();
+	const QVector< QVector< RoutingLogic::GPSInfo > >& currentTrack();
 	int trackDuration();
 
 	QVector< int > polygonEndpointsTracklog();
@@ -71,22 +72,19 @@ signals:
 protected:
 
 	explicit Logger( QObject* parent = 0 );
-	void readGpsInfo( RoutingLogic::GPSInfo );
+	void processGpsInfo( RoutingLogic::GPSInfo );
 	bool readGpxLog();
 	bool writeGpxLog();
 	QFile m_logFile;
 	QDateTime m_lastFlushTime;
-	double m_maxSpeed;
-	double m_sumSpeeds;
-	int m_validPoints;
-	double m_trackDistance;
-	double m_trackMinElevation;
-	double m_trackMaxElevation;
-	QVector<double> m_trackElevations;
 	bool m_loggingEnabled;
 	QString m_tracklogPath;
 	QString m_tracklogPrefix;
-	QVector<RoutingLogic::GPSInfo> m_gpsInfoBuffer;
+	QVector< QVector< RoutingLogic::GPSInfo > > m_trackSegments;
+	QVector< double > m_segmentLenghts;
+	QVector< double > m_segmentMinElevations;
+	QVector< double > m_segmentMaxElevations;
+	double m_maxSpeed;
 };
 
 #endif // LOGGER_H
