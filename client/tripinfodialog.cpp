@@ -116,20 +116,28 @@ void TripinfoDialog::updateInformation()
 	QPixmap pixmap( m_ui->displayTrackProfile->width(), m_ui->displayTrackProfile->height());
 	pixmap.fill( QColor( 255, 255, 255, 128 ) );
 
-	const QVector<double>& trackElevations = Logger::instance()->trackElevations();
+	const QVector< QVector< RoutingLogic::GPSInfo > >& track = Logger::instance()->currentTrack();
 	double minElevation = Logger::instance()->trackMinElevation();
 	double maxElevation = Logger::instance()->trackMaxElevation();
 	double metersDelta = maxElevation - minElevation;
 	int margin = 5;
+	int pointAmount = 0;
 	double scaleX = 1.0;
 	double scaleY = 1.0;
 
-	scaleX = double( m_ui->displayTrackProfile->width() - margin-margin ) / double( trackElevations.size() );
+	for( int i = 0; i < track.size(); i++ )
+		pointAmount += track[i].size();
+
+	scaleX = double( m_ui->displayTrackProfile->width() - margin-margin ) / double( pointAmount );
 	scaleY = ( m_ui->displayTrackProfile->height() -margin-margin ) / metersDelta;
 
 	QPolygonF polygon;
-	for( int i = 0; i < trackElevations.size(); i++ ){
-		polygon << QPointF( (i * scaleX) +margin, (trackElevations.at(i) * scaleY) -margin );
+	int point = 0;
+	for( int i = 0; i < track.size(); i++ ){
+		for( int j = 0; j < track[i].size(); j++ ){
+			polygon << QPointF( ( point * scaleX) +margin, (track[i][j].altitude * scaleY) -margin);
+			point++;
+		}
 	}
 
 	QPainter painter;
@@ -164,7 +172,7 @@ QString TripinfoDialog::distanceString( double distance )
 		return "-";
 	QString distanceSignature = "km";
 	if( m_locale.measurementSystem() == QLocale::ImperialSystem ){
-		distanceSignature = "mi";
+		distanceSignature = "mil";
 		distance *= 0.62;
 	}
 	QString distString = QString::number( distance/1000, 'f', 1 );
@@ -187,7 +195,7 @@ QString TripinfoDialog::dateString( QDateTime date )
 
 QString TripinfoDialog::timeString( double time )
 {
-	// QTime might be a better choice, but can only cope with up to 24 hours, then it flips.
+	// QTime might be a better choice, but can only cope with up to 24 hours, then it wraps.
 	QString timeString;
 	if( time < 1 || QString::number( time ).contains( "nan" ) )
 		timeString = "-";
