@@ -17,6 +17,10 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Also see logger.cpp which contains the same value.
+// Due to a circular dependency, it was not possible to provide a getter method.
+#define INVALIDELEVATIONVALUE -20000.0
+
 #include "interfaces/irouter.h"
 #include "mapdata.h"
 #include "routinglogic.h"
@@ -120,7 +124,7 @@ void TripinfoDialog::updateInformation()
 	double minElevation = Logger::instance()->trackMinElevation();
 	double maxElevation = Logger::instance()->trackMaxElevation();
 	double metersDelta = maxElevation - minElevation;
-	int margin = 5;
+	int margin = 10;
 	int pointAmount = 0;
 	double scaleX = 1.0;
 	double scaleY = 1.0;
@@ -128,22 +132,32 @@ void TripinfoDialog::updateInformation()
 	for( int i = 0; i < track.size(); i++ )
 		pointAmount += track[i].size();
 
-	scaleX = double( m_ui->displayTrackProfile->width() - margin-margin ) / double( pointAmount );
-	scaleY = ( m_ui->displayTrackProfile->height() -margin-margin ) / metersDelta;
+
+	scaleX = m_ui->displayTrackProfile->width() -margin*(track.size() +1);
+	scaleX /= pointAmount;
+	scaleY = m_ui->displayTrackProfile->height() -margin*2;
+	scaleY /= metersDelta;
 
 	QPolygonF polygon;
+	QList<QPolygonF> polygons;
 	int point = 0;
 	for( int i = 0; i < track.size(); i++ ){
 		for( int j = 0; j < track[i].size(); j++ ){
-			polygon << QPointF( ( point * scaleX) +margin, (track[i][j].altitude * scaleY) -margin);
-			point++;
+			if( track[i][j].altitude != INVALIDELEVATIONVALUE ){
+				polygon << QPointF( ( point * scaleX ) +margin +margin*i, ( ( ( track[i][j].altitude-minElevation ) * scaleY) +margin ) );
+				point++;
+			}
 		}
+		polygons.append( polygon );
+		polygon.clear();
 	}
 
 	QPainter painter;
 	painter.begin( &pixmap );
 	painter.setPen( QColor( 178, 034, 034 ) );
-	painter.drawPolyline( polygon );
+	for( int i = 0; i < polygons.size(); i++ ){
+		painter.drawPolyline( polygons[i] );
+	}
 	painter.end();
 
 	// Ugly hack to flip the image
@@ -219,16 +233,23 @@ QString TripinfoDialog::timeString( double time )
 
 QString TripinfoDialog::elevationString( double elevation )
 {
-	QString elevationSignature = "m";
-	if( m_locale.measurementSystem() == QLocale::ImperialSystem ){
-		elevation *= 3.2808399;
-		elevationSignature = "ft";
+	QString elevationString;
+	QString elevationSignature;
+	// BTW: The lowest point on land is near the dead sea, -422m.
+	if( elevation == INVALIDELEVATIONVALUE ){
+		elevationString = "-";
 	}
-	QString eleString = QString::number( elevation );
-	if( eleString.contains( "nan" ) )
-		eleString = "-";
-	else
-		eleString.append( elevationSignature );
-	return eleString;
+	else if( m_locale.measurementSystem() == QLocale::ImperialSystem ){
+		elevation *= 3.2808399;
+		elevationString = QString::number( elevation );
+		elevationSignature = "ft";
+		elevationString.append( elevationSignature );
+	}
+	else{
+		elevationString = QString::number( elevation );
+		elevationSignature = "m";
+		elevationString.append( elevationSignature );
+	}
+	return elevationString;
 }
 
