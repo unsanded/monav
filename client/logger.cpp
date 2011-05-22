@@ -17,6 +17,10 @@ You should have received a copy of the GNU General Public License
 along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+// Also see tripinfodialog.cpp which contains the same value.
+// Due to a circular dependency, it was not possible to provide a getter method.
+#define INVALIDELEVATIONVALUE -20000.0
+
 #include "logger.h"
 #include "routinglogic.h"
 #include "utils/qthelpers.h"
@@ -60,8 +64,8 @@ void Logger::initialize()
 	m_segmentMaxElevations.clear();
 	m_trackSegments.append( QVector< RoutingLogic::GPSInfo >() );
 	m_segmentLenghts.append( 0.0 );
-	m_segmentMinElevations.append( -20000.0 );
-	m_segmentMaxElevations.append( -20000.0 );
+	m_segmentMinElevations.append( INVALIDELEVATIONVALUE );
+	m_segmentMaxElevations.append( INVALIDELEVATIONVALUE );
 	m_maxSpeed = 0.0;
 
 	m_tracklogPrefix = tr( "MoNavTrack" );
@@ -127,6 +131,7 @@ bool Logger::readGpxLog()
 	double lat = 200.0;
 	double lon = 200.0;
 	RoutingLogic::GPSInfo gpsInfo;
+	gpsInfo.altitude = INVALIDELEVATIONVALUE;
 	GPSCoordinate gpsCoordinate;
 
 	enum FileStatus{ insideFile = 0, insideGpx = 1, insideTrack = 2, insideTracksegment = 3, insideTrackpoint = 4, insideWaypoint = 5 };
@@ -148,8 +153,8 @@ bool Logger::readGpxLog()
 			if( m_trackSegments[0].size() > 0 ){
 				m_trackSegments.append( QVector< RoutingLogic::GPSInfo >() );
 				m_segmentLenghts.append( 0.0 );
-				m_segmentMinElevations.append( -20000.0 );
-				m_segmentMaxElevations.append( -20000.0 );
+				m_segmentMinElevations.append( INVALIDELEVATIONVALUE );
+				m_segmentMaxElevations.append( INVALIDELEVATIONVALUE );
 			}
 			fileStatus = insideTracksegment;
 			continue;
@@ -195,6 +200,7 @@ bool Logger::readGpxLog()
 			processGpsInfo( gpsInfo );
 			// Reinitialize the object to make it invalid.
 			gpsInfo = RoutingLogic::GPSInfo();
+			gpsInfo.altitude = INVALIDELEVATIONVALUE;
 			continue;
 		}
 	}
@@ -215,12 +221,12 @@ void Logger::processGpsInfo( RoutingLogic::GPSInfo gpsInfo )
 	if ( gpsInfo.horizontalAccuracy > 40 )
 		return;
 	if ( gpsInfo.verticalAccuracy > 40 )
-		gpsInfo.altitude = -20000.0;
+		gpsInfo.altitude = INVALIDELEVATIONVALUE;
 	// TODO: Replace this ugly string comparison by something more elegant.
 	// Unfortunately a quick search brought up that such checks depend on the compiler and platform used.
 	QString checkValue = QString::number( gpsInfo.altitude );
 	if( checkValue == "nan" || checkValue == "inf" )
-		gpsInfo.altitude = -20000.0;
+		gpsInfo.altitude = INVALIDELEVATIONVALUE;
 
 	// TODO: Maybe filter inaccurate data:
 	// Position and/or timestamp equal the last received event (which actually happens with AGPS)
@@ -244,10 +250,10 @@ void Logger::processGpsInfo( RoutingLogic::GPSInfo gpsInfo )
 	}
 
 	// At this point, all elevations should have been set to something meaningful
-	if( m_segmentMinElevations.last() == -20000.0 || gpsInfo.altitude < m_segmentMinElevations.last() ){
+	if( m_segmentMinElevations.last() == INVALIDELEVATIONVALUE || gpsInfo.altitude < m_segmentMinElevations.last() ){
 		m_segmentMinElevations.last() = gpsInfo.altitude;
 	}
-	if( m_segmentMaxElevations.last() == -20000.0 || gpsInfo.altitude > m_segmentMaxElevations.last() ){
+	if( m_segmentMaxElevations.last() == INVALIDELEVATIONVALUE || gpsInfo.altitude > m_segmentMaxElevations.last() ){
 		m_segmentMaxElevations.last() = gpsInfo.altitude;
 	}
 	m_trackSegments.last().append( gpsInfo );
@@ -306,7 +312,7 @@ bool Logger::writeGpxLog()
 				gpxWriter.writeAttribute( "lat", QString::number( currentSegment[i].position.ToGPSCoordinate().latitude, 'f', 6 ) );
 				gpxWriter.writeAttribute( "lon", QString::number( currentSegment[i].position.ToGPSCoordinate().longitude, 'f', 6 ) );
 				// TODO: See processGpsInfo(). An invalid altitude should not appear in the lists. Remove this section.
-				if( !QString::number( currentSegment[i].altitude ).contains( "nan" ) )
+				if( currentSegment[i].altitude != INVALIDELEVATIONVALUE )
 					gpxWriter.writeTextElement( "ele", QString::number( currentSegment[i].altitude, 'f', 0 ) );
 				// TODO: There are several flavours of the timestamp format, which describe UTC, local time, UTC+[hours] and the like
 				// See the reader method also. I recommend to write UTC.
@@ -351,9 +357,9 @@ double Logger::trackDistance()
 
 double Logger::trackMinElevation()
 {
-	double elevation = 20000.0;
+	double elevation = INVALIDELEVATIONVALUE;
 	for( int i = 0; i < m_segmentMinElevations.size(); i++ ){
-		if( m_segmentMinElevations[i] < elevation )
+		if( elevation == INVALIDELEVATIONVALUE || m_segmentMinElevations[i] < elevation )
 			elevation = m_segmentMinElevations[i];
 	}
 	return elevation;
@@ -362,7 +368,7 @@ double Logger::trackMinElevation()
 
 double Logger::trackMaxElevation()
 {
-	double elevation = -20000.0;
+	double elevation = INVALIDELEVATIONVALUE;
 	for( int i = 0; i < m_segmentMaxElevations.size(); i++ ){
 		if( m_segmentMaxElevations[i] > elevation )
 			elevation = m_segmentMaxElevations[i];
