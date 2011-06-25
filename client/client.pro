@@ -29,7 +29,9 @@ SOURCES += main.cpp \
     placechooser.cpp \
     globalsettings.cpp \
     streetchooser.cpp \
-    worldmapchooser.cpp
+    worldmapchooser.cpp \
+    serverinputdialog.cpp \
+    serverlogic.cpp
 
 HEADERS += \
 	paintwidget.h \
@@ -59,7 +61,9 @@ HEADERS += \
     placechooser.h \
     globalsettings.h \
     streetchooser.h \
-    worldmapchooser.h
+    worldmapchooser.h \
+    serverinputdialog.h \
+    serverlogic.h
 
 FORMS += \
 	paintwidget.ui \
@@ -72,7 +76,8 @@ FORMS += \
     mainwindow.ui \
     mapmoduleswidget.ui \
     placechooser.ui \
-    streetchooser.ui
+    streetchooser.ui \
+    serverinputdialog.ui
 
 DESTDIR = ../bin
 

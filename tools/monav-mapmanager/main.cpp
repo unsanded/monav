@@ -19,12 +19,14 @@ QDomNode findPackageNode(QDomDocument &list, QString packageType, QString packag
 
 		if(packageType == "map")
 		{
-			if(curPackage.toElement().attribute("name") == packageName) return curPackage;
+			if(curPackage.toElement().attribute("name") == packageName)
+				return curPackage;
 		}
 
 		else
 		{
-			if(curPackage.toElement().text() == packageName) return curPackage;
+			if(curPackage.toElement().text() == packageName)
+				return curPackage;
 		}
 	}
 
@@ -37,7 +39,7 @@ QDomNode findMapVersionNode(QDomNode &mapNode, QString &mapVersion)
 
 	for(int i=0; i<versionNodes.size(); i++)
 	{
-		if(versionNodes.at(i).toElement().attribute("config") == mapVersion)
+		if(versionNodes.at(i).toElement().attribute("name") == mapVersion)
 			return versionNodes.at(i);
 	}
 
@@ -215,7 +217,7 @@ int main( int argc, char *argv[] )
 		}
 
 		QDomElement versionElement = list.createElement("version");
-		versionElement.setAttribute("config", mapVersion);
+		versionElement.setAttribute("name", mapVersion);
 		versionElement.setAttribute("complete", "no");
 		versionElement.setAttribute("path", packagePath);
 		mapNode.appendChild(versionElement);
@@ -287,7 +289,7 @@ int main( int argc, char *argv[] )
 		versionElement.appendChild(typeElement);
 
 		QDomElement moduleElement = list.createElement("module");
-		moduleElement.setAttribute("subtype", packageAttributes[3]);
+		moduleElement.setAttribute("name", packageAttributes[3]);
 		moduleElement.setAttribute("timestamp", rootElement.attribute("timestamp").toInt()+1);
 		rootElement.setAttribute("timestamp", moduleElement.attribute("timestamp").toInt());
 		typeElement.appendChild(moduleElement);
