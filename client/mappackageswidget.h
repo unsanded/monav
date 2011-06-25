@@ -21,6 +21,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #define MAPPACKAGESWIDGET_H
 
 #include <QWidget>
+#include <QUrl>
 
 namespace Ui {
 	class MapPackagesWidget;
@@ -53,6 +54,8 @@ protected slots:
 	void check();
 	void update();
 	void download();
+	void editServerList();
+	void populateServerPackageList();
 	void selected( int id );
 
 protected:

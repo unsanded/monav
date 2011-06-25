@@ -19,7 +19,9 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "mappackageswidget.h"
 #include "ui_mappackageswidget.h"
+#include "serverinputdialog.h"
 #include "mapdata.h"
+#include "serverlogic.h"
 
 #include <QResizeEvent>
 #include <QShowEvent>
@@ -31,17 +33,13 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <QMessageBox>
 
 struct MapPackagesWidget::PrivateImplementation {
-	struct Server {
-		QString name;
-		QString url;
-		int id;
-	};
 
 	int selected;
 
 	QString path;
 	QVector< MapData::MapPackage > maps;
-	QVector< Server > servers;
+	QVector< ServerLogic::Server > servers;
+	ServerLogic *serverLogic;
 
 	void populateInstalled( QListWidget* list );
 	void highlightButton( QPushButton* button, bool highlight );
@@ -54,10 +52,7 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	m_ui->setupUi( this );
 	d = new PrivateImplementation;
 
-	// Remove non-functional pages
-	// TODO remove this when functionality is available
-	m_ui->updatable->deleteLater();
-	m_ui->downloadable->deleteLater();
+	d->serverLogic = NULL;
 
 	QSettings settings( "MoNavClient" );
 	settings.beginGroup( "MapPackages" );
@@ -70,10 +65,11 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	int entries = settings.beginReadArray( "server" );
 	for ( int i = 0; i < entries; i++ ) {
 		settings.setArrayIndex( i );
-		PrivateImplementation::Server server;
+		ServerLogic::Server server;
 		server.name = settings.value( "name" ).toString();
-		server.url = settings.value( "url" ).toString();
-		server.id = settings.value( "id" ).toInt();
+		server.url = settings.value( "url" ).toUrl();
+		d->servers.push_back( server );
+		m_ui->server->addItem( server.name, server.url );
 	}
 	settings.endArray();
 	// TODO: INSERT DEFAULT SERVER
@@ -83,7 +79,7 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	connect( m_ui->check, SIGNAL(clicked()), this, SLOT(check()) );
 	connect( m_ui->update, SIGNAL(clicked()), this, SLOT(check()) );
 	connect( m_ui->download, SIGNAL(clicked()), this, SLOT(download()) );
-	// ADD SERVER
+	connect( m_ui->addServer, SIGNAL(clicked()), this, SLOT(editServerList()) );
 	// BACK
 	// CLICK
 	connect( m_ui->installedList, SIGNAL(itemSelectionChanged()), this, SLOT(mapSelectionChanged()) );
@@ -95,6 +91,7 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	d->highlightButton( m_ui->changeDirectory, m_ui->installedList->count() == 0 );
 	m_ui->worldMap->setMaps( d->maps );
 	m_ui->worldMap->setHighlight( d->selected );
+	m_ui->downloadList->setHeaderLabel("Server Package List");
 }
 
 MapPackagesWidget::~MapPackagesWidget()
@@ -108,10 +105,11 @@ MapPackagesWidget::~MapPackagesWidget()
 		settings.setArrayIndex( i );
 		settings.setValue( "name", d->servers[i].name );
 		settings.setValue( "url", d->servers[i].url );
-		settings.setValue( "id", d->servers[i].id );
 	}
 	settings.endArray();
 
+	if(d->serverLogic != NULL)
+		delete d->serverLogic;
 	delete d;
 	delete m_ui;
 }
@@ -197,7 +195,63 @@ void MapPackagesWidget::update()
 
 void MapPackagesWidget::download()
 {
+	if(d->serverLogic == NULL)
+	{
+		d->serverLogic = new ServerLogic();
+		connect(d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
+	}
 
+	d->serverLogic->connectNetworkManager();
+	d->serverLogic->loadPackageList( d->path, d->servers[m_ui->server->currentIndex()].url );
+}
+
+void MapPackagesWidget::editServerList()
+{
+	ServerInputDialog* dialog = new ServerInputDialog( d->servers, this );
+
+	if( dialog->exec() == QDialog::Accepted )
+	{
+		dialog->writeServerSettings( &d->servers );
+
+		m_ui->server->clear();
+		for(int i=0; i<d->servers.size(); i++)
+			m_ui->server->addItem(d->servers[i].name, d->servers[i].url);
+	}
+
+	delete dialog;
+}
+
+void MapPackagesWidget::populateServerPackageList()
+{
+	m_ui->downloadList->clear();
+
+	QDomElement element = d->serverLogic->packageList().documentElement().firstChildElement();
+	QTreeWidgetItem *parent = NULL;
+
+	while(!element.isNull())
+	{
+		QString name = element.hasAttribute( "name" ) ? element.attribute( "name" ) : element.tagName();
+
+		QTreeWidgetItem *item = new QTreeWidgetItem( parent, QStringList( name ) );
+		m_ui->downloadList->addTopLevelItem( item );
+
+		if(!element.firstChildElement().isNull())
+		{
+			element = element.firstChildElement();
+			parent = item;
+		}
+
+		else
+		{
+			while(element.nextSiblingElement().isNull() && !element.parentNode().isNull())
+			{
+				element = element.parentNode().toElement();
+				parent = parent != NULL ? parent->parent() : NULL;
+			}
+
+			element = element.nextSiblingElement();
+		}
+	}
 }
 
 void MapPackagesWidget::PrivateImplementation::populateInstalled( QListWidget* list )
