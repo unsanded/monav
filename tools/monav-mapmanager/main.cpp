@@ -46,29 +46,6 @@ QDomNode findMapVersionNode(QDomNode &mapNode, QString &mapVersion)
 	return QDomNode();
 }
 
-/*
-QDomElement findPackage(QDomDocument &list, QString &packageName)
-{
-	QDomElement curElement = list.documentElement();
-
-	while(!curElement.isNull())
-	{
-		if(curElement.tagName() == "packages" && curElement.text() == packageName) return curElement;
-
-		if(curElement.hasChildNodes())
-			curElement = curElement.firstChildElement();
-		else
-		{
-			while(curElement.nextSiblingElement().isNull() && !curElement.parentNode().isNull())
-				curElement = curElement.parentNode().toElement();
-			curElement = curElement.nextSiblingElement();
-		}
-	}
-
-	return curElement;
-}
-*/
-
 int main( int argc, char *argv[] )
 {
 	QSettings settings("MonavMapManager");

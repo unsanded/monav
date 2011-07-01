@@ -77,7 +77,7 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	connect( m_ui->changeDirectory, SIGNAL(clicked()), this, SLOT(directory()) );
 	connect( m_ui->load, SIGNAL(clicked()), this, SLOT(load()) );
 	connect( m_ui->check, SIGNAL(clicked()), this, SLOT(check()) );
-	connect( m_ui->update, SIGNAL(clicked()), this, SLOT(check()) );
+	connect( m_ui->update, SIGNAL(clicked()), this, SLOT(update()) );
 	connect( m_ui->download, SIGNAL(clicked()), this, SLOT(download()) );
 	connect( m_ui->addServer, SIGNAL(clicked()), this, SLOT(editServerList()) );
 	// BACK
@@ -183,9 +183,20 @@ void MapPackagesWidget::directory()
 	m_ui->worldMap->setHighlight( d->selected );
 }
 
+void MapPackagesWidget::setupNetworkAccess()
+{
+	d->serverLogic = new ServerLogic();
+	connect(d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
+	d->serverLogic->connectNetworkManager();
+
+}
 void MapPackagesWidget::check()
 {
+	if(d->serverLogic == NULL)
+		setupNetworkAccess();
 
+	d->serverLogic->setLocalDir( d->path );
+	d->serverLogic->loadPackageList( d->servers[m_ui->server->currentIndex()].url );
 }
 
 void MapPackagesWidget::update()
@@ -196,13 +207,39 @@ void MapPackagesWidget::update()
 void MapPackagesWidget::download()
 {
 	if(d->serverLogic == NULL)
-	{
-		d->serverLogic = new ServerLogic();
-		connect(d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
-	}
+		setupNetworkAccess();
 
-	d->serverLogic->connectNetworkManager();
-	d->serverLogic->loadPackageList( d->path, d->servers[m_ui->server->currentIndex()].url );
+	d->serverLogic->setLocalDir( d->path );
+
+	QList< QTreeWidgetItem* > selected = m_ui->downloadList->selectedItems();
+
+	foreach ( QTreeWidgetItem* item, selected )
+	{
+		QDomNodeList packages = d->serverLogic->packageList().elementsByTagName( item->data( 0, Qt::UserRole ).toString() );
+
+		QDomElement element;
+		for( int i=0; i < packages.size(); i++ )
+		{
+			if( item->text( 0 ) == packages.item(i).toElement().attribute( "name" ) )
+			{
+				element = packages.item(i).toElement();
+				break;
+			}
+		}
+
+		if( element.isNull() )
+		{
+			qDebug() << "package not found:" << item->data( 0, Qt::UserRole ).toString() << item->text( 0 );
+			return;
+		}
+
+		QStringList modules = element.text().split(".mmm", QString::SkipEmptyParts);
+
+		for( int i=0; i < modules.size(); i++ )
+			d->serverLogic->loadPackage( QUrl( modules.at(i) + ".mmm" ) );
+
+		item->setSelected( false );
+	}
 }
 
 void MapPackagesWidget::editServerList()
@@ -214,8 +251,8 @@ void MapPackagesWidget::editServerList()
 		dialog->writeServerSettings( &d->servers );
 
 		m_ui->server->clear();
-		for(int i=0; i<d->servers.size(); i++)
-			m_ui->server->addItem(d->servers[i].name, d->servers[i].url);
+		for(int i=0; i < d->servers.size(); i++)
+			m_ui->server->addItem( d->servers[i].name, d->servers[i].url );
 	}
 
 	delete dialog;
@@ -233,6 +270,7 @@ void MapPackagesWidget::populateServerPackageList()
 		QString name = element.hasAttribute( "name" ) ? element.attribute( "name" ) : element.tagName();
 
 		QTreeWidgetItem *item = new QTreeWidgetItem( parent, QStringList( name ) );
+		item->setData(0, Qt::UserRole, element.tagName());
 		m_ui->downloadList->addTopLevelItem( item );
 
 		if(!element.firstChildElement().isNull())
