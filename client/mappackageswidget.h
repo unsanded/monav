@@ -62,6 +62,7 @@ protected:
 
 	virtual void resizeEvent( QResizeEvent* event );
 	virtual void showEvent( QShowEvent* event );
+	void setupNetworkAccess();
 
 	struct PrivateImplementation;
 	PrivateImplementation* d;

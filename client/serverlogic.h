@@ -3,9 +3,11 @@
 
 #include <QString>
 #include <QUrl>
-#include <QFile>
-#include <QNetworkAccessManager>
 #include <QDomDocument>
+
+class QNetworkAccessManager;
+class QNetworkReply;
+class DirectoryUnpacker;
 
 class ServerLogic : public QObject
 {
@@ -21,6 +23,7 @@ class ServerLogic : public QObject
 		ServerLogic();
 		~ServerLogic();
 
+		void setLocalDir( const QString &dir );
 		const QDomDocument& packageList() const;
 
 	signals:
@@ -28,13 +31,18 @@ class ServerLogic : public QObject
 
 	public slots:
 		void connectNetworkManager();
-		bool loadPackageList( const QString &dir, const QUrl &url );
+		bool loadPackage( const QUrl &url );
+		bool loadPackageList( const QUrl &url );
 		void finished( QNetworkReply* reply );
+
+	protected slots:
+		void handleUnpackError();
 
 	protected:
 
 		QString m_localDir;
 		QDomDocument m_packageList;
+		DirectoryUnpacker *m_unpacker;
 		QNetworkAccessManager* m_network;
 };
 
