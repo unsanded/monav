@@ -234,6 +234,7 @@ struct DirectoryUnpacker::PrivateImplementation {
 		g_Alloc.Alloc = SzAlloc;
 		g_Alloc.Free = SzFree;
 
+		LzmaDec_Free( &state, &g_Alloc );
 		if ( LzmaDec_Allocate( &state, header, LZMA_PROPS_SIZE, &g_Alloc ) != SZ_OK ) {
 			qCritical() << "Error allocating LZMA data structures";
 			return false;
@@ -248,7 +249,7 @@ struct DirectoryUnpacker::PrivateImplementation {
 		return true;
 	}
 
-	int decodeLZMAData()
+	bool decodeLZMAData()
 	{
 		//qDebug() << "round" << inPos << inSize << outPos;
 
@@ -265,7 +266,6 @@ struct DirectoryUnpacker::PrivateImplementation {
 		SRes res = LzmaDec_DecodeToBuf( &state, lzmaOutputBuffer + outPos, &outLeft, lzmaInputBuffer + inPos, &inLeft, mode, &status );
 		if ( res != SZ_OK ) {
 			//qDebug() << "res" << res;
-			LzmaDec_Free( &state, &g_Alloc );
 			qCritical() << "Error decoding LZMA stream";
 			return false;
 		}
@@ -275,7 +275,6 @@ struct DirectoryUnpacker::PrivateImplementation {
 
 		if ( ( size_t ) outputFile.write( ( const char* ) lzmaOutputBuffer, outPos ) != outPos ) {
 			qCritical() << "Error writing to file:" << outputFile.fileName();
-			LzmaDec_Free( &state, &g_Alloc );
 			return false;
 		}
 		outPos = 0;
@@ -283,13 +282,11 @@ struct DirectoryUnpacker::PrivateImplementation {
 		if ( bytesDecoded == fileSize )
 		{
 			qDebug() << "Finished decoding file:" << currentFileIndex << fileList[currentFileIndex].name;
-			LzmaDec_Free( &state, &g_Alloc );
 			return true;
 		}
 
 		if ( inLeft == 0 && outLeft == 0) {
 			qCritical() << "Internal LZMA error";
-			LzmaDec_Free( &state, &g_Alloc );
 			return false;
 		}
 
@@ -347,7 +344,7 @@ DirectoryUnpacker::DirectoryUnpacker( QString filename, int bufferSize )
 DirectoryUnpacker::DirectoryUnpacker( QString localDir, QNetworkReply *reply, int bufferSize )
 {
 	d = new PrivateImplementation;
-	d->filename = localDir + reply->url().path();
+	d->filename = localDir + "/" + reply->url().host() + reply->url().path();
 	d->lzmaInputBuffer = new unsigned char[bufferSize];
 	d->lzmaOutputBuffer = new unsigned char[bufferSize];
 	d->lzmaBufferSize = bufferSize;
@@ -414,6 +411,7 @@ void DirectoryUnpacker::processNetworkData()
 	{
 		qCritical( d->data->errorString().toUtf8() );
 		emit error();
+		return;
 	}
 
 	while( d->data->bytesAvailable() > 0 )
@@ -431,7 +429,10 @@ void DirectoryUnpacker::processNetworkData()
 				}
 
 				if( !d->readHeader( d->data ) )
+				{
 					emit error();
+					return;
+				}
 
 				d->stage = FILEINFO;
 				break;
@@ -443,6 +444,7 @@ void DirectoryUnpacker::processNetworkData()
 				{
 					qCritical( "Unpacker finished before end of data" );
 					emit error();
+					return;
 				}
 
 				return;
@@ -474,6 +476,7 @@ void DirectoryUnpacker::processBlock()
 			if ( !d->readFileInfo( ) ) {
 				qCritical()  << "Failed to read file info";
 				emit error();
+				return;
 			}
 
 			qDebug() << "Finished reading file list";
@@ -485,7 +488,10 @@ void DirectoryUnpacker::processBlock()
 		case SETFILE:
 		{
 			if( !d->setNextFile() )
+			{
 				emit error();
+				return;
+			}
 
 			d->stage = DECODE_HEADER;
 		}
@@ -493,7 +499,10 @@ void DirectoryUnpacker::processBlock()
 		case DECODE_HEADER:
 		{
 			if ( !d->readLZMAHeader() )
+			{
 				emit error();
+				return;
+			}
 
 			qDebug() << "Finished processing header";
 
@@ -528,6 +537,7 @@ void DirectoryUnpacker::processBlock()
 		{
 			qCritical( "Unknown unpacker state" );
 			emit error();
+			return;
 		}
 	}
 

@@ -28,6 +28,7 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <QSettings>
 #include <QStringList>
 #include <QDir>
+#include <QProgressDialog>
 #include <QFileDialog>
 #include <QtDebug>
 #include <QMessageBox>
@@ -40,6 +41,7 @@ struct MapPackagesWidget::PrivateImplementation {
 	QVector< MapData::MapPackage > maps;
 	QVector< ServerLogic::Server > servers;
 	ServerLogic *serverLogic;
+	QProgressDialog *progress;
 
 	void populateInstalled( QListWidget* list );
 	void highlightButton( QPushButton* button, bool highlight );
@@ -53,6 +55,7 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	d = new PrivateImplementation;
 
 	d->serverLogic = NULL;
+	d->progress = NULL;
 
 	QSettings settings( "MoNavClient" );
 	settings.beginGroup( "MapPackages" );
@@ -62,7 +65,7 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	m_ui->worldMap->setVisible( worldMap );
 	m_ui->switchSelection->setChecked( worldMap );
 
-	int entries = settings.beginReadArray( "server" );
+	int entries = settings.beginReadArray( "servers" );
 	for ( int i = 0; i < entries; i++ ) {
 		settings.setArrayIndex( i );
 		ServerLogic::Server server;
@@ -72,6 +75,7 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 		m_ui->server->addItem( server.name, server.url );
 	}
 	settings.endArray();
+	m_ui->server->setCurrentIndex( settings.value( "server", -1 ).toInt() );
 	// TODO: INSERT DEFAULT SERVER
 
 	connect( m_ui->changeDirectory, SIGNAL(clicked()), this, SLOT(directory()) );
@@ -100,7 +104,8 @@ MapPackagesWidget::~MapPackagesWidget()
 	settings.beginGroup( "MapPackages" );
 	settings.setValue( "path", d->path );
 	settings.setValue( "worldmap", m_ui->switchSelection->isChecked() );
-	settings.beginWriteArray( "server", d->servers.size() );
+	settings.setValue( "server", m_ui->server->currentIndex());
+	settings.beginWriteArray( "servers", d->servers.size() );
 	for ( int i = 0; i < d->servers.size(); i++ ) {
 		settings.setArrayIndex( i );
 		settings.setValue( "name", d->servers[i].name );
@@ -110,6 +115,8 @@ MapPackagesWidget::~MapPackagesWidget()
 
 	if(d->serverLogic != NULL)
 		delete d->serverLogic;
+	if(d->progress != NULL)
+		delete d->progress;
 	delete d;
 	delete m_ui;
 }
@@ -186,17 +193,29 @@ void MapPackagesWidget::directory()
 void MapPackagesWidget::setupNetworkAccess()
 {
 	d->serverLogic = new ServerLogic();
-	connect(d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
+	connect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
 	d->serverLogic->connectNetworkManager();
 
 }
 void MapPackagesWidget::check()
 {
+	QString name = d->servers[m_ui->server->currentIndex()].name;
+	QUrl url = d->servers[m_ui->server->currentIndex()].url;
+
+	QMessageBox dlMsg;
+	dlMsg.setText( "Downloading package list from " + name + " (" + url.toString() + ")." );
+	dlMsg.setInformativeText( "Downloading the package list requires an active internet connection. Proceed?" );
+	dlMsg.setStandardButtons( QMessageBox::No | QMessageBox::Yes );
+	dlMsg.setDefaultButton( QMessageBox::Yes );
+
+	if( dlMsg.exec() != QMessageBox::Yes )
+		return;
+
 	if(d->serverLogic == NULL)
 		setupNetworkAccess();
 
 	d->serverLogic->setLocalDir( d->path );
-	d->serverLogic->loadPackageList( d->servers[m_ui->server->currentIndex()].url );
+	d->serverLogic->loadPackageList( url );
 }
 
 void MapPackagesWidget::update()
@@ -212,6 +231,7 @@ void MapPackagesWidget::download()
 	d->serverLogic->setLocalDir( d->path );
 
 	QList< QTreeWidgetItem* > selected = m_ui->downloadList->selectedItems();
+	QList< QUrl > packagesToLoad;
 
 	foreach ( QTreeWidgetItem* item, selected )
 	{
@@ -236,10 +256,17 @@ void MapPackagesWidget::download()
 		QStringList modules = element.text().split(".mmm", QString::SkipEmptyParts);
 
 		for( int i=0; i < modules.size(); i++ )
-			d->serverLogic->loadPackage( QUrl( modules.at(i) + ".mmm" ) );
+			packagesToLoad.append( QUrl( modules.at(i) + ".mmm" ) );
 
 		item->setSelected( false );
 	}
+
+	d->progress = new QProgressDialog( "Starting package download", "Abort download", 0, packagesToLoad.size(), this );
+	d->progress->setWindowModality( Qt::WindowModal );
+	d->progress->setValue( 0 );
+	d->progress->show();
+
+	d->serverLogic->loadPackages( d->progress, packagesToLoad );
 }
 
 void MapPackagesWidget::editServerList()
