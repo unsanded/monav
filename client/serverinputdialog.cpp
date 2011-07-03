@@ -47,7 +47,7 @@ void ServerInputDialog::writeServerSettings( QVector< ServerLogic::Server > *ser
 
 void ServerInputDialog::addServer()
 {
-	m_ui->serverList->insertRow( m_ui->serverList->currentRow() + 1);
+	m_ui->serverList->insertRow( std::max( m_ui->serverList->currentRow(), 0 ) );
 }
 
 void ServerInputDialog::removeServer()

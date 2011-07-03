@@ -1,5 +1,7 @@
-#include <QNetworkReply>
+#include <QStringList>
 #include <QFile>
+#include <QNetworkReply>
+#include <QProgressDialog>
 #include <QDebug>
 
 #include "serverlogic.h"
@@ -10,6 +12,9 @@ ServerLogic::ServerLogic()
 	m_localDir = "";
 	m_network = NULL;
 	m_unpacker = NULL;
+	m_progress = NULL;
+
+	connect( this, SIGNAL(loadedPackage()), this, SLOT(loadPackages()) );
 }
 
 ServerLogic::~ServerLogic()
@@ -19,6 +24,9 @@ ServerLogic::~ServerLogic()
 
 	if( m_unpacker != NULL )
 		delete m_unpacker;
+
+	if( m_progress != NULL )
+		delete m_progress;
 }
 
 void ServerLogic::setLocalDir( const QString &dir )
@@ -58,36 +66,59 @@ bool ServerLogic::loadPackage( const QUrl &url )
 	reply->setReadBufferSize( 2 * 16 * 1024 );
 
 	m_unpacker = new DirectoryUnpacker( m_localDir, reply );
+	connect( m_unpacker, SIGNAL( error() ), this, SLOT( handleUnpackError() ) );
+
 	connect( reply, SIGNAL( readyRead() ), m_unpacker, SLOT( processNetworkData() ) );
 	connect( reply, SIGNAL( destroyed() ), m_unpacker, SLOT( deleteLater() ) );
-	connect( m_unpacker, SIGNAL( error() ), this, SLOT( handleUnpackError() ) );
 
 	return true;
 }
 
+bool ServerLogic::loadPackages( QProgressDialog *progress, QList<QUrl> packageURLs )
+{
+	if( progress != NULL)
+		m_progress = progress;
+
+	if( m_progress->wasCanceled() )
+		return false;
+
+	if( !packageURLs.isEmpty() )
+		m_packagesToLoad = packageURLs;
+	else
+		m_progress->setValue( m_progress->value() + 1 );
+
+	if( m_packagesToLoad.isEmpty() )
+	{
+		m_progress->setLabelText( "Finished" );
+		return true;
+	}
+
+	m_progress->setLabelText( "Downloading " + m_packagesToLoad.first().toString() );
+
+	return loadPackage( m_packagesToLoad.takeFirst() );
+}
+
 void ServerLogic::handleUnpackError()
 {
-	/*
-	delete m_network;
-	m_network = NULL;
-
-	delete m_unpacker;
-	m_unpacker = NULL;
-	*/
+	m_network->deleteLater();
+	m_unpacker->deleteLater();
+	m_progress->deleteLater();
 }
 
 void ServerLogic::finished( QNetworkReply* reply )
 {
 	if( reply->error() != QNetworkReply::NoError )
+	{
 		qCritical( reply->errorString().toUtf8() );
+		return;
+	}
 
 	if( reply->url().path().endsWith( ".mmm" ) )
 	{
 		while ( reply->bytesAvailable() > 0 )
 			m_unpacker->processNetworkData();
 
-		delete m_unpacker;
-		m_unpacker = NULL;
+		emit loadedPackage();
 	}
 
 	if( reply->url().path().endsWith( "packageList.xml" ) )
