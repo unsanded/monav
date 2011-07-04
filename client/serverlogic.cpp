@@ -24,9 +24,6 @@ ServerLogic::~ServerLogic()
 
 	if( m_unpacker != NULL )
 		delete m_unpacker;
-
-	if( m_progress != NULL )
-		delete m_progress;
 }
 
 void ServerLogic::setLocalDir( const QString &dir )
@@ -42,9 +39,10 @@ const QDomDocument& ServerLogic::packageList() const
 void ServerLogic::connectNetworkManager()
 {
 	if(m_network == NULL)
+	{
 		m_network = new QNetworkAccessManager( this );
-
-	connect( m_network, SIGNAL(finished(QNetworkReply*)), this, SLOT(finished(QNetworkReply*)) );
+		connect( m_network, SIGNAL(finished(QNetworkReply*)), this, SLOT(finished(QNetworkReply*)) );
+	}
 }
 
 bool ServerLogic::loadPackageList( const QUrl &url )
@@ -65,11 +63,16 @@ bool ServerLogic::loadPackage( const QUrl &url )
 	QNetworkReply * reply = m_network->get( request );
 	reply->setReadBufferSize( 2 * 16 * 1024 );
 
-	m_unpacker = new DirectoryUnpacker( m_localDir, reply );
-	connect( m_unpacker, SIGNAL( error() ), this, SLOT( handleUnpackError() ) );
+	if( url.path().endsWith(".mmm") )
+	{
+		QString filename = url.path();
+		filename.remove( 0, filename.lastIndexOf( "/" ) +1 );
 
-	connect( reply, SIGNAL( readyRead() ), m_unpacker, SLOT( processNetworkData() ) );
-	connect( reply, SIGNAL( destroyed() ), m_unpacker, SLOT( deleteLater() ) );
+		m_unpacker = new DirectoryUnpacker( m_localDir + filename, reply );
+		connect( reply, SIGNAL( readyRead() ), m_unpacker, SLOT( processNetworkData() ) );
+		connect( reply, SIGNAL( destroyed() ), m_unpacker, SLOT( deleteLater() ) );
+		connect( m_unpacker, SIGNAL( error() ), this, SLOT( handleError() ) );
+	}
 
 	return true;
 }
@@ -98,11 +101,14 @@ bool ServerLogic::loadPackages( QProgressDialog *progress, QList<QUrl> packageUR
 	return loadPackage( m_packagesToLoad.takeFirst() );
 }
 
-void ServerLogic::handleUnpackError()
+void ServerLogic::handleError()
 {
-	m_network->deleteLater();
-	m_unpacker->deleteLater();
-	m_progress->deleteLater();
+	if( m_progress != NULL)
+		m_progress->cancel();
+
+	if( m_unpacker != NULL )
+		m_unpacker->deleteLater();
+	m_unpacker = NULL;
 }
 
 void ServerLogic::finished( QNetworkReply* reply )
@@ -110,6 +116,7 @@ void ServerLogic::finished( QNetworkReply* reply )
 	if( reply->error() != QNetworkReply::NoError )
 	{
 		qCritical( reply->errorString().toUtf8() );
+		handleError();
 		return;
 	}
 
@@ -117,6 +124,9 @@ void ServerLogic::finished( QNetworkReply* reply )
 	{
 		while ( reply->bytesAvailable() > 0 )
 			m_unpacker->processNetworkData();
+
+		m_unpacker->deleteLater();
+		m_unpacker = NULL;
 
 		emit loadedPackage();
 	}
@@ -127,6 +137,23 @@ void ServerLogic::finished( QNetworkReply* reply )
 			qCritical( "error parsing package list\n" );
 
 		emit loadedList();
+	}
+
+	if( reply->url().path().endsWith( "MoNav.ini" ) )
+	{
+		QFile file( m_localDir + "MoNav.ini" );
+
+		if ( !file.open( QIODevice::WriteOnly ) )
+		{
+			qCritical( "Couldn't open target file");
+			return;
+		}
+
+		QByteArray data = reply->readAll();
+		file.write( data );
+		file.close();
+
+		emit loadedPackage();
 	}
 
 	reply->deleteLater();

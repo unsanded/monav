@@ -5,151 +5,143 @@
 #include <QFile>
 #include <QtXml/QDomDocument>
 
-const int VERSION = 1;
+const int VERSION = 2;
 
-enum OPERATION { NEW_MAP, DELETE_MAP, ADD_PACKAGE, DELETE_PACKAGE, CREATE_LIST, DELETE_LIST };
+enum OPERATION { CREATE_LIST, DELETE_LIST, NEW_MAP, DELETE_MAP, ADD_PACKAGE, DELETE_PACKAGE, DEFAULT };
 
-QDomNode findPackageNode(QDomDocument &list, QString packageType, QString packageName)
+QDomElement findPackageElement( QDomDocument &list, QString packageType, QString packageName, QString mapName = "" )
 {
-	QDomNodeList packageNodeList = list.elementsByTagName(packageType);
+	QDomNodeList packageNodeList = list.elementsByTagName( packageType );
 
-	for(unsigned int i=0; i<packageNodeList.length(); i++)
+	for( unsigned int i=0; i < packageNodeList.length(); i++ )
 	{
-		QDomNode curPackage = packageNodeList.at(i);
+		QDomElement package = packageNodeList.at( i ).toElement();
 
-		if(packageType == "map")
-		{
-			if(curPackage.toElement().attribute("name") == packageName)
-				return curPackage;
-		}
+		if( packageType == "map" && package.attribute( "name" ) == packageName )
+				return package;
 
-		else
+		if( packageType == "module" && package.attribute( "name" ) == packageName )
 		{
-			if(curPackage.toElement().text() == packageName)
-				return curPackage;
+			if( package.parentNode().parentNode().toElement().attribute( "name" ) == mapName )
+				return package;
 		}
 	}
 
-	return QDomNode();
-}
-
-QDomNode findMapVersionNode(QDomNode &mapNode, QString &mapVersion)
-{
-	QDomNodeList versionNodes = mapNode.childNodes();
-
-	for(int i=0; i<versionNodes.size(); i++)
-	{
-		if(versionNodes.at(i).toElement().attribute("name") == mapVersion)
-			return versionNodes.at(i);
-	}
-
-	return QDomNode();
+	return QDomElement();
 }
 
 int main( int argc, char *argv[] )
 {
-	QSettings settings("MonavMapManager");
-
-	if(argc == 1)
+	if( argc != 3 )
 	{
-		printf("usage:\n");
-		printf("-c server_path : create list\n");
-		printf("-r delete list\n");
-		printf("-n [map_path_and_name] : add map to list\n");
-		printf("-e [map_path_and_name] : delete map to list\n");
-		printf("-a [module_path_and_name] : add module to list\n");
-		printf("-d [module_path_and_name] : delete module from list\n");
+		printf( "usage:\n" );
+		printf( "-c server_url : create list\n" );
+		printf( "-r server_url : delete list\n" );
+		printf( "-n map_path_and_name : add map to list\n" );
+		printf( "-e map_path_and_name : delete map to list\n" );
+		printf( "-a module_path_and_name : add module to list\n" );
+		printf( "-d module_path_and_name : delete module from list\n" );
 		return 0;
 	}
 
-	QString listPath = settings.value("ListPath","").toString();
+	QString serverPath = "";
 	QString packagePath = "";
-
-	OPERATION listOperation;
+	OPERATION listOperation = DEFAULT;
 
 	int c;
-	while ((c = getopt(argc, argv, "c:d:n:a:e:r")) != -1)
+	while ( ( c = getopt( argc, argv, "c:r:n:e:a:d:" ) ) != -1 )
 	{
 		switch(c)
 		{
-			case 'r':
-				listOperation = DELETE_LIST;
-				break;
-
 			case 'c':
 				listOperation = CREATE_LIST;
-				listPath = optarg;
+				serverPath = optarg;
 				break;
-			case 'd':
-				listOperation = DELETE_PACKAGE;
-				packagePath = optarg;
-				break;
-			case 'e':
-				listOperation = DELETE_MAP;
-				packagePath = optarg;
-				break;
-			case 'n':
-				listOperation = NEW_MAP;
-				packagePath = optarg;
+			case 'r':
+				listOperation = DELETE_LIST;
 				break;
 			case 'a':
 				listOperation = ADD_PACKAGE;
 				packagePath = optarg;
 				break;
+			case 'd':
+				listOperation = DELETE_PACKAGE;
+				packagePath = optarg;
+				break;
+			default:
+				printf( "operation not recognized\n" );
+				return 1;
 		}
 	}
 
-	if(!listPath.endsWith("/")) listPath.append("/");
-
 	QString packageName = packagePath;
-	packageName.remove(0, packageName.lastIndexOf('/')+1);
-	packageName.truncate(packageName.lastIndexOf('.'));
+	packageName.remove( 0, packageName.lastIndexOf( '/' ) + 1 );
+	packageName.truncate( packageName.lastIndexOf( '.' ) );
+
+	if( packagePath.startsWith( "." ) )
+		packagePath.remove( 0, 1 );
+
+	if( packagePath.startsWith( "/" ) )
+		packagePath.remove( 0, 1 );
+
 
 	QDomDocument list;
-	QFile listFile(listPath+("packageList.xml"));
+	QFile listFile( "packageList.xml" );
 
-	if(listOperation == CREATE_LIST)
+	if( listOperation == CREATE_LIST )
 	{
 		if (listFile.exists())
 		{
-			printf("a previous list file exists on the server, delete it first using -r server_path\n");
+			printf( "a previous list file exists on the server, delete it first using -r server_path\n" );
 			return 1;
 		}
 
-		QDomElement rootElement = list.createElement("root");
-		rootElement.setAttribute("path", listPath);
-		rootElement.setAttribute("timestamp", 0);
+		if( !serverPath.endsWith( "/" ) )
+			serverPath.append( "/" );
+
+		QDomElement rootElement = list.createElement( "root" );
+		rootElement.setAttribute( "path", serverPath );
+		rootElement.setAttribute( "timestamp", 0 );
+		rootElement.setAttribute( "version", VERSION );
 		list.appendChild(rootElement);
 
-		if (!listFile.open(QIODevice::ReadWrite | QIODevice::Truncate)) return 1;
-		listFile.write(list.toString().toUtf8());
+		if ( !listFile.open( QIODevice::ReadWrite | QIODevice::Truncate ) )
+		{
+			printf( "failed to open list file\n" );
+			return 1;
+		}
+		listFile.write( list.toString().toUtf8() );
 		listFile.close();
 
-		settings.setValue("ListPath", listPath);
+		printf( "created list\n" );
 		return 0;
 	}
 
-	if (!listFile.exists())
+	if ( !listFile.exists() )
 	{
-		printf(listPath.toUtf8());
-		printf("no list file exists on the server, create one first using -c server_path\n");
+		printf( "create list file first using -c server_path\n" );
 		return 1;
 	}
 
-	if(listOperation == DELETE_LIST)
+	if( listOperation == DELETE_LIST )
 	{
-		if (!listFile.remove())
+		if ( !listFile.remove() )
 		{
-			printf("error deleting list file\n");
+			printf( "error deleting list file\n" );
 			return 1;
 		}
 
-		settings.setValue("ListPath", "");
+		printf( "deleted list\n" );
 		return 0;
 	}
 
-	if (!listFile.open(QIODevice::ReadOnly)) return 1;
-	if (!list.setContent(&listFile))
+	if ( !listFile.open( QIODevice::ReadOnly ) )
+	{
+		printf( "failed to open list file\n" );
+		return 1;
+	}
+
+	if ( !list.setContent( &listFile ) )
 	{
 		printf("error parsing list file\n");
 		listFile.close();
@@ -159,150 +151,120 @@ int main( int argc, char *argv[] )
 
 	QDomElement rootElement = list.documentElement();
 
-	if(listOperation == NEW_MAP)
+	// map package
+	if( packagePath.endsWith( ".ini" ) )
 	{
-		if(!QFile(packagePath).exists())
+		if( !QFile( packagePath ).exists() )
 		{
-			printf("could not open map file for parsing\n");
-			printf("path: "+packagePath.toUtf8()+"\n");
+			printf( "map file does not exist (required for parsing)\n" );
+			printf( "path: " + packagePath.toUtf8() + "\n" );
 			return 1;
 		}
 
 		QSettings mapFile( packagePath, QSettings::IniFormat );
+		QString mapName = mapFile.value( "name" ).toString();
+		QDomElement mapElement = findPackageElement( list, "map", mapName );
 
-		QString mapName = mapFile.value("name").toString();
-		QString mapVersion = mapFile.value("configVersion").toString();
-
-		QDomNode mapNode = findPackageNode(list, "map", mapName);
-
-		if(mapNode.isNull())
+		if( listOperation == DELETE_PACKAGE )
 		{
-			mapNode = list.createElement("map");
-			mapNode.toElement().setAttribute("name", mapName);
-			rootElement.appendChild(mapNode);
-
-			printf("creating new map entry\n");
-		}
-
-		else
-		{
-			if(!findMapVersionNode(mapNode, mapVersion).isNull())
+			if( mapElement.isNull() )
 			{
-				printf("map version already in list\n");
+				printf( "map not in list\n" );
 				return 1;
 			}
+
+			rootElement.removeChild( mapElement );
+
+			printf( "deleted map entry\n" );
 		}
 
-		QDomElement versionElement = list.createElement("version");
-		versionElement.setAttribute("name", mapVersion);
-		versionElement.setAttribute("complete", "no");
-		versionElement.setAttribute("path", packagePath);
-		mapNode.appendChild(versionElement);
+		if( listOperation == ADD_PACKAGE )
+		{
+
+			if( !mapElement.isNull() )
+			{
+				printf( "map already in list\n" );
+				return 1;
+			}
+
+			mapElement = list.createElement( "map" );
+			mapElement.setAttribute( "name" , mapName );
+			mapElement.setAttribute( "path" , packagePath );
+			rootElement.appendChild( mapElement );
+
+			printf( "created map entry\n" );
+		}
 	}
 
-	else if(listOperation == DELETE_MAP)
+	// module package
+	else if( packagePath.endsWith( ".mmm" ) )
 	{
-		if(!QFile(packagePath).exists())
-		{
-			printf("could not open map file for parsing\n");
-			printf("path: "+packagePath.toUtf8()+"\n");
-			return 1;
-		}
-
-		QSettings mapFile( packagePath, QSettings::IniFormat );
-
-		QString mapName = mapFile.value("name").toString();
-		QString mapVersion = mapFile.value("configVersion").toString();
-
-		QDomNode mapNode = findPackageNode(list,"map", mapName);
-
-		if(mapNode.isNull())
-		{
-			printf("map not in list\n");
-			return 1;
-		}
-
-		QDomNode versionNode = findMapVersionNode(mapNode, mapVersion);
-
-		if(versionNode.isNull())
-		{
-			printf("map version not in list\n");
-			return 1;
-		}
-
-		mapNode.removeChild(versionNode);
-
-		if(mapNode.firstChildElement("version").isNull()) rootElement.removeChild(mapNode);
-	}
-
-	else if(listOperation == ADD_PACKAGE)
-	{
-		if(!findPackageNode(list, "module", packagePath).isNull())
-		{
-			printf("module package already in list\n");
-			return 1;
-		}
-
-		/* packageName : type_mapname_version_subtype */
 		QStringList packageAttributes = packageName.split("_");
+		QString type = packageAttributes[0];
+		QString mapName =  packageAttributes[1];
+		QString name = packageAttributes[2];
+		QDomElement packageElement = findPackageElement( list, "module", name, mapName );
 
-		QDomNode mapNode = findPackageNode(list, "map", packageAttributes[1]);
-		if(mapNode.isNull())
+		if( listOperation == DELETE_PACKAGE )
 		{
-			printf("corresponding map not in list, add it first\n");
-			return 1;
+			if( packageElement.isNull() )
+			{
+				printf("module package not in list\n");
+				return 1;
+			}
+
+			QDomElement parentElement = packageElement.parentNode().toElement();
+			parentElement.removeChild( packageElement );
+
+			if( !parentElement.hasChildNodes() )
+				parentElement.parentNode().removeChild( parentElement );
+
+			printf( "deleted module entry\n" );
 		}
 
-		QDomElement	versionElement = findMapVersionNode(mapNode, packageAttributes[2]).toElement();
-
-		if(versionElement.isNull())
+		if( listOperation == ADD_PACKAGE )
 		{
-			printf("no corresponding map version in list, add it first\n");
-			return 1;
+			QDomElement mapElement = findPackageElement( list, "map", mapName ).toElement();
+			if( mapElement.isNull() )
+			{
+				printf("corresponding map not in list, add it first\n");
+				return 1;
+			}
+
+			if( !packageElement.isNull() )
+			{
+				printf( "module package already in list\n" );
+				return 1;
+			}
+
+			int timestamp = rootElement.attribute( "timestamp" ).toInt() + 1;
+			rootElement.setAttribute( "timestamp", timestamp );
+			mapElement.setAttribute( "timestamp", timestamp );
+
+			QDomElement typeElement = mapElement.firstChildElement( type );
+			if( typeElement.isNull() )
+			{
+				typeElement = list.createElement( type );
+				mapElement.appendChild(typeElement);
+			}
+			typeElement.setAttribute( "timestamp", timestamp );
+
+			QDomElement moduleElement = list.createElement( "module" );
+			moduleElement.setAttribute( "name", name );
+			moduleElement.setAttribute( "timestamp", timestamp );
+			typeElement.appendChild( moduleElement );
+
+			QDomText pathNode = list.createTextNode(packagePath);
+			moduleElement.appendChild(pathNode);
+
+			printf( "added module entry\n" );
 		}
-
-		QDomElement typeElement = versionElement.firstChildElement(packageAttributes[0]);
-		if(typeElement.isNull()) typeElement = list.createElement(packageAttributes[0]);
-		versionElement.appendChild(typeElement);
-
-		QDomElement moduleElement = list.createElement("module");
-		moduleElement.setAttribute("name", packageAttributes[3]);
-		moduleElement.setAttribute("timestamp", rootElement.attribute("timestamp").toInt()+1);
-		rootElement.setAttribute("timestamp", moduleElement.attribute("timestamp").toInt());
-		typeElement.appendChild(moduleElement);
-
-		QDomText pathNode = list.createTextNode(packagePath);
-		moduleElement.appendChild(pathNode);
 	}
 
-	else if(listOperation == DELETE_PACKAGE)
+	else
 	{
-		QDomNode packageNode = findPackageNode(list, "module", packagePath);
-
-		if(packageNode.isNull())
-		{
-			printf("module package not in list\n");
-			return 1;
-		}
-
-		QStringList packageAttributes = packageName.split("_");
-
-		QDomNode mapNode = findPackageNode(list, "map", packageAttributes[1]);
-		if(mapNode.isNull())
-		{
-			printf("corresponding map not in list, add it first\n");
-			return 1;
-		}
-
-		QDomElement	versionElement = findMapVersionNode(mapNode, packageAttributes[2]).toElement();
-
-		if(versionElement.isNull())
-		{
-			printf("no corresponding map version in list, add it first\n");
-			return 1;
-		}
-
-		versionElement.removeChild(packageNode);
+		printf( "unrecognized package format\n" );
+		return 1;
 	}
 
 	if (!listFile.open(QIODevice::ReadWrite | QIODevice::Truncate)) return 1;

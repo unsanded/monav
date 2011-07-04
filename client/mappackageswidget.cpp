@@ -40,10 +40,12 @@ struct MapPackagesWidget::PrivateImplementation {
 	QString path;
 	QVector< MapData::MapPackage > maps;
 	QVector< ServerLogic::Server > servers;
+	QVector< QDomElement > elements;
 	ServerLogic *serverLogic;
 	QProgressDialog *progress;
 
 	void populateInstalled( QListWidget* list );
+	void populateInstalled( QTreeWidget* tree );
 	void highlightButton( QPushButton* button, bool highlight );
 };
 
@@ -214,7 +216,6 @@ void MapPackagesWidget::check()
 	if(d->serverLogic == NULL)
 		setupNetworkAccess();
 
-	d->serverLogic->setLocalDir( d->path );
 	d->serverLogic->loadPackageList( url );
 }
 
@@ -225,46 +226,64 @@ void MapPackagesWidget::update()
 
 void MapPackagesWidget::download()
 {
-	if(d->serverLogic == NULL)
-		setupNetworkAccess();
-
-	d->serverLogic->setLocalDir( d->path );
-
 	QList< QTreeWidgetItem* > selected = m_ui->downloadList->selectedItems();
+	QString serverPath = d->serverLogic->packageList().documentElement().attribute( "path" );
 	QList< QUrl > packagesToLoad;
+	QList< QString > mapNames;
+	QString dlInfo = "";
 
 	foreach ( QTreeWidgetItem* item, selected )
 	{
-		QDomNodeList packages = d->serverLogic->packageList().elementsByTagName( item->data( 0, Qt::UserRole ).toString() );
+		int elementIndex =  item->data(0, Qt::UserRole).toInt();
+		QDomElement element = d->elements[ elementIndex ];
 
-		QDomElement element;
-		for( int i=0; i < packages.size(); i++ )
-		{
-			if( item->text( 0 ) == packages.item(i).toElement().attribute( "name" ) )
-			{
-				element = packages.item(i).toElement();
-				break;
-			}
-		}
-
-		if( element.isNull() )
-		{
-			qDebug() << "package not found:" << item->data( 0, Qt::UserRole ).toString() << item->text( 0 );
-			return;
-		}
+		QDomElement map = element;
+		while( map.tagName() != "map" )
+			map = map.parentNode().toElement();
+		mapNames.append( map.attribute( "name" ) );
 
 		QStringList modules = element.text().split(".mmm", QString::SkipEmptyParts);
+		for( int j=0; j < modules.size(); j++)
+			modules[j].append( ".mmm" );
+
+		if( !QFile( d->path + "/" + m_ui->server->currentText() + "/" + "MoNav.ini" ).exists( ) )
+		{
+			mapNames.append( map.attribute( "name" ) );
+			modules.append( map.attribute( "path" ) );
+		}
 
 		for( int i=0; i < modules.size(); i++ )
-			packagesToLoad.append( QUrl( modules.at(i) + ".mmm" ) );
+		{
+			QUrl moduleURL( serverPath + modules.at(i) );
+			dlInfo.append( moduleURL.toString() + "\n" );
+			packagesToLoad.append( moduleURL );
+		}
 
 		item->setSelected( false );
 	}
 
+	QMessageBox dlMsg;
+	dlMsg.setText( "Downloading packages from " + d->servers[m_ui->server->currentIndex()].name + "." );
+	dlMsg.setInformativeText( "Downloading the packages requires an active internet connection. Proceed?" );
+	dlMsg.setDetailedText( dlInfo );
+	dlMsg.setStandardButtons( QMessageBox::No | QMessageBox::Yes );
+	dlMsg.setDefaultButton( QMessageBox::Yes );
+
+	if( dlMsg.exec() != QMessageBox::Yes )
+		return;
+
+	if(d->serverLogic == NULL)
+		setupNetworkAccess();
+
+	if( d->progress != NULL )
+		delete d->progress;
 	d->progress = new QProgressDialog( "Starting package download", "Abort download", 0, packagesToLoad.size(), this );
 	d->progress->setWindowModality( Qt::WindowModal );
 	d->progress->setValue( 0 );
 	d->progress->show();
+
+	d->serverLogic->setLocalDir(
+				d->path + "/" + m_ui->server->currentText() + "/" + mapNames.takeFirst() + "/" );
 
 	d->serverLogic->loadPackages( d->progress, packagesToLoad );
 }
@@ -288,19 +307,39 @@ void MapPackagesWidget::editServerList()
 void MapPackagesWidget::populateServerPackageList()
 {
 	m_ui->downloadList->clear();
+	d->elements.clear();
 
 	QDomElement element = d->serverLogic->packageList().documentElement().firstChildElement();
 	QTreeWidgetItem *parent = NULL;
 
-	while(!element.isNull())
+	int id = 0;
+	while( !element.isNull() )
 	{
+		d->elements.push_back( element );
+
 		QString name = element.hasAttribute( "name" ) ? element.attribute( "name" ) : element.tagName();
 
+		QString status = "";
+		if( element.firstChild().isText() )
+		{
+			QString modulePath = element.firstChild().toText().data();
+			QString moduleName = modulePath.remove( 0, modulePath.lastIndexOf( '/' ) + 1 ).replace( ".mmm", "" );
+			QString mapName = element.parentNode().parentNode().toElement().attribute( "name" );
+			QString dirName =
+					d->path + "/" + m_ui->server->currentText() + "/" + mapName + "/" + moduleName;
+
+			if( QDir( dirName ).exists() )
+				status = "installed";
+		}
+
 		QTreeWidgetItem *item = new QTreeWidgetItem( parent, QStringList( name ) );
-		item->setData(0, Qt::UserRole, element.tagName());
+		item->setText( 1, status);
+		item->setData( 0, Qt::UserRole, id );
 		m_ui->downloadList->addTopLevelItem( item );
 
-		if(!element.firstChildElement().isNull())
+		++id;
+
+		if( !element.firstChildElement().isNull() )
 		{
 			element = element.firstChildElement();
 			parent = item;
@@ -308,7 +347,7 @@ void MapPackagesWidget::populateServerPackageList()
 
 		else
 		{
-			while(element.nextSiblingElement().isNull() && !element.parentNode().isNull())
+			while( element.nextSiblingElement().isNull() && !element.parentNode().isNull() )
 			{
 				element = element.parentNode().toElement();
 				parent = parent != NULL ? parent->parent() : NULL;

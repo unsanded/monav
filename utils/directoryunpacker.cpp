@@ -341,10 +341,10 @@ DirectoryUnpacker::DirectoryUnpacker( QString filename, int bufferSize )
 	connect( this, SIGNAL( error() ), this, SLOT( cleanUp() ) );
 }
 
-DirectoryUnpacker::DirectoryUnpacker( QString localDir, QNetworkReply *reply, int bufferSize )
+DirectoryUnpacker::DirectoryUnpacker( QString filename, QNetworkReply *reply, int bufferSize )
 {
 	d = new PrivateImplementation;
-	d->filename = localDir + "/" + reply->url().host() + reply->url().path();
+	d->filename = filename;
 	d->lzmaInputBuffer = new unsigned char[bufferSize];
 	d->lzmaOutputBuffer = new unsigned char[bufferSize];
 	d->lzmaBufferSize = bufferSize;

@@ -148,11 +148,11 @@
       <attribute name="title">
        <string>Download</string>
       </attribute>
-      <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,1,0,0">
+      <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0">
        <item>
         <widget class="QToolButton" name="back">
          <property name="sizePolicy">
-          <sizepolicy hsizetype="MinimumExpanding" vsizetype="MinimumExpanding">
+          <sizepolicy hsizetype="Minimum" vsizetype="MinimumExpanding">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
@@ -166,9 +166,6 @@
         </widget>
        </item>
        <item>
-        <widget class="QListWidget" name="downloadBrowse"/>
-       </item>
-       <item>
         <widget class="QTreeWidget" name="downloadList">
          <property name="showDropIndicator" stdset="0">
           <bool>true</bool>
@@ -180,11 +177,16 @@
           <bool>false</bool>
          </property>
          <property name="columnCount">
-          <number>1</number>
+          <number>2</number>
          </property>
          <column>
           <property name="text">
            <string notr="true">1</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string notr="true">2</string>
           </property>
          </column>
         </widget>

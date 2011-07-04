@@ -40,7 +40,7 @@ class ServerLogic : public QObject
 		void finished( QNetworkReply* reply );
 
 	protected slots:
-		void handleUnpackError();
+		void handleError();
 
 	protected:
 
