@@ -358,6 +358,8 @@ DirectoryUnpacker::DirectoryUnpacker( QString filename, QNetworkReply *reply, in
 	d->currentFileIndex = -1;
 
 	connect( this, SIGNAL( error() ), this, SLOT( cleanUp() ) );
+	connect( reply, SIGNAL( readyRead() ), this, SLOT( processNetworkData() ) );
+	connect( reply, SIGNAL( destroyed() ), this, SLOT( deleteLater() ) );
 }
 
 DirectoryUnpacker::~DirectoryUnpacker()
