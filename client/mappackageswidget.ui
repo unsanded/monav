@@ -173,20 +173,38 @@
          <property name="selectionMode">
           <enum>QAbstractItemView::MultiSelection</enum>
          </property>
+         <property name="uniformRowHeights">
+          <bool>true</bool>
+         </property>
+         <property name="itemsExpandable">
+          <bool>true</bool>
+         </property>
+         <property name="allColumnsShowFocus">
+          <bool>true</bool>
+         </property>
          <property name="expandsOnDoubleClick">
           <bool>false</bool>
          </property>
          <property name="columnCount">
           <number>2</number>
          </property>
+         <attribute name="headerVisible">
+          <bool>false</bool>
+         </attribute>
+         <attribute name="headerDefaultSectionSize">
+          <number>200</number>
+         </attribute>
+         <attribute name="headerStretchLastSection">
+          <bool>true</bool>
+         </attribute>
          <column>
           <property name="text">
-           <string notr="true">1</string>
+           <string notr="true">Available Packages</string>
           </property>
          </column>
          <column>
           <property name="text">
-           <string notr="true">2</string>
+           <string notr="true">Installed</string>
           </property>
          </column>
         </widget>

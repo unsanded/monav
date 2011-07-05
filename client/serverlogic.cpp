@@ -66,11 +66,9 @@ bool ServerLogic::loadPackage( const QUrl &url )
 	if( url.path().endsWith(".mmm") )
 	{
 		QString filename = url.path();
-		filename.remove( 0, filename.lastIndexOf( "/" ) +1 );
+		filename.remove( 0, filename.lastIndexOf( "/" ) + 1 );
 
 		m_unpacker = new DirectoryUnpacker( m_localDir + filename, reply );
-		connect( reply, SIGNAL( readyRead() ), m_unpacker, SLOT( processNetworkData() ) );
-		connect( reply, SIGNAL( destroyed() ), m_unpacker, SLOT( deleteLater() ) );
 		connect( m_unpacker, SIGNAL( error() ), this, SLOT( handleError() ) );
 	}
 
@@ -149,8 +147,7 @@ void ServerLogic::finished( QNetworkReply* reply )
 			return;
 		}
 
-		QByteArray data = reply->readAll();
-		file.write( data );
+		file.write( reply->readAll() );
 		file.close();
 
 		emit loadedPackage();

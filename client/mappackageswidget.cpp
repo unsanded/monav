@@ -97,7 +97,6 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	d->highlightButton( m_ui->changeDirectory, m_ui->installedList->count() == 0 );
 	m_ui->worldMap->setMaps( d->maps );
 	m_ui->worldMap->setHighlight( d->selected );
-	m_ui->downloadList->setHeaderLabel("Server Package List");
 }
 
 MapPackagesWidget::~MapPackagesWidget()
@@ -319,6 +318,8 @@ void MapPackagesWidget::populateServerPackageList()
 
 		QString name = element.hasAttribute( "name" ) ? element.attribute( "name" ) : element.tagName();
 
+		QTreeWidgetItem *item = new QTreeWidgetItem( parent, QStringList( name ) );
+
 		QString status = "";
 		if( element.firstChild().isText() )
 		{
@@ -332,9 +333,9 @@ void MapPackagesWidget::populateServerPackageList()
 				status = "installed";
 		}
 
-		QTreeWidgetItem *item = new QTreeWidgetItem( parent, QStringList( name ) );
 		item->setText( 1, status);
 		item->setData( 0, Qt::UserRole, id );
+
 		m_ui->downloadList->addTopLevelItem( item );
 
 		++id;
