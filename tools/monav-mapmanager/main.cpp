@@ -87,18 +87,6 @@ int main( int argc, char *argv[] )
 	if( listOperation == CREATE_LIST )
 		return createList( &list, &listFile, serverPath );
 
-	if( listOperation == DELETE_LIST )
-	{
-		if ( !listFile.remove() )
-		{
-			printf( "error deleting list file\n" );
-			return 0;
-		}
-
-		printf( "deleted list\n" );
-		return 1;
-	}
-
 	if( listOperation == AUTOMATIC )
 	{
 		if( !createList( &list, &listFile, serverPath ) )
@@ -116,8 +104,11 @@ int main( int argc, char *argv[] )
 				dirList.append( dir.path() + '/' + subDirs[j] );
 
 			QString mapName = findMapInDir( dir.path() + '/' + "Monav.ini" );
-			mapName = mapName.isEmpty() ? dir.dirName() : mapName;
-			addPackage( &list, dir.path() + '/' + "MoNav.ini" );
+
+			if( !mapName.isEmpty() )
+				addPackage( &list, dir.path() + '/' + "MoNav.ini" );
+//			else
+//				mapName = dir.dirName();
 
 			QStringList modules = dir.entryList( QDir::Files, QDir::Type ).filter( ".mmm" );
 
@@ -133,6 +124,19 @@ int main( int argc, char *argv[] )
 			printf( "create list file first using -c or -p\n" );
 			return 0;
 		}
+
+		if( listOperation == DELETE_LIST )
+		{
+			if ( !listFile.remove() )
+			{
+				printf( "error deleting list file\n" );
+				return 0;
+			}
+
+			printf( "deleted list\n" );
+			return 1;
+		}
+
 
 		if ( !listFile.open( QIODevice::ReadOnly ) )
 		{
@@ -196,11 +200,7 @@ QString findMapInDir( const QString& path )
 	QString mapPath = path.left( path.lastIndexOf( '/' ) + 1 ) + "MoNav.ini";
 
 	if( !QFile::exists( mapPath ) )
-	{
-		printf( "map file does not exist (required for parsing)\n" );
-		printf( "path: " + path.toUtf8() + "\n" );
 		return "";
-	}
 
 	QSettings mapFile( mapPath, QSettings::IniFormat );
 
@@ -239,12 +239,10 @@ void addMap( QDomDocument* list, QString name, QString path )
 	int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
 	list->documentElement().setAttribute( "timestamp", timestamp );
 
-	QString folder = path.right( path.size() - path.lastIndexOf( '/' ) );
-
 	QDomElement mapElement = list->createElement( "map" );
-	mapElement.setAttribute( "name", name );
 	mapElement.setAttribute( "timestamp", timestamp );
-	mapElement.setAttribute( "path" , folder );
+	mapElement.setAttribute( "path" , path );
+	mapElement.setAttribute( "name", name );
 	list->documentElement().appendChild( mapElement );
 
 	printf( "added map entry: "  + name.toUtf8() + " from " + path.toUtf8() + "\n" );
@@ -256,7 +254,11 @@ bool addPackage( QDomDocument* list, QString path )
 	QString map = findMapInDir( path );
 
 	if( map.isEmpty() )
+	{
+		printf( "no map file in dir (required for parsing)\n" );
+		printf( "package path: " + path.toUtf8() + "\n" );
 		return false;
+	}
 
 	QDomElement mapElement = findPackageElement( *list, "map", map );
 
@@ -300,8 +302,8 @@ bool addPackage( QDomDocument* list, QString path )
 		typeElement.setAttribute( "timestamp", timestamp );
 
 		QDomElement moduleElement = list->createElement( "module" );
-		moduleElement.setAttribute( "name" , name );
 		moduleElement.setAttribute( "timestamp", timestamp );
+		moduleElement.setAttribute( "name" , name );
 		typeElement.appendChild( moduleElement );
 
 		QDomText pathNode = list->createTextNode( path );
