@@ -10,9 +10,7 @@ const int VERSION = 2;
 
 enum OPERATION { CREATE_LIST, DELETE_LIST, ADD_PACKAGE, DELETE_PACKAGE, AUTOMATIC, DEFAULT };
 
-QDomElement findPackageElement(
-	const QDomDocument& list, QString type, QString name, QString map = "" );
-
+QDomElement findPackageElement( const QDomDocument& list, QString type, QString name, QString map = "" );
 QString findMapInDir( const QString &path );
 
 bool createList( QDomDocument* list, QFile* file, QString serverPath );
@@ -241,7 +239,8 @@ void addMap( QDomDocument* list, QString name, QString path )
 
 	QDomElement mapElement = list->createElement( "map" );
 	mapElement.setAttribute( "timestamp", timestamp );
-	mapElement.setAttribute( "path" , path );
+	mapElement.setAttribute( "size", QFile( path ).size() );
+	mapElement.setAttribute( "path", path );
 	mapElement.setAttribute( "name", name );
 	list->documentElement().appendChild( mapElement );
 
@@ -303,6 +302,7 @@ bool addPackage( QDomDocument* list, QString path )
 
 		QDomElement moduleElement = list->createElement( "module" );
 		moduleElement.setAttribute( "timestamp", timestamp );
+		moduleElement.setAttribute( "size", QFile( path ).size() );
 		moduleElement.setAttribute( "name" , name );
 		typeElement.appendChild( moduleElement );
 

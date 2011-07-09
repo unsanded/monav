@@ -283,12 +283,17 @@ void MapPackagesWidget::download()
 	}
 
 	QString dlInfo = "";
+	qint64 sizeTotal = 0;
 	foreach ( const ServerLogic::PackageInfo& pInfo, packagesToLoad )
-		dlInfo.append( pInfo.path + " - " + pInfo.size + "\n" );
+	{
+		dlInfo.append( pInfo.path + QString( " - %1 byte\n" ).arg( pInfo.size ) );
+		sizeTotal += pInfo.size;
+	}
 
 	QMessageBox dlMsg;
-	dlMsg.setText( "Downloading packages from " + d->servers[m_ui->server->currentIndex()].name + "." );
-	dlMsg.setInformativeText( "Downloading the packages requires an active internet connection. Proceed?" );
+	dlMsg.setText( "Downloading packages from " + serverName + " (" + serverPath + ')' );
+	QString sizeInfo = QString( "Total size is %1 byte. Proceed?" ).arg( sizeTotal );
+	dlMsg.setInformativeText( "Downloading the packages requires an active internet connection. " + sizeInfo );
 	dlMsg.setDetailedText( dlInfo );
 	dlMsg.setStandardButtons( QMessageBox::No | QMessageBox::Yes );
 	dlMsg.setDefaultButton( QMessageBox::Yes );
