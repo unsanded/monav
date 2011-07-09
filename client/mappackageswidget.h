@@ -56,7 +56,9 @@ protected slots:
 	void download();
 	void editServerList();
 	void populateServerPackageList();
+	void updateProgress( QString text );
 	void selected( int id );
+	void cleanUp();
 
 protected:
 

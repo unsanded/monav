@@ -1,7 +1,7 @@
 #include <QStringList>
 #include <QFile>
+#include <QDir>
 #include <QNetworkReply>
-#include <QProgressDialog>
 #include <QDebug>
 
 #include "serverlogic.h"
@@ -12,9 +12,8 @@ ServerLogic::ServerLogic()
 	m_localDir = "";
 	m_network = NULL;
 	m_unpacker = NULL;
-	m_progress = NULL;
 
-	connect( this, SIGNAL(loadedPackage()), this, SLOT(loadPackages()) );
+	connect(this, SIGNAL(error()), this, SLOT(cleanUp()) );
 }
 
 ServerLogic::~ServerLogic()
@@ -26,9 +25,9 @@ ServerLogic::~ServerLogic()
 		delete m_unpacker;
 }
 
-void ServerLogic::setLocalDir( const QString &dir )
+void ServerLogic::addPackagesToLoad( const QList< ServerLogic::PackageInfo > &packageLocations )
 {
-	m_localDir = dir;
+	m_packagesToLoad.append( packageLocations );
 }
 
 const QDomDocument& ServerLogic::packageList() const
@@ -54,55 +53,37 @@ bool ServerLogic::loadPackageList( const QUrl &url )
 	return true;
 }
 
-bool ServerLogic::loadPackage( const QUrl &url )
+bool ServerLogic::loadPackage()
 {
-	qDebug() << "loading package from:" << url << ", isvalid =" << url.isValid();
+	if( m_packagesToLoad.isEmpty() )
+		return false;
 
-	QNetworkRequest request( url );
+	ServerLogic::PackageInfo package = m_packagesToLoad.takeFirst();
+
+	m_localDir = package.dir;
+
+	qDebug() << "loading package from:" << package.path;
+
+	QNetworkRequest request( package.path );
 
 	QNetworkReply * reply = m_network->get( request );
 	reply->setReadBufferSize( 2 * 16 * 1024 );
 
-	if( url.path().endsWith(".mmm") )
+	if( package.path.endsWith(".mmm") )
 	{
-		QString filename = url.path();
+		QString filename = package.path;
 		filename.remove( 0, filename.lastIndexOf( "/" ) + 1 );
 
 		m_unpacker = new DirectoryUnpacker( m_localDir + filename, reply );
-		connect( m_unpacker, SIGNAL( error() ), this, SLOT( handleError() ) );
+		connect( m_unpacker, SIGNAL( error() ), this, SIGNAL( error() ) );
 	}
 
 	return true;
 }
 
-bool ServerLogic::loadPackages( QProgressDialog *progress, QList<QUrl> packageURLs )
+void ServerLogic::cleanUp()
 {
-	if( progress != NULL)
-		m_progress = progress;
-
-	if( m_progress->wasCanceled() )
-		return false;
-
-	if( !packageURLs.isEmpty() )
-		m_packagesToLoad = packageURLs;
-	else
-		m_progress->setValue( m_progress->value() + 1 );
-
-	if( m_packagesToLoad.isEmpty() )
-	{
-		m_progress->setLabelText( "Finished" );
-		return true;
-	}
-
-	m_progress->setLabelText( "Downloading " + m_packagesToLoad.first().toString() );
-
-	return loadPackage( m_packagesToLoad.takeFirst() );
-}
-
-void ServerLogic::handleError()
-{
-	if( m_progress != NULL)
-		m_progress->cancel();
+	m_packagesToLoad.clear();
 
 	if( m_unpacker != NULL )
 		m_unpacker->deleteLater();
@@ -114,7 +95,7 @@ void ServerLogic::finished( QNetworkReply* reply )
 	if( reply->error() != QNetworkReply::NoError )
 	{
 		qCritical( reply->errorString().toUtf8() );
-		handleError();
+		emit error();
 		return;
 	}
 
@@ -126,31 +107,49 @@ void ServerLogic::finished( QNetworkReply* reply )
 		m_unpacker->deleteLater();
 		m_unpacker = NULL;
 
-		emit loadedPackage();
+		if( !m_packagesToLoad.isEmpty() )
+			emit loadedPackage( m_packagesToLoad.first().path );
+		else
+			emit loadedPackage( "Finished." );
 	}
 
 	if( reply->url().path().endsWith( "packageList.xml" ) )
 	{
 		if ( !m_packageList.setContent( reply ) )
+		{
 			qCritical( "error parsing package list\n" );
+			emit error();
+			return;
+		}
 
 		emit loadedList();
 	}
 
 	if( reply->url().path().endsWith( "MoNav.ini" ) )
 	{
-		QFile file( m_localDir + "MoNav.ini" );
+		QDir dir( m_localDir );
+		if( !dir.exists() && !dir.mkpath( m_localDir ) )
+		{
+			qCritical( "Couldn't open target file");
+			emit error();
+			return;
+		}
 
+		QFile file( m_localDir + "MoNav.ini" );
 		if ( !file.open( QIODevice::WriteOnly ) )
 		{
 			qCritical( "Couldn't open target file");
+			emit error();
 			return;
 		}
 
 		file.write( reply->readAll() );
 		file.close();
 
-		emit loadedPackage();
+		if( !m_packagesToLoad.isEmpty() )
+			emit loadedPackage( m_packagesToLoad.first().path );
+		else
+			emit loadedPackage( "Finished." );
 	}
 
 	reply->deleteLater();
