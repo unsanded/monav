@@ -17,30 +17,47 @@ class ServerLogic : public QObject
 
 	public:
 
-		struct Server {
+		struct Server
+		{
 			QString name;
 			QUrl url;
+		};
+
+		struct PackageInfo
+		{
+			QString path;
+			qint64 size;
+			QString dir;
+
+			bool operator==( const PackageInfo& other ) const
+			{
+				return this->path == other.path && this->size == other.size && this->dir == other.dir;
+			}
+
 		};
 
 		ServerLogic();
 		~ServerLogic();
 
-		void setLocalDir( const QString &dir );
+		void addPackagesToLoad( const QList< PackageInfo >& packageLocations );
 		const QDomDocument& packageList() const;
 
 	signals:
+
 		void loadedList();
-		void loadedPackage();
+		void loadedPackage( QString info );
+		void error();
 
 	public slots:
+
 		void connectNetworkManager();
-		bool loadPackage( const QUrl &url );
-		bool loadPackages( QProgressDialog *progress = NULL, QList< QUrl > packageURLs = QList< QUrl >() );
+		bool loadPackage();
 		bool loadPackageList( const QUrl &url );
-		void finished( QNetworkReply* reply );
 
 	protected slots:
-		void handleError();
+
+		void finished( QNetworkReply* reply );
+		void cleanUp();
 
 	protected:
 
@@ -48,9 +65,8 @@ class ServerLogic : public QObject
 		QDomDocument m_packageList;
 		DirectoryUnpacker *m_unpacker;
 		QNetworkAccessManager* m_network;
-		QProgressDialog* m_progress;
 
-		QList< QUrl > m_packagesToLoad;
+		QList< PackageInfo > m_packagesToLoad;
 };
 
 #endif // SERVERLOGIC_H

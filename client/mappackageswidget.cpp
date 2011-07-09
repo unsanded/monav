@@ -194,10 +194,14 @@ void MapPackagesWidget::directory()
 void MapPackagesWidget::setupNetworkAccess()
 {
 	d->serverLogic = new ServerLogic();
-	connect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
-	d->serverLogic->connectNetworkManager();
 
+	connect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
+	connect( d->serverLogic, SIGNAL( loadedPackage( QString ) ), this, SLOT( updateProgress( QString ) ) );
+	connect( d->serverLogic, SIGNAL( error() ), this, SLOT( cleanUp() ) );
+
+	d->serverLogic->connectNetworkManager();
 }
+
 void MapPackagesWidget::check()
 {
 	QString name = d->servers[m_ui->server->currentIndex()].name;
@@ -226,40 +230,61 @@ void MapPackagesWidget::update()
 void MapPackagesWidget::download()
 {
 	QList< QTreeWidgetItem* > selected = m_ui->downloadList->selectedItems();
+	QString serverName = d->servers[ m_ui->server->currentIndex() ].name;
 	QString serverPath = d->serverLogic->packageList().documentElement().attribute( "path" );
-	QList< QUrl > packagesToLoad;
-	QList< QString > mapNames;
-	QString dlInfo = "";
 
+	QList< ServerLogic::PackageInfo > packagesToLoad;
 	foreach ( QTreeWidgetItem* item, selected )
 	{
 		int elementIndex =  item->data(0, Qt::UserRole).toInt();
-		QDomElement element = d->elements[ elementIndex ];
 
-		QDomElement map = element;
+		QDomElement map = d->elements[ elementIndex ];
 		while( map.tagName() != "map" )
 			map = map.parentNode().toElement();
-		mapNames.append( map.attribute( "name" ) );
+		QString mapName = map.attribute( "name" );
 
-		QStringList modules = element.text().split(".mmm", QString::SkipEmptyParts);
-		for( int j=0; j < modules.size(); j++)
-			modules[j].append( ".mmm" );
+		QString localDir = d->path + "/" + serverName + '/' + mapName +'/';
 
-		if( !QFile( d->path + "/" + m_ui->server->currentText() + "/" + "MoNav.ini" ).exists( ) )
+		ServerLogic::PackageInfo pInfo;
+
+		if( !QFile( localDir + "MoNav.ini" ).exists() )
 		{
-			mapNames.append( map.attribute( "name" ) );
-			modules.append( map.attribute( "path" ) );
+			pInfo.path = serverPath +  map.attribute( "path" );
+			pInfo.size = map.attribute( "size" ).toLongLong();
+			pInfo.dir = localDir;
+
+			if( !packagesToLoad.contains( pInfo ) )
+				packagesToLoad.push_back( pInfo );
 		}
 
-		for( int i=0; i < modules.size(); i++ )
+		QDomElement element = d->elements[ elementIndex ];
+		while ( true )
 		{
-			QUrl moduleURL( serverPath + modules.at(i) );
-			dlInfo.append( moduleURL.toString() + "\n" );
-			packagesToLoad.append( moduleURL );
+			while( !element.firstChild().isText() )
+				element = element.firstChild().toElement();
+
+			pInfo.path = serverPath + element.text();
+			pInfo.size = element.attribute( "size" ).toLongLong();
+			pInfo.dir = localDir;
+
+			if( !packagesToLoad.contains( pInfo ) )
+				packagesToLoad.push_back( pInfo );
+
+			while( element.nextSiblingElement().isNull() && element != d->elements[ elementIndex ] )
+				element = element.parentNode().toElement();
+
+			if( element == d->elements[ elementIndex ] )
+				break;
+
+			element = element.nextSiblingElement();
 		}
 
 		item->setSelected( false );
 	}
+
+	QString dlInfo = "";
+	foreach ( const ServerLogic::PackageInfo& pInfo, packagesToLoad )
+		dlInfo.append( pInfo.path + " - " + pInfo.size + "\n" );
 
 	QMessageBox dlMsg;
 	dlMsg.setText( "Downloading packages from " + d->servers[m_ui->server->currentIndex()].name + "." );
@@ -274,6 +299,8 @@ void MapPackagesWidget::download()
 	if(d->serverLogic == NULL)
 		setupNetworkAccess();
 
+	d->serverLogic->addPackagesToLoad( packagesToLoad );
+
 	if( d->progress != NULL )
 		delete d->progress;
 	d->progress = new QProgressDialog( "Starting package download", "Abort download", 0, packagesToLoad.size(), this );
@@ -281,10 +308,7 @@ void MapPackagesWidget::download()
 	d->progress->setValue( 0 );
 	d->progress->show();
 
-	d->serverLogic->setLocalDir(
-				d->path + "/" + m_ui->server->currentText() + "/" + mapNames.takeFirst() + "/" );
-
-	d->serverLogic->loadPackages( d->progress, packagesToLoad );
+	d->serverLogic->loadPackage();
 }
 
 void MapPackagesWidget::editServerList()
@@ -386,4 +410,29 @@ void MapPackagesWidget::PrivateImplementation::highlightButton( QPushButton* but
 	font.setBold( highlight );
 	font.setUnderline( highlight );
 	button->setFont( font );
+}
+
+
+void MapPackagesWidget::updateProgress( QString text )
+{
+	if( d->progress == NULL || d->progress->wasCanceled() )
+		return;
+
+	else
+	{
+		d->progress->setValue(  d->progress->value() + 1 );
+		d->progress->setLabelText( text );
+
+		d->serverLogic->loadPackage();
+	}
+}
+
+void MapPackagesWidget::cleanUp()
+{
+	if( d->progress != NULL )
+	{
+		d->progress->cancel();
+		d->progress->deleteLater();
+		d->progress = NULL;
+	}
 }
