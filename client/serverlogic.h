@@ -26,12 +26,19 @@ class ServerLogic : public QObject
 		struct PackageInfo
 		{
 			QString path;
-			qint64 size;
+			QString server;
 			QString dir;
+			qint64 size;
+			unsigned timestamp;
 
 			bool operator==( const PackageInfo& other ) const
 			{
-				return this->path == other.path && this->size == other.size && this->dir == other.dir;
+				return this->path == other.path;
+			}
+
+			bool operator<( const PackageInfo& other ) const
+			{
+				return this->server < other.server;
 			}
 
 		};
@@ -40,11 +47,13 @@ class ServerLogic : public QObject
 		~ServerLogic();
 
 		void addPackagesToLoad( const QList< PackageInfo >& packageLocations );
+		const QList< PackageInfo >& packagesToLoad() const;
 		const QDomDocument& packageList() const;
 
 	signals:
 
 		void loadedList();
+		void checkedPackage( QString info );
 		void loadedPackage( QString info );
 		void error();
 
@@ -52,6 +61,7 @@ class ServerLogic : public QObject
 
 		void connectNetworkManager();
 		bool loadPackage();
+		bool checkPackage();
 		bool loadPackageList( const QUrl &url );
 
 	protected slots:
@@ -67,6 +77,9 @@ class ServerLogic : public QObject
 		QNetworkAccessManager* m_network;
 
 		QList< PackageInfo > m_packagesToLoad;
+		int m_packageIndex;
+
+		QDomElement findElement( QString packageType, QString packageName, QString mapName = "" );
 };
 
 #endif // SERVERLOGIC_H
