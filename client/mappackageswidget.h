@@ -51,9 +51,10 @@ protected slots:
 
 	void load();
 	void directory();
+	void downloadList();
+	void downloadPackages();
 	void check();
 	void update();
-	void download();
 	void editServerList();
 	void populateServerPackageList();
 	void updateProgress( QString text );
