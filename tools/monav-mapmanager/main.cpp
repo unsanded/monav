@@ -57,7 +57,7 @@ int main( int argc, char *argv[] )
 	if( argc < 2 || ( argc != 3 && listOperation != DELETE_LIST ) )
 	{
 		printf( "usage:\n" );
-		printf( " p server_url: create list automatically by recursively parsing mapmanager directory\n" );
+		printf( "-p server_url: create list automatically by recursively parsing mapmanager directory\n" );
 		printf( "-c server_url : create list\n" );
 		printf( "-d server_url : delete list\n" );
 		printf( "-a package_path_and_name : add package to list\n" );
