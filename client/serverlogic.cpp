@@ -14,7 +14,7 @@ ServerLogic::ServerLogic()
 	m_network = NULL;
 	m_unpacker = NULL;
 
-	connect(this, SIGNAL(error()), this, SLOT(cleanUp()) );
+	connect( this, SIGNAL( error() ), this, SLOT( cleanUp() ) );
 }
 
 ServerLogic::~ServerLogic()
@@ -26,9 +26,21 @@ ServerLogic::~ServerLogic()
 		delete m_unpacker;
 }
 
+void ServerLogic::clearPackagesToLoad()
+{
+	m_packagesToLoad.clear();
+	m_packageIndex = 0;
+}
+
 void ServerLogic::addPackagesToLoad( const QList< ServerLogic::PackageInfo > &packageLocations )
 {
 	m_packagesToLoad.append( packageLocations );
+}
+
+void ServerLogic::removePackagesToLoad( const QList< ServerLogic::PackageInfo > &packageLocations )
+{
+	foreach ( const ServerLogic::PackageInfo &package, packageLocations )
+		m_packagesToLoad.removeOne( package );
 }
 
 const QList< ServerLogic::PackageInfo >& ServerLogic::packagesToLoad() const
@@ -50,13 +62,13 @@ void ServerLogic::connectNetworkManager()
 	}
 }
 
-bool ServerLogic::loadPackageList( const QUrl &url )
+void ServerLogic::loadPackageList( const QUrl &url )
 {
+	m_packageList.clear();
+
 	qDebug() << "loading package list from:" << url << ", isvalid =" << url.isValid();
 
 	m_network->get( QNetworkRequest( url ) );
-
-	return true;
 }
 
 bool ServerLogic::loadPackage()
@@ -90,50 +102,73 @@ bool ServerLogic::loadPackage()
 
 bool ServerLogic::checkPackage()
 {
-	while( m_packageIndex < m_packagesToLoad.size() &&
-		   m_packagesToLoad[ m_packageIndex ].server != m_packageList.documentElement().attribute( "path" ) )
-	{
-		QUrl listPath(m_packagesToLoad[ m_packageIndex ].server + "packageList.xml" );
-		if( !loadPackageList( listPath ) )
-		{
-			qDebug() << "Unable to load server package list: " << listPath << '\n';
-			m_packagesToLoad.removeAt( m_packageIndex );
-		}
-	}
-
 	if( m_packageIndex >= m_packagesToLoad.size() )
+		return true;
+
+	QString server = m_packagesToLoad[ m_packageIndex ].server;
+	if( m_packageList.documentElement().isNull() )
 	{
-		emit checkedPackage( "Finished Checking For Updates." );
+		qDebug() << "Unable to load server package list: " << server + "packageList.xml";
+		m_packagesToLoad.removeAt( m_packageIndex );
+
+		if( m_packageIndex >= m_packagesToLoad.size() )
+			emit checkedPackage( "Finished Checking For Updates." );
+		else
+		{
+			if( m_packagesToLoad[ m_packageIndex ].server != server )
+				loadPackageList( m_packagesToLoad[ m_packageIndex ].server + "packageList.xml" );
+		}
 		return true;
 	}
 
-	PackageInfo* package = &m_packagesToLoad[ m_packageIndex ];
+	if( server != m_packageList.documentElement().attribute( "path" ) )
+	{
+		QString listPath = server + "packageList.xml";
+		loadPackageList( listPath );
+		return false;
+	}
 
-	QString type = package->dir.endsWith( "MoNav.ini" ) ? "map" : "module";
-	QString map = package->path;
-	QString name = ( type == "map" ) ? map : package->dir.right( package->dir.size() - package->dir.lastIndexOf( '_') - 1);
+	PackageInfo package = m_packagesToLoad.at( m_packageIndex );
+
+	QString type = package.dir.endsWith( "MoNav.ini" ) ? "map" : "module";
+	QString map = package.path;
+	QString name = ( type == "map" ) ? map : package.dir.right( package.dir.size() - package.dir.lastIndexOf( '_') - 1);
 
 	QDomElement packageElement = findElement( type, name, map);
 
 	if( packageElement.isNull() )
 	{
-		qDebug() << "Package not found in list: " << name << '\n';
+		qDebug() << "Package not found in list: " << map << type << name;
 		m_packagesToLoad.removeAt( m_packageIndex );
 	}
 
-	else if( packageElement.attribute( "timestamp" ).toUInt() > package->timestamp )
+	else if( packageElement.attribute( "timestamp" ).toUInt() > package.timestamp )
 	{
-		qDebug() << "Update found: " << name << '\n';
+		qDebug() << "Update found: " << map << type << name;
+
+		if( type == "map")
+			m_packagesToLoad[ m_packageIndex ].path = packageElement.attribute( "path" );
+		else
+			m_packagesToLoad[ m_packageIndex ].path = packageElement.text();
+		m_packagesToLoad[ m_packageIndex ].dir.truncate( m_packagesToLoad[ m_packageIndex ].dir.lastIndexOf('/') +1 );
+		m_packagesToLoad[ m_packageIndex ].size = packageElement.attribute( "size" ).toLongLong();
+		m_packagesToLoad[ m_packageIndex ].timestamp = packageElement.attribute( "timestamp" ).toUInt();
+
 		++m_packageIndex;
 	}
 
 	else
 	{
-		qDebug() << "Up to date: " << name << '\n';
+		qDebug() << "Up to date: " << map << type << name;
 		m_packagesToLoad.removeAt( m_packageIndex );
 	}
 
-	emit checkedPackage( name );
+	if( m_packageIndex >= m_packagesToLoad.size() )
+		emit checkedPackage( "Finished Checking For Updates." );
+
+	else
+		emit checkedPackage( m_packagesToLoad[ m_packageIndex ].path );
+
 	return true;
 }
 
@@ -141,7 +176,7 @@ QDomElement ServerLogic::findElement( QString packageType, QString packageName, 
 {
 	QDomNodeList packageNodeList = m_packageList.elementsByTagName( packageType );
 
-	for( unsigned int i=0; i < packageNodeList.length(); i++ )
+	for( int i=0; i < packageNodeList.size(); i++ )
 	{
 		QDomElement package = packageNodeList.at( i ).toElement();
 
@@ -171,12 +206,15 @@ void ServerLogic::finished( QNetworkReply* reply )
 {
 	if( reply->error() != QNetworkReply::NoError )
 	{
-		qCritical( reply->errorString().toUtf8() );
-		emit error();
-		return;
+		qCritical( reply->url().path().toUtf8() + " : " + reply->errorString().toUtf8() );
+
+		if( !reply->url().path().endsWith( "packageList.xml" ) )
+			emit error();
+		else
+			emit loadedList();
 	}
 
-	if( reply->url().path().endsWith( ".mmm" ) )
+	else if( reply->url().path().endsWith( ".mmm" ) )
 	{
 		while ( reply->bytesAvailable() > 0 )
 			m_unpacker->processNetworkData();
@@ -195,19 +233,14 @@ void ServerLogic::finished( QNetworkReply* reply )
 			emit loadedPackage( "Finished Download & Extract." );
 	}
 
-	if( reply->url().path().endsWith( "packageList.xml" ) )
+	else if( reply->url().path().endsWith( "packageList.xml" ) )
 	{
 		if ( !m_packageList.setContent( reply ) )
-		{
 			qCritical( "error parsing package list\n" );
-			emit error();
-			return;
-		}
-
 		emit loadedList();
 	}
 
-	if( reply->url().path().endsWith( "MoNav.ini" ) )
+	else if( reply->url().path().endsWith( "MoNav.ini" ) )
 	{
 		QDir dir( m_localDir );
 		if( !dir.exists() && !dir.mkpath( m_localDir ) )

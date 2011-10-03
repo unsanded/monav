@@ -46,6 +46,7 @@ struct MapPackagesWidget::PrivateImplementation {
 
 	void populateInstalled( QListWidget* list );
 	void populateUpdatable( QListWidget* list );
+	void startPackageDownload();
 	void highlightButton( QPushButton* button, bool highlight );
 };
 
@@ -235,32 +236,38 @@ void MapPackagesWidget::check()
 	{
 		QDir dir( d->maps.at( i ).path );
 
-		QSettings mapInfo( dir.filePath( "MoNav.ini" ) );
+		QSettings mapInfo( dir.filePath( "MoNav.ini" ), QSettings::IniFormat );
 		QString mapName = mapInfo.value( "name" ).toString();
 
-		QSettings serverInfo( dir.filePath( "Server.ini" ) );
+		QSettings serverInfo( dir.filePath( "Server.ini" ), QSettings::IniFormat );
 		package.server = serverInfo.value( "server" ).toString();
 		package.timestamp = serverInfo.value( "timestamp").toUInt();
-		package.dir = dir.path() + "MoNav.ini";
+		package.dir = dir.path() + '/' + "MoNav.ini";
 		package.path = mapName;
 
-		packagesInstalled.push_back( package );
+		if( !package.server.isEmpty() )
+			packagesInstalled.push_back( package );
 
 		QStringList modules = dir.entryList( QDir::Dirs | QDir::NoDotAndDotDot );
-
 		for( int j=0; j < modules.size(); j++ )
 		{
-			dir.cd( modules[i] );
+			dir.cd( modules[j] );
 
-			QSettings moduleInfo( dir.filePath( "Server.ini" ) );
+			QSettings moduleInfo( dir.filePath( "Server.ini" ), QSettings::IniFormat );
 			package.server = moduleInfo.value( "server" ).toString();
 			package.timestamp = moduleInfo.value( "timestamp").toUInt();
 			package.dir = dir.path();
 			package.path = mapName;
 
-			packagesInstalled.push_back( package );
+			if( !package.server.isEmpty() )
+				packagesInstalled.push_back( package );
+
+			dir.cdUp();
 		}
 	}
+
+	if( packagesInstalled.isEmpty() )
+		return;
 
 	qSort( packagesInstalled.begin(), packagesInstalled.end() );
 
@@ -275,22 +282,45 @@ void MapPackagesWidget::check()
 
 	if( d->serverLogic == NULL )
 		setupNetworkAccess();
+	else
+		d->serverLogic->clearPackagesToLoad();
 
 	d->serverLogic->addPackagesToLoad( packagesInstalled );
 
 	if( d->progress != NULL )
 		delete d->progress;
-	d->progress = new QProgressDialog( "Checking packages", "Abort", 0, packagesInstalled.size(), this );
+	d->progress = new QProgressDialog( packagesInstalled.first().path, "Abort", 0, packagesInstalled.size(), this );
 	d->progress->setWindowModality( Qt::WindowModal );
 	d->progress->setValue( 0 );
 	d->progress->show();
 
-	if ( !d->serverLogic->checkPackage() )
-		d->progress->cancel();
+	connect( d->serverLogic, SIGNAL( loadedList() ), d->serverLogic, SLOT( checkPackage() ) );
+	d->serverLogic->loadPackageList( packagesInstalled.first().server + "packageList.xml" );
+
+	return;
 }
 
 void MapPackagesWidget::update()
 {
+	QList< QListWidgetItem* > selected = m_ui->updateList->selectedItems();
+	QList< ServerLogic::PackageInfo > packagesToUpdate;
+
+	foreach ( QListWidgetItem* item, selected )
+	{
+		packagesToUpdate.append( d->serverLogic->packagesToLoad()[ item->data( Qt::UserRole ).toInt() ] );
+		item->setSelected( false );
+	}
+
+	if( packagesToUpdate.isEmpty() )
+		return;
+
+	if(d->serverLogic == NULL)
+		setupNetworkAccess();
+
+	d->serverLogic->clearPackagesToLoad();
+	d->serverLogic->addPackagesToLoad( packagesToUpdate );
+
+	d->startPackageDownload();
 
 }
 
@@ -303,7 +333,7 @@ void MapPackagesWidget::downloadPackages()
 	QList< ServerLogic::PackageInfo > packagesToLoad;
 	foreach ( QTreeWidgetItem* item, selected )
 	{
-		int elementIndex =  item->data(0, Qt::UserRole).toInt();
+		int elementIndex =  item->data( 0, Qt::UserRole ).toInt();
 
 		QDomElement map = d->elements[ elementIndex ];
 		while( map.tagName() != "map" )
@@ -351,23 +381,7 @@ void MapPackagesWidget::downloadPackages()
 		item->setSelected( false );
 	}
 
-	QString dlInfo = "";
-	qint64 sizeTotal = 0;
-	foreach ( const ServerLogic::PackageInfo& pInfo, packagesToLoad )
-	{
-		dlInfo.append( pInfo.server + pInfo.path + QString( " - %1 byte\n" ).arg( pInfo.size ) );
-		sizeTotal += pInfo.size;
-	}
-
-	QMessageBox dlMsg;
-	dlMsg.setText( "Downloading packages from " + serverName + " ( " + serverPath + " )"  );
-	QString sizeInfo = QString( "Total size is %1 byte. Proceed?" ).arg( sizeTotal );
-	dlMsg.setInformativeText( "Downloading the packages requires an active internet connection. " + sizeInfo );
-	dlMsg.setDetailedText( dlInfo );
-	dlMsg.setStandardButtons( QMessageBox::No | QMessageBox::Yes );
-	dlMsg.setDefaultButton( QMessageBox::Yes );
-
-	if( dlMsg.exec() != QMessageBox::Yes )
+	if( packagesToLoad.isEmpty() )
 		return;
 
 	if(d->serverLogic == NULL)
@@ -375,14 +389,7 @@ void MapPackagesWidget::downloadPackages()
 
 	d->serverLogic->addPackagesToLoad( packagesToLoad );
 
-	if( d->progress != NULL )
-		delete d->progress;
-	d->progress = new QProgressDialog( "Starting package download", "Abort download", 0, packagesToLoad.size(), this );
-	d->progress->setWindowModality( Qt::WindowModal );
-	d->progress->setValue( 0 );
-	d->progress->show();
-
-	d->serverLogic->loadPackage();
+	d->startPackageDownload();
 }
 
 void MapPackagesWidget::editServerList()
@@ -405,6 +412,9 @@ void MapPackagesWidget::populateServerPackageList()
 {
 	m_ui->downloadList->clear();
 	d->elements.clear();
+
+	if( d->serverLogic->packageList().isNull() )
+		return;
 
 	QDomElement element = d->serverLogic->packageList().documentElement().firstChildElement();
 	QTreeWidgetItem *parent = NULL;
@@ -457,6 +467,42 @@ void MapPackagesWidget::populateServerPackageList()
 	}
 }
 
+void MapPackagesWidget::PrivateImplementation::startPackageDownload()
+{
+	QString dlInfo = "";
+	qint64 sizeTotal = 0;
+	foreach ( const ServerLogic::PackageInfo& pInfo, serverLogic->packagesToLoad() )
+	{
+		dlInfo.append( pInfo.server + pInfo.path + QString( " - %1 byte\n" ).arg( pInfo.size ) );
+		sizeTotal += pInfo.size;
+	}
+
+	QMessageBox dlMsg;
+	//dlMsg.setText( "Downloading packages from " + serverName + " ( " + serverPath + " )"  );
+	dlMsg.setText( "Downloading packages" );
+	QString sizeInfo = QString( "Total size is %1 byte. Proceed?" ).arg( sizeTotal );
+	dlMsg.setInformativeText( "Downloading the packages requires an active internet connection. " + sizeInfo );
+	dlMsg.setDetailedText( dlInfo );
+	dlMsg.setStandardButtons( QMessageBox::No | QMessageBox::Yes );
+	dlMsg.setDefaultButton( QMessageBox::Yes );
+
+	if( dlMsg.exec() != QMessageBox::Yes )
+		return;
+
+	if( progress != NULL )
+		delete progress;
+	progress = new QProgressDialog(
+				serverLogic->packagesToLoad().first().path,
+				"Abort download",
+				0,
+				serverLogic->packagesToLoad().size() );
+	progress->setWindowModality( Qt::WindowModal );
+	progress->setValue( 0 );
+	progress->show();
+
+	serverLogic->loadPackage();
+}
+
 void MapPackagesWidget::PrivateImplementation::populateInstalled( QListWidget* list )
 {
 	list->clear();
@@ -480,13 +526,17 @@ void MapPackagesWidget::PrivateImplementation::populateInstalled( QListWidget* l
 
 void MapPackagesWidget::PrivateImplementation::populateUpdatable( QListWidget* list )
 {
-	ServerLogic::PackageInfo package;
+	list->clear();
 
+	ServerLogic::PackageInfo package;
 	for( int i=0; i < serverLogic->packagesToLoad().size(); i++ )
 	{
 		package = serverLogic->packagesToLoad().at( i );
+		QString module = package.path.right( package.path.size() - package.path.lastIndexOf( '/') - 1 );
+		module.truncate( module.lastIndexOf( '.') );
+		QString map = package.path.left( package.path.lastIndexOf( '/') );
 
-		QListWidgetItem *item = new QListWidgetItem( package.path );
+		QListWidgetItem *item = new QListWidgetItem( map + " - " + module );
 		item->setData( Qt::UserRole, i );
 		list->addItem( item );
 	}
@@ -506,13 +556,16 @@ void MapPackagesWidget::updateProgress( QString text )
 	if( d->progress == NULL || d->progress->wasCanceled() )
 		return;
 
-	d->progress->setValue(  d->progress->value() + 1 );
 	d->progress->setLabelText( text );
+	d->progress->setValue(  d->progress->value() + 1 );;
 
 	if( text == "Finished Download & Extract." )
 		d->populateInstalled( m_ui->installedList );
 	else if ( text == "Finished Checking For Updates." )
+	{
+		disconnect( d->serverLogic, SIGNAL( loadedList() ), d->serverLogic, SLOT( checkPackage() ) );
 		d->populateUpdatable( m_ui->updateList );
+	}
 }
 
 void MapPackagesWidget::cleanUp()

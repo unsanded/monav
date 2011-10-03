@@ -46,7 +46,9 @@ class ServerLogic : public QObject
 		ServerLogic();
 		~ServerLogic();
 
+		void clearPackagesToLoad();
 		void addPackagesToLoad( const QList< PackageInfo >& packageLocations );
+		void removePackagesToLoad( const QList< ServerLogic::PackageInfo > &packageLocations );
 		const QList< PackageInfo >& packagesToLoad() const;
 		const QDomDocument& packageList() const;
 
@@ -62,7 +64,7 @@ class ServerLogic : public QObject
 		void connectNetworkManager();
 		bool loadPackage();
 		bool checkPackage();
-		bool loadPackageList( const QUrl &url );
+		void loadPackageList( const QUrl &url );
 
 	protected slots:
 
