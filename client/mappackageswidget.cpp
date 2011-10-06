@@ -43,11 +43,13 @@ struct MapPackagesWidget::PrivateImplementation {
 	QVector< QDomElement > elements;
 	ServerLogic *serverLogic;
 	QProgressDialog *progress;
+	QString progressDetails;
 
 	void populateInstalled( QListWidget* list );
 	void populateUpdatable( QListWidget* list );
 	void startPackageDownload();
 	void highlightButton( QPushButton* button, bool highlight );
+	void showProgressDetails( QString operation );
 };
 
 MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
@@ -59,6 +61,7 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 
 	d->serverLogic = NULL;
 	d->progress = NULL;
+	QString progressDetails = "";
 
 	QSettings settings( "MoNavClient" );
 	settings.beginGroup( "MapPackages" );
@@ -221,7 +224,7 @@ void MapPackagesWidget::downloadList()
 	if( dlMsg.exec() != QMessageBox::Yes )
 		return;
 
-	if(d->serverLogic == NULL)
+	if( d->serverLogic == NULL )
 		setupNetworkAccess();
 
 	d->serverLogic->loadPackageList( url );
@@ -293,8 +296,11 @@ void MapPackagesWidget::check()
 	d->progress->setWindowModality( Qt::WindowModal );
 	d->progress->setValue( 0 );
 	d->progress->show();
+	d->progressDetails = "";
 
 	connect( d->serverLogic, SIGNAL( loadedList() ), d->serverLogic, SLOT( checkPackage() ) );
+	disconnect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
+
 	d->serverLogic->loadPackageList( packagesInstalled.first().server + "packageList.xml" );
 
 	return;
@@ -414,7 +420,10 @@ void MapPackagesWidget::populateServerPackageList()
 	d->elements.clear();
 
 	if( d->serverLogic->packageList().isNull() )
+	{
+		qCritical( "could not download package list" );
 		return;
+	}
 
 	QDomElement element = d->serverLogic->packageList().documentElement().firstChildElement();
 	QTreeWidgetItem *parent = NULL;
@@ -465,6 +474,8 @@ void MapPackagesWidget::populateServerPackageList()
 			element = element.nextSiblingElement();
 		}
 	}
+
+	qDebug() << "loaded package list";
 }
 
 void MapPackagesWidget::PrivateImplementation::startPackageDownload()
@@ -479,7 +490,7 @@ void MapPackagesWidget::PrivateImplementation::startPackageDownload()
 
 	QMessageBox dlMsg;
 	//dlMsg.setText( "Downloading packages from " + serverName + " ( " + serverPath + " )"  );
-	dlMsg.setText( "Downloading packages" );
+	dlMsg.setText( "Downloading packages." );
 	QString sizeInfo = QString( "Total size is %1 byte. Proceed?" ).arg( sizeTotal );
 	dlMsg.setInformativeText( "Downloading the packages requires an active internet connection. " + sizeInfo );
 	dlMsg.setDetailedText( dlInfo );
@@ -499,6 +510,7 @@ void MapPackagesWidget::PrivateImplementation::startPackageDownload()
 	progress->setWindowModality( Qt::WindowModal );
 	progress->setValue( 0 );
 	progress->show();
+	progressDetails = "";
 
 	serverLogic->loadPackage();
 }
@@ -550,6 +562,34 @@ void MapPackagesWidget::PrivateImplementation::highlightButton( QPushButton* but
 	button->setFont( font );
 }
 
+void MapPackagesWidget::PrivateImplementation::showProgressDetails( QString operation )
+{
+	QMessageBox dlMsg;
+
+	if( operation == "check" )
+	{
+		dlMsg.setText( "Checked installed packages for updates." );
+		dlMsg.setInformativeText( "" );
+	}
+	else if( operation == "download" )
+	{
+		dlMsg.setText( "Downloaded & extracted packages." );
+		dlMsg.setInformativeText( "" );
+	}
+	else
+	{
+		dlMsg.setText( "Finished operation." );
+		dlMsg.setInformativeText( "" );
+	}
+
+	dlMsg.setDetailedText( progressDetails );
+
+	dlMsg.setStandardButtons( QMessageBox::Ok );
+	dlMsg.setDefaultButton( QMessageBox::Ok );
+
+	dlMsg.exec();
+}
+
 
 void MapPackagesWidget::updateProgress( QString text )
 {
@@ -557,15 +597,22 @@ void MapPackagesWidget::updateProgress( QString text )
 		return;
 
 	d->progress->setLabelText( text );
-	d->progress->setValue(  d->progress->value() + 1 );;
+	d->progress->setValue(  d->progress->value() + 1 );
 
 	if( text == "Finished Download & Extract." )
+	{
 		d->populateInstalled( m_ui->installedList );
+		d->showProgressDetails( "download" );
+	}
 	else if ( text == "Finished Checking For Updates." )
 	{
 		disconnect( d->serverLogic, SIGNAL( loadedList() ), d->serverLogic, SLOT( checkPackage() ) );
+		connect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
 		d->populateUpdatable( m_ui->updateList );
+		d->showProgressDetails( "update" );
 	}
+	else
+		d->progressDetails.append( text + '\n' );
 }
 
 void MapPackagesWidget::cleanUp()
