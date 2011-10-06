@@ -108,16 +108,14 @@ bool ServerLogic::checkPackage()
 	QString server = m_packagesToLoad[ m_packageIndex ].server;
 	if( m_packageList.documentElement().isNull() )
 	{
-		qDebug() << "Unable to load server package list: " << server + "packageList.xml";
 		m_packagesToLoad.removeAt( m_packageIndex );
 
 		if( m_packageIndex >= m_packagesToLoad.size() )
 			emit checkedPackage( "Finished Checking For Updates." );
+		else if( m_packagesToLoad[ m_packageIndex ].server != server )
+			loadPackageList( m_packagesToLoad[ m_packageIndex ].server + "packageList.xml" );
 		else
-		{
-			if( m_packagesToLoad[ m_packageIndex ].server != server )
-				loadPackageList( m_packagesToLoad[ m_packageIndex ].server + "packageList.xml" );
-		}
+			emit checkedPackage( m_packagesToLoad[ m_packageIndex ].path );
 		return true;
 	}
 
@@ -206,10 +204,13 @@ void ServerLogic::finished( QNetworkReply* reply )
 {
 	if( reply->error() != QNetworkReply::NoError )
 	{
-		qCritical( reply->url().path().toUtf8() + " : " + reply->errorString().toUtf8() );
+		qDebug( "loading " + reply->url().toString().toUtf8() + " : " + reply->errorString().toUtf8() );
 
 		if( !reply->url().path().endsWith( "packageList.xml" ) )
+		{
+			qCritical( reply->url().toString().toUtf8() + " : " + reply->errorString().toUtf8() );
 			emit error();
+		}
 		else
 			emit loadedList();
 	}
