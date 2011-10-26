@@ -21,7 +21,6 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include "ui_mappackageswidget.h"
 #include "serverinputdialog.h"
 #include "mapdata.h"
-#include "serverlogic.h"
 
 #include <QResizeEvent>
 #include <QShowEvent>
@@ -49,7 +48,7 @@ struct MapPackagesWidget::PrivateImplementation {
 	void populateUpdatable( QListWidget* list );
 	void startPackageDownload();
 	void highlightButton( QPushButton* button, bool highlight );
-	void showProgressDetails( QString operation );
+	void showProgressDetails( ServerLogic::OPERATION );
 };
 
 MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
@@ -205,7 +204,7 @@ void MapPackagesWidget::setupNetworkAccess()
 	connect( d->serverLogic, SIGNAL( loadedPackage( QString ) ), d->serverLogic, SLOT( loadPackage() ) );
 	connect( d->serverLogic, SIGNAL( checkedPackage( QString ) ), this, SLOT( updateProgress( QString ) ) );
 	connect( d->serverLogic, SIGNAL( checkedPackage( QString ) ), d->serverLogic, SLOT( checkPackage() ) );
-	connect( d->serverLogic, SIGNAL( error() ), this, SLOT( cleanUp() ) );
+	connect( d->serverLogic, SIGNAL( error( ServerLogic::ERROR_TYPE, QString ) ), this, SLOT( cleanUp( ServerLogic::ERROR_TYPE, QString ) ) );
 
 	d->serverLogic->connectNetworkManager();
 }
@@ -227,6 +226,8 @@ void MapPackagesWidget::downloadList()
 	if( d->serverLogic == NULL )
 		setupNetworkAccess();
 
+	d->progressDetails = "";
+	d->serverLogic->setOp( ServerLogic::LIST_DL );
 	d->serverLogic->loadPackageList( url );
 }
 
@@ -301,6 +302,7 @@ void MapPackagesWidget::check()
 	connect( d->serverLogic, SIGNAL( loadedList() ), d->serverLogic, SLOT( checkPackage() ) );
 	disconnect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
 
+	d->serverLogic->setOp( ServerLogic::PACKAGE_CHK );
 	d->serverLogic->loadPackageList( packagesInstalled.first().server + "packageList.xml" );
 
 	return;
@@ -421,7 +423,7 @@ void MapPackagesWidget::populateServerPackageList()
 
 	if( d->serverLogic->packageList().isNull() )
 	{
-		qCritical( "could not download package list" );
+		d->showProgressDetails( ServerLogic::LIST_DL);
 		return;
 	}
 
@@ -512,6 +514,7 @@ void MapPackagesWidget::PrivateImplementation::startPackageDownload()
 	progress->show();
 	progressDetails = "";
 
+	serverLogic->setOp( ServerLogic::PACKAGE_DL );
 	serverLogic->loadPackage();
 }
 
@@ -562,27 +565,38 @@ void MapPackagesWidget::PrivateImplementation::highlightButton( QPushButton* but
 	button->setFont( font );
 }
 
-void MapPackagesWidget::PrivateImplementation::showProgressDetails( QString operation )
+void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic::OPERATION operation )
 {
 	QMessageBox dlMsg;
 
-	if( operation == "check" )
+	switch( operation )
 	{
-		dlMsg.setText( "Checked installed packages for updates." );
-		dlMsg.setInformativeText( "" );
+		case ServerLogic::PACKAGE_CHK:
+		{
+			dlMsg.setText( "Package Update Check" );
+			dlMsg.setInformativeText( "" );
+			dlMsg.setDetailedText( progressDetails );
+			break;
+		}
+		case ServerLogic::PACKAGE_DL:
+		{
+			dlMsg.setText( "Package Download & Extract" );
+			dlMsg.setInformativeText( "" );
+			dlMsg.setDetailedText( progressDetails );
+			break;
+		}
+		case ServerLogic::LIST_DL:
+		{
+			dlMsg.setText( "Server Package List Download" );
+			dlMsg.setInformativeText( progressDetails );
+			break;
+		}
+		default:
+		{
+			dlMsg.setText( "Finished Operation" );
+			dlMsg.setInformativeText( progressDetails );
+		}
 	}
-	else if( operation == "download" )
-	{
-		dlMsg.setText( "Downloaded & extracted packages." );
-		dlMsg.setInformativeText( "" );
-	}
-	else
-	{
-		dlMsg.setText( "Finished operation." );
-		dlMsg.setInformativeText( "" );
-	}
-
-	dlMsg.setDetailedText( progressDetails );
 
 	dlMsg.setStandardButtons( QMessageBox::Ok );
 	dlMsg.setDefaultButton( QMessageBox::Ok );
@@ -597,26 +611,48 @@ void MapPackagesWidget::updateProgress( QString text )
 		return;
 
 	d->progress->setLabelText( text );
-	d->progress->setValue(  d->progress->value() + 1 );
 
-	if( text == "Finished Download & Extract." )
+	int newProgressValue = d->progress->value() + 1;
+	d->progress->setValue( newProgressValue );
+
+	if( newProgressValue == d->progress->maximum() )
 	{
-		d->populateInstalled( m_ui->installedList );
-		d->showProgressDetails( "download" );
+		ServerLogic::OPERATION operation = d->serverLogic->getOp();
+
+		switch( operation )
+		{
+			case ServerLogic::PACKAGE_DL:
+			{
+				d->populateInstalled( m_ui->installedList );
+				break;
+			}
+
+			case ServerLogic::PACKAGE_CHK:
+			{
+				disconnect( d->serverLogic, SIGNAL( loadedList() ), d->serverLogic, SLOT( checkPackage() ) );
+				connect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
+				d->populateUpdatable( m_ui->updateList );
+				break;
+			}
+
+			default:
+				break;
+		}
+
+		d->showProgressDetails( operation );
 	}
-	else if ( text == "Finished Checking For Updates." )
-	{
-		disconnect( d->serverLogic, SIGNAL( loadedList() ), d->serverLogic, SLOT( checkPackage() ) );
-		connect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
-		d->populateUpdatable( m_ui->updateList );
-		d->showProgressDetails( "update" );
-	}
+
 	else
 		d->progressDetails.append( text + '\n' );
 }
 
-void MapPackagesWidget::cleanUp()
+void MapPackagesWidget::cleanUp( ServerLogic::ERROR_TYPE type, QString message )
 {
+	d->progressDetails.append( message );
+
+	if( type == ServerLogic::LIST_DL_ERROR )
+		return;
+
 	if( d->progress != NULL )
 	{
 		d->progress->cancel();

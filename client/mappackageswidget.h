@@ -23,6 +23,8 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <QWidget>
 #include <QUrl>
 
+#include "serverlogic.h"
+
 namespace Ui {
 	class MapPackagesWidget;
 }
@@ -59,7 +61,7 @@ protected slots:
 	void populateServerPackageList();
 	void updateProgress( QString text );
 	void selected( int id );
-	void cleanUp();
+	void cleanUp( ServerLogic::ERROR_TYPE, QString message = "" );
 
 protected:
 
