@@ -11,10 +11,11 @@ ServerLogic::ServerLogic()
 {
 	m_localDir = "";
 	m_packageIndex = 0;
+	m_currentOp = INACTIVE;
 	m_network = NULL;
 	m_unpacker = NULL;
 
-	connect( this, SIGNAL( error() ), this, SLOT( cleanUp() ) );
+	connect( this, SIGNAL( error( ServerLogic::ERROR_TYPE, QString ) ), this, SLOT( cleanUp( ServerLogic::ERROR_TYPE, QString ) ) );
 }
 
 ServerLogic::~ServerLogic()
@@ -24,6 +25,16 @@ ServerLogic::~ServerLogic()
 
 	if( m_unpacker != NULL )
 		delete m_unpacker;
+}
+
+void ServerLogic::setOp( ServerLogic::OPERATION operation )
+{
+	m_currentOp = operation;
+}
+
+const ServerLogic::OPERATION& ServerLogic::getOp()
+{
+	return m_currentOp;
 }
 
 void ServerLogic::clearPackagesToLoad()
@@ -191,8 +202,11 @@ QDomElement ServerLogic::findElement( QString packageType, QString packageName, 
 	return QDomElement();
 }
 
-void ServerLogic::cleanUp()
+void ServerLogic::cleanUp( ERROR_TYPE type, QString message )
 {
+	if( type == LIST_DL_ERROR )
+		return;
+
 	m_packagesToLoad.clear();
 
 	if( m_unpacker != NULL )
@@ -204,15 +218,15 @@ void ServerLogic::finished( QNetworkReply* reply )
 {
 	if( reply->error() != QNetworkReply::NoError )
 	{
-		qDebug( "loading " + reply->url().toString().toUtf8() + " : " + reply->errorString().toUtf8() );
+		qDebug( "Error loading " + reply->url().toString().toUtf8() + " : " + reply->errorString().toUtf8() );
 
-		if( !reply->url().path().endsWith( "packageList.xml" ) )
+		if( reply->url().path().endsWith( "packageList.xml" ) )
 		{
-			qCritical( reply->url().toString().toUtf8() + " : " + reply->errorString().toUtf8() );
-			emit error();
+			emit error( ServerLogic::LIST_DL_ERROR, reply->url().toString().toUtf8() + ":\n" + reply->errorString().toUtf8() + '\n' );
+			emit loadedList();
 		}
 		else
-			emit loadedList();
+			emit error( ServerLogic::PACKAGE_DL_ERROR, reply->url().toString().toUtf8() + ":\n" + reply->errorString().toUtf8() + '\n' );
 	}
 
 	else if( reply->url().path().endsWith( ".mmm" ) )

@@ -43,13 +43,20 @@ class ServerLogic : public QObject
 
 		};
 
+		enum ERROR_TYPE { UNDEFINED_ERROR, LIST_DL_ERROR, PACKAGE_DL_ERROR };
+		enum OPERATION { INACTIVE, LIST_DL, PACKAGE_CHK, PACKAGE_DL };
+
 		ServerLogic();
 		~ServerLogic();
+
+		void setOp( ServerLogic::OPERATION operation );
+		const ServerLogic::OPERATION& getOp();
 
 		void clearPackagesToLoad();
 		void addPackagesToLoad( const QList< PackageInfo >& packageLocations );
 		void removePackagesToLoad( const QList< ServerLogic::PackageInfo > &packageLocations );
 		const QList< PackageInfo >& packagesToLoad() const;
+
 		const QDomDocument& packageList() const;
 
 	signals:
@@ -57,7 +64,7 @@ class ServerLogic : public QObject
 		void loadedList();
 		void checkedPackage( QString info );
 		void loadedPackage( QString info );
-		void error();
+		void error( ServerLogic::ERROR_TYPE type = UNDEFINED_ERROR, QString message = "" );
 
 	public slots:
 
@@ -69,12 +76,13 @@ class ServerLogic : public QObject
 	protected slots:
 
 		void finished( QNetworkReply* reply );
-		void cleanUp();
+		void cleanUp( ServerLogic::ERROR_TYPE type = UNDEFINED_ERROR, QString message = "" );
 
 	protected:
 
 		QString m_localDir;
 		QDomDocument m_packageList;
+		OPERATION m_currentOp;
 		DirectoryUnpacker *m_unpacker;
 		QNetworkAccessManager* m_network;
 
