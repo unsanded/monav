@@ -500,7 +500,10 @@ void MapPackagesWidget::PrivateImplementation::startPackageDownload()
 	dlMsg.setDefaultButton( QMessageBox::Yes );
 
 	if( dlMsg.exec() != QMessageBox::Yes )
+	{
+		serverLogic->clearPackagesToLoad();
 		return;
+	}
 
 	if( progress != NULL )
 		delete progress;
@@ -573,21 +576,19 @@ void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic:
 	{
 		case ServerLogic::PACKAGE_CHK:
 		{
-			dlMsg.setText( "Package Update Check" );
-			dlMsg.setInformativeText( "" );
+			dlMsg.setText( "Finished Package Update Check" );
 			dlMsg.setDetailedText( progressDetails );
 			break;
 		}
 		case ServerLogic::PACKAGE_DL:
 		{
-			dlMsg.setText( "Package Download & Extract" );
-			dlMsg.setInformativeText( "" );
+			dlMsg.setText( "Finished Package Download & Extract" );
 			dlMsg.setDetailedText( progressDetails );
 			break;
 		}
 		case ServerLogic::LIST_DL:
 		{
-			dlMsg.setText( "Server Package List Download" );
+			dlMsg.setText( "Finished Server Package List Download" );
 			dlMsg.setInformativeText( progressDetails );
 			break;
 		}
@@ -610,7 +611,9 @@ void MapPackagesWidget::updateProgress( QString text )
 	if( d->progress == NULL || d->progress->wasCanceled() )
 		return;
 
+	qDebug() << text;
 	d->progress->setLabelText( text );
+	d->progressDetails.append( text + '\n' );
 
 	int newProgressValue = d->progress->value() + 1;
 	d->progress->setValue( newProgressValue );
@@ -641,9 +644,6 @@ void MapPackagesWidget::updateProgress( QString text )
 
 		d->showProgressDetails( operation );
 	}
-
-	else
-		d->progressDetails.append( text + '\n' );
 }
 
 void MapPackagesWidget::cleanUp( ServerLogic::ERROR_TYPE type, QString message )
