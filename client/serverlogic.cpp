@@ -116,17 +116,26 @@ bool ServerLogic::checkPackage()
 	if( m_packageIndex >= m_packagesToLoad.size() )
 		return true;
 
-	QString server = m_packagesToLoad[ m_packageIndex ].server;
+	PackageInfo package = m_packagesToLoad.at( m_packageIndex );
+
+	QString type = package.dir.endsWith( "MoNav.ini" ) ? "map" : "module";
+	QString map = package.path;
+	QString name = ( type == "map" ) ? map : package.dir.right( package.dir.size() - package.dir.lastIndexOf( '_') - 1);
+	QString id = ( type == "map" ) ? "map" : package.dir.right( package.dir.size() - package.dir.lastIndexOf( '/') - 1);
+	QString server = package.server;
+
+	QString packageProgressInfo = package.path + ' ' + id + " : ";
+
 	if( m_packageList.documentElement().isNull() )
 	{
+		packageProgressInfo.append( "error downloading list" );
 		m_packagesToLoad.removeAt( m_packageIndex );
 
-		if( m_packageIndex >= m_packagesToLoad.size() )
-			emit checkedPackage( "Finished Checking For Updates." );
-		else if( m_packagesToLoad[ m_packageIndex ].server != server )
-			loadPackageList( m_packagesToLoad[ m_packageIndex ].server + "packageList.xml" );
+		if( m_packageIndex >= m_packagesToLoad.size() || m_packagesToLoad[ m_packageIndex ].server == server  )
+			emit checkedPackage( packageProgressInfo );
 		else
-			emit checkedPackage( m_packagesToLoad[ m_packageIndex ].path );
+			loadPackageList( m_packagesToLoad[ m_packageIndex ].server + "packageList.xml" );
+
 		return true;
 	}
 
@@ -137,29 +146,23 @@ bool ServerLogic::checkPackage()
 		return false;
 	}
 
-	PackageInfo package = m_packagesToLoad.at( m_packageIndex );
-
-	QString type = package.dir.endsWith( "MoNav.ini" ) ? "map" : "module";
-	QString map = package.path;
-	QString name = ( type == "map" ) ? map : package.dir.right( package.dir.size() - package.dir.lastIndexOf( '_') - 1);
-
 	QDomElement packageElement = findElement( type, name, map);
 
 	if( packageElement.isNull() )
 	{
-		qDebug() << "Package not found in list: " << map << type << name;
+		packageProgressInfo.append( "not found in list" );
 		m_packagesToLoad.removeAt( m_packageIndex );
 	}
 
 	else if( packageElement.attribute( "timestamp" ).toUInt() > package.timestamp )
 	{
-		qDebug() << "Update found: " << map << type << name;
+		packageProgressInfo.append( "update found" );
 
 		if( type == "map")
 			m_packagesToLoad[ m_packageIndex ].path = packageElement.attribute( "path" );
 		else
 			m_packagesToLoad[ m_packageIndex ].path = packageElement.text();
-		m_packagesToLoad[ m_packageIndex ].dir.truncate( m_packagesToLoad[ m_packageIndex ].dir.lastIndexOf('/') +1 );
+		m_packagesToLoad[ m_packageIndex ].dir.truncate( m_packagesToLoad[ m_packageIndex ].dir.lastIndexOf('/') + 1 );
 		m_packagesToLoad[ m_packageIndex ].size = packageElement.attribute( "size" ).toLongLong();
 		m_packagesToLoad[ m_packageIndex ].timestamp = packageElement.attribute( "timestamp" ).toUInt();
 
@@ -168,15 +171,11 @@ bool ServerLogic::checkPackage()
 
 	else
 	{
-		qDebug() << "Up to date: " << map << type << name;
+		packageProgressInfo.append( "up to date" );
 		m_packagesToLoad.removeAt( m_packageIndex );
 	}
 
-	if( m_packageIndex >= m_packagesToLoad.size() )
-		emit checkedPackage( "Finished Checking For Updates." );
-
-	else
-		emit checkedPackage( m_packagesToLoad[ m_packageIndex ].path );
+	emit checkedPackage( packageProgressInfo );
 
 	return true;
 }
@@ -240,12 +239,11 @@ void ServerLogic::finished( QNetworkReply* reply )
 		QSettings serverConfig( m_localDir + "Server.ini", QSettings::IniFormat );
 		serverConfig.setValue( "server", m_packagesToLoad.first().server );
 		serverConfig.setValue( "timestamp", m_packagesToLoad.first().timestamp );
-		m_packagesToLoad.removeFirst();
 
-		if( !m_packagesToLoad.isEmpty() )
-			emit loadedPackage( m_packagesToLoad.first().path );
-		else
-			emit loadedPackage( "Finished Download & Extract." );
+		QString packageProgressInfo = m_packagesToLoad.first().path + " ok";
+
+		m_packagesToLoad.removeFirst();
+		emit loadedPackage( packageProgressInfo );
 	}
 
 	else if( reply->url().path().endsWith( "packageList.xml" ) )
@@ -279,12 +277,11 @@ void ServerLogic::finished( QNetworkReply* reply )
 		QSettings serverConfig( m_localDir + "Server.ini", QSettings::IniFormat );
 		serverConfig.setValue( "server", m_packagesToLoad.first().server );
 		serverConfig.setValue( "timestamp", m_packagesToLoad.first().timestamp );
-		m_packagesToLoad.removeFirst();
 
-		if( !m_packagesToLoad.isEmpty() )
-			emit loadedPackage( m_packagesToLoad.first().path );
-		else
-			emit loadedPackage( "Finished Download & Extract." );
+		QString packageProgressInfo = m_packagesToLoad.first().path + " ok";
+
+		m_packagesToLoad.removeFirst();
+		emit loadedPackage( packageProgressInfo );
 	}
 
 	reply->deleteLater();
