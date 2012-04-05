@@ -1,0 +1,85 @@
+<RCC>
+    <qresource prefix="/">
+        <file>audio/en/instructions-announce.wav</file>
+        <file>audio/en/instructions-now.wav</file>
+        <file>audio/en/instructions-and-then.wav</file>
+        <file>audio/en/instructions-head-straightforward.wav</file>
+        <file>audio/en/instructions-roundabout_01.wav</file>
+        <file>audio/en/instructions-roundabout_02.wav</file>
+        <file>audio/en/instructions-roundabout_03.wav</file>
+        <file>audio/en/instructions-roundabout_04.wav</file>
+        <file>audio/en/instructions-roundabout_05.wav</file>
+        <file>audio/en/instructions-roundabout_06.wav</file>
+        <file>audio/en/instructions-roundabout_07.wav</file>
+        <file>audio/en/instructions-roundabout_08.wav</file>
+        <file>audio/en/instructions-roundabout_09.wav</file>
+        <file>audio/en/instructions-take-ramp.wav</file>
+        <file>audio/en/instructions-turn-left.wav</file>
+        <file>audio/en/instructions-turn-right.wav</file>
+        <file>audio/en/instructions-turn-sharply-left.wav</file>
+        <file>audio/en/instructions-turn-sharply-right.wav</file>
+        <file>audio/en/instructions-turn-slightly-left.wav</file>
+        <file>audio/en/instructions-turn-slightly-right.wav</file>
+        <file>audio/en/instructions-turn-u.wav</file>
+        <file>audio/en/instructions-leave-motorway.wav</file>
+        <file>audio/en/instructions-leave-trunk.wav</file>
+        <file>audio/en/instructions-take-motorway-ramp.wav</file>
+        <file>audio/en/instructions-take-trunk-ramp.wav</file>
+
+        <file>audio/en/instructions-distance-now.wav</file>
+        <file>audio/en/instructions-distance-50m.wav</file>
+        <file>audio/en/instructions-distance-100m.wav</file>
+        <file>audio/en/instructions-distance-200m.wav</file>
+        <file>audio/en/instructions-distance-500m.wav</file>
+        <file>audio/en/instructions-distance-800m.wav</file>
+        <file>audio/en/instructions-distance-1km.wav</file>
+        <file>audio/en/instructions-distance-2km.wav</file>
+
+        <file>audio/en/instructions-crossing-1.wav</file>
+        <file>audio/en/instructions-crossing-2.wav</file>
+        <file>audio/en/instructions-crossing-3.wav</file>
+        <file>audio/en/instructions-crossing-4.wav</file>
+        <file>audio/en/instructions-crossing-many.wav</file>
+
+        <file>audio/de/instructions-announce.wav</file>
+        <file>audio/de/instructions-now.wav</file>
+        <file>audio/de/instructions-and-then.wav</file>
+        <file>audio/de/instructions-head-straightforward.wav</file>
+        <file>audio/de/instructions-roundabout_01.wav</file>
+        <file>audio/de/instructions-roundabout_02.wav</file>
+        <file>audio/de/instructions-roundabout_03.wav</file>
+        <file>audio/de/instructions-roundabout_04.wav</file>
+        <file>audio/de/instructions-roundabout_05.wav</file>
+        <file>audio/de/instructions-roundabout_06.wav</file>
+        <file>audio/de/instructions-roundabout_07.wav</file>
+        <file>audio/de/instructions-roundabout_08.wav</file>
+        <file>audio/de/instructions-roundabout_09.wav</file>
+        <file>audio/de/instructions-take-ramp.wav</file>
+        <file>audio/de/instructions-turn-left.wav</file>
+        <file>audio/de/instructions-turn-right.wav</file>
+        <file>audio/de/instructions-turn-sharply-left.wav</file>
+        <file>audio/de/instructions-turn-sharply-right.wav</file>
+        <file>audio/de/instructions-turn-slightly-left.wav</file>
+        <file>audio/de/instructions-turn-slightly-right.wav</file>
+        <file>audio/de/instructions-turn-u.wav</file>
+        <file>audio/de/instructions-leave-motorway.wav</file>
+        <file>audio/de/instructions-leave-trunk.wav</file>
+        <file>audio/de/instructions-take-motorway-ramp.wav</file>
+        <file>audio/de/instructions-take-trunk-ramp.wav</file>
+
+        <file>audio/de/instructions-distance-now.wav</file>
+        <file>audio/de/instructions-distance-50m.wav</file>
+        <file>audio/de/instructions-distance-100m.wav</file>
+        <file>audio/de/instructions-distance-200m.wav</file>
+        <file>audio/de/instructions-distance-500m.wav</file>
+        <file>audio/de/instructions-distance-800m.wav</file>
+        <file>audio/de/instructions-distance-1km.wav</file>
+        <file>audio/de/instructions-distance-2km.wav</file>
+
+        <file>audio/de/instructions-crossing-1.wav</file>
+        <file>audio/de/instructions-crossing-2.wav</file>
+        <file>audio/de/instructions-crossing-3.wav</file>
+        <file>audio/de/instructions-crossing-4.wav</file>
+        <file>audio/de/instructions-crossing-many.wav</file>
+    </qresource>
+</RCC>
