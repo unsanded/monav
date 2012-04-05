@@ -95,7 +95,11 @@ void Audio::process()
 		return;
 	}
 
+#ifdef Q_WS_MAEMO_5
 	if ( m_audioOut->state() == QAudio::StoppedState ){
+#else
+	if ( (m_audioOut->state() == QAudio::StoppedState) || (m_audioOut->state() == QAudio::IdleState) ){
+#endif
 		m_audioOut->start( &m_audioFile );
 	}
 	else if ( m_audioOut->state() == QAudio::SuspendedState ){
