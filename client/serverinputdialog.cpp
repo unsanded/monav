@@ -24,7 +24,7 @@ ServerInputDialog::ServerInputDialog( const QVector< ServerLogic::Server > &serv
 	for ( int i = 0; i < servers.size(); i++ ) {
 		m_ui->serverList->insertRow(i);
 		m_ui->serverList->setItem( i, 0, new QTableWidgetItem( servers.at(i).name ) );
-		m_ui->serverList->setItem( i, 1, new QTableWidgetItem( servers.at(i).url.toString( )) );
+                m_ui->serverList->setItem( i, 1, new QTableWidgetItem( servers.at(i).url.toString( ) ) );
 	}
 
 }
@@ -40,14 +40,19 @@ void ServerInputDialog::writeServerSettings( QVector< ServerLogic::Server > *ser
 	servers->resize( entries );
 	for ( int i = 0; i < entries; i++ )
 	{
-		(*servers)[i].name = m_ui->serverList->item( i, 0 )->text();
-		(*servers)[i].url = QUrl( m_ui->serverList->item( i, 1 )->text() );
+
+            (*servers)[i].name = m_ui->serverList->item( i, 0 )->text();
+            (*servers)[i].url = QUrl( m_ui->serverList->item( i, 1 )->text() );
 	}
 }
 
 void ServerInputDialog::addServer()
 {
-	m_ui->serverList->insertRow( std::max( m_ui->serverList->currentRow(), 0 ) );
+        int index = std::max( m_ui->serverList->currentRow(), 0 );
+
+        m_ui->serverList->insertRow( index );
+        m_ui->serverList->setItem( index, 0, new QTableWidgetItem( "" ) );
+        m_ui->serverList->setItem( index, 1, new QTableWidgetItem( "" ) );
 }
 
 void ServerInputDialog::removeServer()
