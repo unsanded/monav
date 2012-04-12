@@ -81,7 +81,8 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	}
 	settings.endArray();
 	m_ui->server->setCurrentIndex( settings.value( "server", -1 ).toInt() );
-	// TODO: INSERT DEFAULT SERVER
+        // TODO: INSERT DEFAULT SERVER
+        m_ui->loadList->setEnabled( m_ui->server->count() > 0 );
 
 	connect( m_ui->changeDirectory, SIGNAL(clicked()), this, SLOT(directory()) );
 	connect( m_ui->load, SIGNAL(clicked()), this, SLOT(load()) );
@@ -92,6 +93,7 @@ MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
 	connect( m_ui->addServer, SIGNAL(clicked()), this, SLOT(editServerList()) );
 	// BACK
 	// CLICK
+        connect( m_ui->server, SIGNAL(currentIndexChanged(int)), this, SLOT(serverIndexChanged(int)));
 	connect( m_ui->installedList, SIGNAL(itemSelectionChanged()), this, SLOT(mapSelectionChanged()) );
 	connect( m_ui->updateList, SIGNAL(itemSelectionChanged()), this, SLOT(updateSelectionChanged()) );
 	connect( m_ui->downloadList, SIGNAL(itemSelectionChanged()), this, SLOT(downloadSelectionChanged()) );
@@ -141,6 +143,11 @@ void MapPackagesWidget::showEvent( QShowEvent* /*event*/ )
 void MapPackagesWidget::selected( int id )
 {
 	m_ui->installedList->item( id )->setSelected( true );
+}
+
+void MapPackagesWidget::serverIndexChanged( int newIndex )
+{
+        m_ui->loadList->setEnabled( newIndex >= 0 );
 }
 
 void MapPackagesWidget::mapSelectionChanged()
@@ -311,6 +318,10 @@ void MapPackagesWidget::check()
 void MapPackagesWidget::update()
 {
 	QList< QListWidgetItem* > selected = m_ui->updateList->selectedItems();
+
+        if( selected.isEmpty() )
+            return;
+
 	QList< ServerLogic::PackageInfo > packagesToUpdate;
 
 	foreach ( QListWidgetItem* item, selected )
@@ -322,9 +333,6 @@ void MapPackagesWidget::update()
 	if( packagesToUpdate.isEmpty() )
 		return;
 
-	if(d->serverLogic == NULL)
-		setupNetworkAccess();
-
 	d->serverLogic->clearPackagesToLoad();
 	d->serverLogic->addPackagesToLoad( packagesToUpdate );
 
@@ -335,6 +343,10 @@ void MapPackagesWidget::update()
 void MapPackagesWidget::downloadPackages()
 {
 	QList< QTreeWidgetItem* > selected = m_ui->downloadList->selectedItems();
+
+        if( selected.isEmpty() )
+            return;
+
 	QString serverName = d->servers[ m_ui->server->currentIndex() ].name;
 	QString serverPath = d->serverLogic->packageList().documentElement().attribute( "path" );
 
@@ -391,9 +403,6 @@ void MapPackagesWidget::downloadPackages()
 
 	if( packagesToLoad.isEmpty() )
 		return;
-
-	if(d->serverLogic == NULL)
-		setupNetworkAccess();
 
 	d->serverLogic->addPackagesToLoad( packagesToLoad );
 
@@ -576,25 +585,25 @@ void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic:
 	{
 		case ServerLogic::PACKAGE_CHK:
 		{
-			dlMsg.setText( "Finished Package Update Check" );
+                        dlMsg.setText( "Package Update Check" );
 			dlMsg.setDetailedText( progressDetails );
 			break;
 		}
 		case ServerLogic::PACKAGE_DL:
 		{
-			dlMsg.setText( "Finished Package Download & Extract" );
+                        dlMsg.setText( "Package Download & Extract" );
 			dlMsg.setDetailedText( progressDetails );
 			break;
 		}
 		case ServerLogic::LIST_DL:
 		{
-			dlMsg.setText( "Finished Server Package List Download" );
+                        dlMsg.setText( "Server Package List Download" );
 			dlMsg.setInformativeText( progressDetails );
 			break;
 		}
 		default:
 		{
-			dlMsg.setText( "Finished Operation" );
+                        dlMsg.setText( "Operation" );
 			dlMsg.setInformativeText( progressDetails );
 		}
 	}
@@ -650,7 +659,7 @@ void MapPackagesWidget::cleanUp( ServerLogic::ERROR_TYPE type, QString message )
 {
 	d->progressDetails.append( message );
 
-	if( type == ServerLogic::LIST_DL_ERROR )
+        if( type == ServerLogic::LIST_DL_ERROR )
 		return;
 
 	if( d->progress != NULL )

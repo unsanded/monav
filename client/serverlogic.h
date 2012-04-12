@@ -43,7 +43,7 @@ class ServerLogic : public QObject
 
 		};
 
-		enum ERROR_TYPE { UNDEFINED_ERROR, LIST_DL_ERROR, PACKAGE_DL_ERROR };
+                enum ERROR_TYPE { UNDEFINED_ERROR, LIST_DL_ERROR, PACKAGE_DL_ERROR };
 		enum OPERATION { INACTIVE, LIST_DL, PACKAGE_CHK, PACKAGE_DL };
 
 		ServerLogic();

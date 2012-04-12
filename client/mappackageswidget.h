@@ -40,6 +40,7 @@ public:
 
 public slots:
 
+        void serverIndexChanged( int newIndex );
 	void mapSelectionChanged();
 	void updateSelectionChanged();
 	void downloadSelectionChanged();
