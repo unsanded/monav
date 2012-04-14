@@ -39,8 +39,7 @@ public:
 	~MapPackagesWidget();
 
 public slots:
-
-        void serverIndexChanged( int newIndex );
+	void serverIndexChanged( int newIndex );
 	void mapSelectionChanged();
 	void updateSelectionChanged();
 	void downloadSelectionChanged();
@@ -54,6 +53,7 @@ protected slots:
 
 	void load();
 	void directory();
+	void changeTab(int tabIndex = 0);
 	void downloadList();
 	void downloadPackages();
 	void check();
