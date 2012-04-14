@@ -4,9 +4,9 @@
 #
 #-------------------------------------------------
 
-QT       += core
-
-QT       -= gui
+QT	+= core
+QT	+= xml
+QT	-= gui
 
 TARGET = monavmapmanager
 CONFIG   += console

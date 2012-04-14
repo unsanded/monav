@@ -105,8 +105,9 @@ int main( int argc, char *argv[] )
 
 			if( !mapName.isEmpty() )
 				addPackage( &list, dir.path() + '/' + "MoNav.ini" );
-//			else
+			else
 //				mapName = dir.dirName();
+				continue;
 
 			QStringList modules = dir.entryList( QDir::Files, QDir::Type ).filter( ".mmm" );
 
@@ -209,7 +210,7 @@ bool createList( QDomDocument* list, QFile* listFile, QString serverPath )
 {
 	if ( listFile->exists() )
 	{
-		printf( "a previous list file exists on the server, delete it first using -r server_path\n" );
+		printf( "a previous list file exists on the server, delete it first using -d server_url\n" );
 		return false;
 	}
 
@@ -244,7 +245,7 @@ void addMap( QDomDocument* list, QString name, QString path )
 	mapElement.setAttribute( "name", name );
 	list->documentElement().appendChild( mapElement );
 
-	printf( "added map entry: "  + name.toUtf8() + " from " + path.toUtf8() + "\n" );
+	printf( "added "  + name.toUtf8() + " map entry: " + path.toUtf8() + "\n" );
 }
 
 
@@ -309,7 +310,7 @@ bool addPackage( QDomDocument* list, QString path )
 		QDomText pathNode = list->createTextNode( path );
 		moduleElement.appendChild(pathNode);
 
-		printf( "added module entry: " + path.toUtf8() + "\n" );
+		printf( "added " + map.toUtf8() + " module entry: " + path.toUtf8() + "\n" );
 	}
 
 	else

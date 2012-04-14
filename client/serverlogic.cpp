@@ -57,11 +57,12 @@ void ServerLogic::removePackagesToLoad( const QList< ServerLogic::PackageInfo > 
 const QList< ServerLogic::PackageInfo >& ServerLogic::packagesToLoad() const
 {
 	return m_packagesToLoad;
+
 }
 
 const QDomDocument& ServerLogic::packageList() const
 {
-        return m_packageList;
+	return m_packageList;
 }
 
 void ServerLogic::connectNetworkManager()

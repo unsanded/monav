@@ -10,8 +10,8 @@ ServerInputDialog::ServerInputDialog( const QVector< ServerLogic::Server > &serv
 {
 	m_ui->setupUi( this );
 
-	connect( m_ui->buttonBox, SIGNAL( accepted() ), this, SLOT( accept() ) );
-	connect( m_ui->buttonBox, SIGNAL( rejected() ), this, SLOT( reject() ) );
+	connect( m_ui->buttonSave, SIGNAL( accepted() ), this, SLOT( accept() ) );
+	connect( m_ui->buttonCancel, SIGNAL( rejected() ), this, SLOT( reject() ) );
 	connect( m_ui->add, SIGNAL( clicked() ), this, SLOT( addServer() ) );
 	connect( m_ui->remove, SIGNAL( clicked() ), this, SLOT( removeServer() ) );
 
@@ -24,7 +24,7 @@ ServerInputDialog::ServerInputDialog( const QVector< ServerLogic::Server > &serv
 	for ( int i = 0; i < servers.size(); i++ ) {
 		m_ui->serverList->insertRow(i);
 		m_ui->serverList->setItem( i, 0, new QTableWidgetItem( servers.at(i).name ) );
-                m_ui->serverList->setItem( i, 1, new QTableWidgetItem( servers.at(i).url.toString( ) ) );
+				m_ui->serverList->setItem( i, 1, new QTableWidgetItem( servers.at(i).url.toString( ) ) );
 	}
 
 }
@@ -40,19 +40,29 @@ void ServerInputDialog::writeServerSettings( QVector< ServerLogic::Server > *ser
 	servers->resize( entries );
 	for ( int i = 0; i < entries; i++ )
 	{
+			(*servers)[i].name = m_ui->serverList->item( i, 0 )->text();
 
-            (*servers)[i].name = m_ui->serverList->item( i, 0 )->text();
-            (*servers)[i].url = QUrl( m_ui->serverList->item( i, 1 )->text() );
+			QString path = m_ui->serverList->item( i, 1 )->text();
+
+			if( !path.endsWith( "packageList.xml" ) )
+			{
+				if ( !path.endsWith( '/' ) && !path.endsWith( '\\') )
+					path.append( '/' );
+
+				path.append( "packageList.xml" );
+			}
+
+			(*servers)[i].url = QUrl( path );
 	}
 }
 
 void ServerInputDialog::addServer()
 {
-        int index = std::max( m_ui->serverList->currentRow(), 0 );
+		int index = std::max( m_ui->serverList->currentRow(), 0 );
 
-        m_ui->serverList->insertRow( index );
-        m_ui->serverList->setItem( index, 0, new QTableWidgetItem( "" ) );
-        m_ui->serverList->setItem( index, 1, new QTableWidgetItem( "" ) );
+		m_ui->serverList->insertRow( index );
+		m_ui->serverList->setItem( index, 0, new QTableWidgetItem( "" ) );
+		m_ui->serverList->setItem( index, 1, new QTableWidgetItem( "" ) );
 }
 
 void ServerInputDialog::removeServer()
