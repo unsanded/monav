@@ -48,7 +48,7 @@ struct MapPackagesWidget::PrivateImplementation {
 	void populateUpdatable( QListWidget* list );
 	void startPackageDownload();
 	void highlightButton( QPushButton* button, bool highlight );
-	void showProgressDetails( ServerLogic::OPERATION );
+	void showProgressDetails( ServerLogic::OPERATION, bool error = false );
 };
 
 MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
@@ -436,7 +436,7 @@ void MapPackagesWidget::populateServerPackageList()
 
 	if( d->serverLogic->packageList().isNull() )
 	{
-		d->showProgressDetails( ServerLogic::LIST_DL);
+		d->showProgressDetails( d->serverLogic->getOp(), true );
 		return;
 	}
 
@@ -581,7 +581,7 @@ void MapPackagesWidget::PrivateImplementation::highlightButton( QPushButton* but
 	button->setFont( font );
 }
 
-void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic::OPERATION operation )
+void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic::OPERATION operation, bool error)
 {
 	QMessageBox dlMsg;
 
@@ -589,28 +589,33 @@ void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic:
 	{
 		case ServerLogic::PACKAGE_CHK:
 		{
-						dlMsg.setText( "Package Update Check" );
+			dlMsg.setText( "Package Update Check" );
 			dlMsg.setDetailedText( progressDetails );
 			break;
 		}
 		case ServerLogic::PACKAGE_DL:
 		{
-						dlMsg.setText( "Package Download & Extract" );
+			dlMsg.setText( "Package Download & Extract" );
 			dlMsg.setDetailedText( progressDetails );
 			break;
 		}
 		case ServerLogic::LIST_DL:
 		{
-						dlMsg.setText( "Server Package List Download" );
-			dlMsg.setInformativeText( progressDetails );
+			dlMsg.setText( "Server Package List Download" );
+			dlMsg.setDetailedText( progressDetails );
 			break;
 		}
 		default:
 		{
-						dlMsg.setText( "Operation" );
-			dlMsg.setInformativeText( progressDetails );
+			dlMsg.setText( "Operation" );
+			dlMsg.setDetailedText( progressDetails );
 		}
 	}
+
+	if( error )
+		dlMsg.setInformativeText( "Failure");
+	else
+		dlMsg.setInformativeText( "Success");
 
 	dlMsg.setStandardButtons( QMessageBox::Ok );
 	dlMsg.setDefaultButton( QMessageBox::Ok );
@@ -663,8 +668,10 @@ void MapPackagesWidget::cleanUp( ServerLogic::ERROR_TYPE type, QString message )
 {
 	d->progressDetails.append( message );
 
-		if( type == ServerLogic::LIST_DL_ERROR )
+	if( type == ServerLogic::LIST_DL_ERROR )
 		return;
+
+	d->showProgressDetails( d->serverLogic->getOp(), true );
 
 	if( d->progress != NULL )
 	{
