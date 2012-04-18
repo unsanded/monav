@@ -23,7 +23,7 @@
    <item>
     <widget class="QTabWidget" name="tabs">
      <property name="currentIndex">
-      <number>2</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="installed">
       <attribute name="title">
@@ -129,7 +129,7 @@
          <item>
           <widget class="QPushButton" name="update">
            <property name="enabled">
-            <bool>true</bool>
+            <bool>false</bool>
            </property>
            <property name="sizePolicy">
             <sizepolicy hsizetype="Minimum" vsizetype="MinimumExpanding">

@@ -48,7 +48,7 @@ struct MapPackagesWidget::PrivateImplementation {
 	void populateUpdatable( QListWidget* list );
 	void startPackageDownload();
 	void highlightButton( QPushButton* button, bool highlight );
-	void showProgressDetails( ServerLogic::OPERATION, bool error = false );
+	void showProgressDetails( ServerLogic::OPERATION, bool critical = false );
 };
 
 MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
@@ -581,7 +581,7 @@ void MapPackagesWidget::PrivateImplementation::highlightButton( QPushButton* but
 	button->setFont( font );
 }
 
-void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic::OPERATION operation, bool error)
+void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic::OPERATION operation, bool critical)
 {
 	QMessageBox dlMsg;
 
@@ -612,10 +612,10 @@ void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic:
 		}
 	}
 
-	if( error )
-		dlMsg.setInformativeText( "Failure");
+	if( critical )
+		dlMsg.setInformativeText( "Critical errors occurred");
 	else
-		dlMsg.setInformativeText( "Success");
+		dlMsg.setInformativeText( "Finished");
 
 	dlMsg.setStandardButtons( QMessageBox::Ok );
 	dlMsg.setDefaultButton( QMessageBox::Ok );
