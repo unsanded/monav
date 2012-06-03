@@ -10,7 +10,6 @@
 ServerLogic::ServerLogic()
 {
 	m_localDir = "";
-	m_packageIndex = 0;
 	m_currentOp = INACTIVE;
 	m_errorStatus = NO_ERROR;
 	m_network = NULL;
@@ -51,7 +50,6 @@ const ServerLogic::ERROR_TYPE& ServerLogic::getStatus() const
 void ServerLogic::clearPackagesToLoad()
 {
 	m_packagesToLoad.clear();
-	m_packageIndex = 0;
 }
 
 void ServerLogic::addPackagesToLoad( const QList< ServerLogic::PackageInfo > &packageLocations )
@@ -139,10 +137,10 @@ bool ServerLogic::loadPackage()
 
 bool ServerLogic::checkPackage()
 {
-	if( m_packageIndex >= m_packagesToLoad.size() )
+	if( m_packagesToLoad.isEmpty() )
 		return true;
 
-	PackageInfo package = m_packagesToLoad.at( m_packageIndex );
+	PackageInfo package = m_packagesToLoad.takeFirst();
 
 	QString type = package.dir.endsWith( "MoNav.ini" ) ? "map" : "module";
 	QString map = package.path;
@@ -155,12 +153,11 @@ bool ServerLogic::checkPackage()
 	if( m_packageList.documentElement().isNull() )
 	{
 		packageProgressInfo.append( "error downloading list" );
-		m_packagesToLoad.removeAt( m_packageIndex );
 
-		if( m_packageIndex >= m_packagesToLoad.size() || m_packagesToLoad[ m_packageIndex ].server == server  )
+		if( m_packagesToLoad.isEmpty() || m_packagesToLoad.first().server == server  )
 			emit checkedPackage( packageProgressInfo );
 		else
-			loadPackageList( m_packagesToLoad[ m_packageIndex ].server + "packageList.xml" );
+			loadPackageList( m_packagesToLoad.first().server + "packageList.xml" );
 
 		return true;
 	}
@@ -175,31 +172,26 @@ bool ServerLogic::checkPackage()
 	QDomElement packageElement = findElement( type, name, map);
 
 	if( packageElement.isNull() )
-	{
 		packageProgressInfo.append( "not found in list" );
-		m_packagesToLoad.removeAt( m_packageIndex );
-	}
 
 	else if( packageElement.attribute( "timestamp" ).toUInt() > package.timestamp )
 	{
 		packageProgressInfo.append( "update found" );
 
-		if( type == "map")
-			m_packagesToLoad[ m_packageIndex ].path = packageElement.attribute( "path" );
-		else
-			m_packagesToLoad[ m_packageIndex ].path = packageElement.text();
-		m_packagesToLoad[ m_packageIndex ].dir.truncate( m_packagesToLoad[ m_packageIndex ].dir.lastIndexOf('/') + 1 );
-		m_packagesToLoad[ m_packageIndex ].size = packageElement.attribute( "size" ).toLongLong();
-		m_packagesToLoad[ m_packageIndex ].timestamp = packageElement.attribute( "timestamp" ).toUInt();
 
-		++m_packageIndex;
+		if( type == "map")
+			package.path = packageElement.attribute( "path" );
+		else
+			package.path = packageElement.text();
+		package.dir.truncate( package.dir.lastIndexOf('/') + 1 );
+		package.size = packageElement.attribute( "size" ).toLongLong();
+		package.timestamp = packageElement.attribute( "timestamp" ).toUInt();
+
+		m_updatablePackages.append( package );
 	}
 
 	else
-	{
 		packageProgressInfo.append( "up to date" );
-		m_packagesToLoad.removeAt( m_packageIndex );
-	}
 
 	emit checkedPackage( packageProgressInfo );
 
@@ -270,7 +262,11 @@ void ServerLogic::finished( QNetworkReply* reply )
 
 		QString packageProgressInfo = m_packagesToLoad.first().path + " ok";
 
+		if( !m_updatablePackages.isEmpty() )
+			m_updatablePackages.removeOne( m_packagesToLoad.first() );
+
 		m_packagesToLoad.removeFirst();
+
 		emit loadedPackage( packageProgressInfo );
 	}
 
@@ -306,7 +302,11 @@ void ServerLogic::finished( QNetworkReply* reply )
 
 		QString packageProgressInfo = m_packagesToLoad.first().path + " ok";
 
+		if( !m_updatablePackages.isEmpty() )
+			m_updatablePackages.removeOne( m_packagesToLoad.first() );
+
 		m_packagesToLoad.removeFirst();
+
 		emit loadedPackage( packageProgressInfo );
 	}
 

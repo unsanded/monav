@@ -95,7 +95,6 @@ class ServerLogic : public QObject
 
 		QList< PackageInfo > m_packagesToLoad;
 		QList< PackageInfo > m_updatablePackages;
-		int m_packageIndex;
 
 		QDomElement findElement( QString packageType, QString packageName, QString mapName = "" );
 };
