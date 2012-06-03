@@ -60,7 +60,7 @@ protected slots:
 	void update();
 	void editServerList();
 	void populateServerPackageList();
-	void updateProgress( QString text );
+	void handleProgress( QString text );
 	void selected( int id );
 	void cleanUp( ServerLogic::ERROR_TYPE, QString message = "" );
 
