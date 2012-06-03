@@ -302,7 +302,10 @@ void MapPackagesWidget::check()
 	if( d->serverLogic == NULL )
 		setupNetworkAccess();
 	else
+	{
+		d->serverLogic->clearUpdatablePackages();
 		d->serverLogic->clearPackagesToLoad();
+	}
 
 	d->serverLogic->addPackagesToLoad( packagesInstalled );
 
@@ -335,7 +338,7 @@ void MapPackagesWidget::update()
 
 	foreach ( QListWidgetItem* item, selected )
 	{
-		packagesToUpdate.append( d->serverLogic->packagesToLoad()[ item->data( Qt::UserRole ).toInt() ] );
+		packagesToUpdate.append( d->serverLogic->updatablePackages()[ item->data( Qt::UserRole ).toInt() ] );
 		item->setSelected( false );
 	}
 
@@ -564,9 +567,9 @@ void MapPackagesWidget::PrivateImplementation::populateUpdatable( QListWidget* l
 	list->clear();
 
 	ServerLogic::PackageInfo package;
-	for( int i=0; i < serverLogic->packagesToLoad().size(); i++ )
+	for( int i=0; i < serverLogic->updatablePackages().size(); i++ )
 	{
-		package = serverLogic->packagesToLoad().at( i );
+		package = serverLogic->updatablePackages().at( i );
 		QString module = package.path.right( package.path.size() - package.path.lastIndexOf( '/') - 1 );
 		module.truncate( module.lastIndexOf( '.') );
 		QString map = package.path.left( package.path.lastIndexOf( '/') );
@@ -650,6 +653,8 @@ void MapPackagesWidget::handleProgress( QString text )
 			case ServerLogic::PACKAGE_DL:
 			{
 				d->populateInstalled( m_ui->installedList );
+				if( m_ui->updateList->count() > 0 )
+					d->populateUpdatable( m_ui->updateList );
 				break;
 			}
 
