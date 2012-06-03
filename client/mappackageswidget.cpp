@@ -48,7 +48,7 @@ struct MapPackagesWidget::PrivateImplementation {
 	void populateUpdatable( QListWidget* list );
 	void startPackageDownload();
 	void highlightButton( QPushButton* button, bool highlight );
-	void showProgressDetails( ServerLogic::OPERATION, bool critical = false );
+	void showFinishDialog();
 };
 
 MapPackagesWidget::MapPackagesWidget( QWidget* parent ) :
@@ -214,9 +214,9 @@ void MapPackagesWidget::setupNetworkAccess()
 	d->serverLogic = new ServerLogic();
 
 	connect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
-	connect( d->serverLogic, SIGNAL( loadedPackage( QString ) ), this, SLOT( updateProgress( QString ) ) );
+	connect( d->serverLogic, SIGNAL( loadedPackage( QString ) ), this, SLOT( handleProgress( QString ) ) );
 	connect( d->serverLogic, SIGNAL( loadedPackage( QString ) ), d->serverLogic, SLOT( loadPackage() ) );
-	connect( d->serverLogic, SIGNAL( checkedPackage( QString ) ), this, SLOT( updateProgress( QString ) ) );
+	connect( d->serverLogic, SIGNAL( checkedPackage( QString ) ), this, SLOT( handleProgress( QString ) ) );
 	connect( d->serverLogic, SIGNAL( checkedPackage( QString ) ), d->serverLogic, SLOT( checkPackage() ) );
 	connect( d->serverLogic, SIGNAL( error( ServerLogic::ERROR_TYPE, QString ) ), this, SLOT( cleanUp( ServerLogic::ERROR_TYPE, QString ) ) );
 
@@ -242,6 +242,7 @@ void MapPackagesWidget::downloadList()
 
 	d->progressDetails = "";
 	d->serverLogic->setOp( ServerLogic::LIST_DL );
+	d->serverLogic->setStatus( ServerLogic::NO_ERROR );
 	d->serverLogic->loadPackageList( url );
 }
 
@@ -317,6 +318,7 @@ void MapPackagesWidget::check()
 	disconnect( d->serverLogic, SIGNAL( loadedList() ), this, SLOT( populateServerPackageList() ) );
 
 	d->serverLogic->setOp( ServerLogic::PACKAGE_CHK );
+	d->serverLogic->setStatus( ServerLogic::NO_ERROR );
 	d->serverLogic->loadPackageList( packagesInstalled.first().server + "packageList.xml" );
 
 	return;
@@ -436,7 +438,8 @@ void MapPackagesWidget::populateServerPackageList()
 
 	if( d->serverLogic->packageList().isNull() )
 	{
-		d->showProgressDetails( d->serverLogic->getOp(), true );
+		d->serverLogic->setStatus( ServerLogic::LIST_DL_ERROR );
+		d->showFinishDialog();
 		return;
 	}
 
@@ -531,6 +534,7 @@ void MapPackagesWidget::PrivateImplementation::startPackageDownload()
 	progressDetails = "";
 
 	serverLogic->setOp( ServerLogic::PACKAGE_DL );
+	serverLogic->setStatus( ServerLogic::NO_ERROR );
 	serverLogic->loadPackage();
 }
 
@@ -581,8 +585,9 @@ void MapPackagesWidget::PrivateImplementation::highlightButton( QPushButton* but
 	button->setFont( font );
 }
 
-void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic::OPERATION operation, bool critical)
+void MapPackagesWidget::PrivateImplementation::showFinishDialog()
 {
+	ServerLogic::OPERATION_TYPE operation = serverLogic->getOp();
 	QMessageBox dlMsg;
 
 	switch( operation )
@@ -612,8 +617,8 @@ void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic:
 		}
 	}
 
-	if( critical )
-		dlMsg.setInformativeText( "Critical errors occurred");
+	if( serverLogic->getStatus() != ServerLogic::NO_ERROR )
+		dlMsg.setInformativeText( "Errors occurred.\nSee details for more info.");
 	else
 		dlMsg.setInformativeText( "Finished");
 
@@ -624,7 +629,7 @@ void MapPackagesWidget::PrivateImplementation::showProgressDetails( ServerLogic:
 }
 
 
-void MapPackagesWidget::updateProgress( QString text )
+void MapPackagesWidget::handleProgress( QString text )
 {
 	if( d->progress == NULL || d->progress->wasCanceled() )
 		return;
@@ -638,7 +643,7 @@ void MapPackagesWidget::updateProgress( QString text )
 
 	if( newProgressValue == d->progress->maximum() )
 	{
-		ServerLogic::OPERATION operation = d->serverLogic->getOp();
+		ServerLogic::OPERATION_TYPE operation = d->serverLogic->getOp();
 
 		switch( operation )
 		{
@@ -660,7 +665,7 @@ void MapPackagesWidget::updateProgress( QString text )
 				break;
 		}
 
-		d->showProgressDetails( operation );
+		d->showFinishDialog();
 	}
 }
 
@@ -671,12 +676,12 @@ void MapPackagesWidget::cleanUp( ServerLogic::ERROR_TYPE type, QString message )
 	if( type == ServerLogic::LIST_DL_ERROR )
 		return;
 
-	d->showProgressDetails( d->serverLogic->getOp(), true );
-
 	if( d->progress != NULL )
 	{
 		d->progress->cancel();
 		d->progress->deleteLater();
 		d->progress = NULL;
 	}
+
+	d->showFinishDialog();
 }

@@ -12,6 +12,7 @@ ServerLogic::ServerLogic()
 	m_localDir = "";
 	m_packageIndex = 0;
 	m_currentOp = INACTIVE;
+	m_errorStatus = NO_ERROR;
 	m_network = NULL;
 	m_unpacker = NULL;
 
@@ -27,14 +28,24 @@ ServerLogic::~ServerLogic()
 		delete m_unpacker;
 }
 
-void ServerLogic::setOp( ServerLogic::OPERATION operation )
+void ServerLogic::setOp( ServerLogic::OPERATION_TYPE operation )
 {
 	m_currentOp = operation;
 }
 
-const ServerLogic::OPERATION& ServerLogic::getOp()
+void ServerLogic::setStatus( ServerLogic::ERROR_TYPE error )
+{
+	m_errorStatus = error;
+}
+
+const ServerLogic::OPERATION_TYPE& ServerLogic::getOp() const
 {
 	return m_currentOp;
+}
+
+const ServerLogic::ERROR_TYPE& ServerLogic::getStatus() const
+{
+	return m_errorStatus;
 }
 
 void ServerLogic::clearPackagesToLoad()
@@ -57,7 +68,21 @@ void ServerLogic::removePackagesToLoad( const QList< ServerLogic::PackageInfo > 
 const QList< ServerLogic::PackageInfo >& ServerLogic::packagesToLoad() const
 {
 	return m_packagesToLoad;
+}
 
+void ServerLogic::clearUpdatablePackages()
+{
+	m_updatablePackages.clear();
+}
+
+void ServerLogic::addUpdatablePackages( const QList< ServerLogic::PackageInfo >& packageLocations )
+{
+	m_updatablePackages.append( packageLocations );
+}
+
+const QList< ServerLogic::PackageInfo >& ServerLogic::updatablePackages() const
+{
+	return m_updatablePackages;
 }
 
 const QDomDocument& ServerLogic::packageList() const
@@ -202,9 +227,11 @@ QDomElement ServerLogic::findElement( QString packageType, QString packageName, 
 	return QDomElement();
 }
 
-void ServerLogic::cleanUp( ERROR_TYPE type, QString message )
+void ServerLogic::cleanUp( ERROR_TYPE error, QString message )
 {
-	if( type == LIST_DL_ERROR )
+	m_errorStatus = error;
+
+	if( error == LIST_DL_ERROR )
 		return;
 
 	m_packagesToLoad.clear();
@@ -259,16 +286,14 @@ void ServerLogic::finished( QNetworkReply* reply )
 		QDir dir( m_localDir );
 		if( !dir.exists() && !dir.mkpath( m_localDir ) )
 		{
-			qCritical( "Couldn't open target file");
-			emit error();
+			emit error( ServerLogic::FILE_ERROR, "Unable to create target file:\n" + dir.path() + '\n');
 			return;
 		}
 
 		QFile file( m_localDir + "MoNav.ini" );
 		if ( !file.open( QIODevice::WriteOnly ) )
 		{
-			qCritical( "Couldn't open target file");
-			emit error();
+			emit error( ServerLogic::FILE_ERROR, "Unable to open target file:\n" + file.fileName() + '\n');
 			return;
 		}
 

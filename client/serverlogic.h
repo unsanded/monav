@@ -43,19 +43,25 @@ class ServerLogic : public QObject
 
 		};
 
-		enum ERROR_TYPE { UNDEFINED_ERROR, LIST_DL_ERROR, PACKAGE_DL_ERROR };
-		enum OPERATION { INACTIVE, LIST_DL, PACKAGE_CHK, PACKAGE_DL };
+		enum ERROR_TYPE { NO_ERROR, UNDEFINED_ERROR, LIST_DL_ERROR, PACKAGE_DL_ERROR, FILE_ERROR };
+		enum OPERATION_TYPE { INACTIVE, LIST_DL, PACKAGE_CHK, PACKAGE_DL };
 
 		ServerLogic();
 		~ServerLogic();
 
-		void setOp( ServerLogic::OPERATION operation );
-		const ServerLogic::OPERATION& getOp();
+		void setOp( ServerLogic::OPERATION_TYPE operation );
+		void setStatus( ServerLogic::ERROR_TYPE error );
+		const ServerLogic::OPERATION_TYPE& getOp() const;
+		const ServerLogic::ERROR_TYPE& getStatus() const;
 
 		void clearPackagesToLoad();
-		void addPackagesToLoad( const QList< PackageInfo >& packageLocations );
+		void addPackagesToLoad( const QList< ServerLogic::PackageInfo >& packageLocations );
 		void removePackagesToLoad( const QList< ServerLogic::PackageInfo > &packageLocations );
 		const QList< PackageInfo >& packagesToLoad() const;
+
+		void clearUpdatablePackages();
+		void addUpdatablePackages( const QList< ServerLogic::PackageInfo >& packageLocations );
+		const QList< PackageInfo >& updatablePackages() const;
 
 		const QDomDocument& packageList() const;
 
@@ -82,11 +88,13 @@ class ServerLogic : public QObject
 
 		QString m_localDir;
 		QDomDocument m_packageList;
-		OPERATION m_currentOp;
+		OPERATION_TYPE m_currentOp;
+		ERROR_TYPE m_errorStatus;
 		DirectoryUnpacker *m_unpacker;
-		QNetworkAccessManager* m_network;
+		QNetworkAccessManager *m_network;
 
 		QList< PackageInfo > m_packagesToLoad;
+		QList< PackageInfo > m_updatablePackages;
 		int m_packageIndex;
 
 		QDomElement findElement( QString packageType, QString packageName, QString mapName = "" );
