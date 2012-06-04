@@ -290,9 +290,23 @@ void MapPackagesWidget::check()
 
 	qSort( packagesInstalled.begin(), packagesInstalled.end() );
 
+	QString checkServer = packagesInstalled.first().server;
+	QString checkInfo = "Server " + checkServer +":\n";
+	foreach ( const ServerLogic::PackageInfo& pInfo, packagesInstalled )
+	{
+		if( pInfo.server != checkServer )
+		{
+			checkServer = pInfo.server;
+			checkInfo.append( "\nServer " + checkServer +":\n");
+		}
+
+		checkInfo.append( pInfo.dir + '\n');
+	}
+
 	QMessageBox dlMsg;
 	dlMsg.setText( "Checking installed packages for updates." );
-	dlMsg.setInformativeText( "Updating requires an active internet connection. Proceed?" );
+	dlMsg.setInformativeText( "Update Check requires an active internet connection to retrieve server package list. Proceed?" );
+	dlMsg.setDetailedText( checkInfo );
 	dlMsg.setStandardButtons( QMessageBox::No | QMessageBox::Yes );
 	dlMsg.setDefaultButton( QMessageBox::Yes );
 
