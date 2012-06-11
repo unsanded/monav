@@ -11,7 +11,7 @@ const int VERSION = 2;
 
 enum OPERATION { CREATE_LIST, DELETE_LIST, ADD_PACKAGE, DELETE_PACKAGE, AUTOMATIC, DEFAULT };
 
-QByteArray computePackageHash( const QString &path );
+QString computePackageHash( const QString &path );
 
 QDomElement findPackageElement( const QDomDocument& list, QString type, QString name, QString map = "" );
 QString findMapInDir( const QString &path );
@@ -244,6 +244,7 @@ void addMap( QDomDocument* list, QString name, QString path )
 	QDomElement mapElement = list->createElement( "map" );
 	mapElement.setAttribute( "timestamp", timestamp );
 	mapElement.setAttribute( "size", QFile( path ).size() );
+	mapElement.setAttribute( "hash", computePackageHash( path ) );
 	mapElement.setAttribute( "path", path );
 	mapElement.setAttribute( "name", name );
 	list->documentElement().appendChild( mapElement );
@@ -307,6 +308,7 @@ bool addPackage( QDomDocument* list, QString path )
 		QDomElement moduleElement = list->createElement( "module" );
 		moduleElement.setAttribute( "timestamp", timestamp );
 		moduleElement.setAttribute( "size", QFile( path ).size() );
+		moduleElement.setAttribute( "hash", computePackageHash( path ) );
 		moduleElement.setAttribute( "name" , name );
 		typeElement.appendChild( moduleElement );
 
@@ -377,7 +379,7 @@ bool deletePackage( QDomDocument *list, QString path )
 	return true;
 }
 
-QByteArray computePackageHash( const QString &path )
+QString computePackageHash( const QString &path )
 {
 	QFile packageFile( path );
 
@@ -386,7 +388,10 @@ QByteArray computePackageHash( const QString &path )
 
 	QCryptographicHash packageHash( QCryptographicHash::Md5 );
 
-	packageHash.addData( packageFile.readAll() );
+	while ( !packageFile.atEnd() )
+		packageHash.addData( packageFile.read( sizeof( quint16 ) ) );
 
-	return packageHash.result();
+	packageFile.close();
+
+	return QString( packageHash.result().toBase64() );
 }
