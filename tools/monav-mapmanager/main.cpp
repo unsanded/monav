@@ -5,10 +5,13 @@
 #include <QFile>
 #include <QDir>
 #include <QtXml/QDomDocument>
+#include <QCryptographicHash>
 
 const int VERSION = 2;
 
 enum OPERATION { CREATE_LIST, DELETE_LIST, ADD_PACKAGE, DELETE_PACKAGE, AUTOMATIC, DEFAULT };
+
+QByteArray computePackageHash( const QString &path );
 
 QDomElement findPackageElement( const QDomDocument& list, QString type, QString name, QString map = "" );
 QString findMapInDir( const QString &path );
@@ -372,4 +375,18 @@ bool deletePackage( QDomDocument *list, QString path )
 	}
 
 	return true;
+}
+
+QByteArray computePackageHash( const QString &path )
+{
+	QFile packageFile( path );
+
+	if ( !packageFile.open( QIODevice::ReadOnly ) )
+		printf( "failed to open package file\n" );
+
+	QCryptographicHash packageHash( QCryptographicHash::Md5 );
+
+	packageHash.addData( packageFile.readAll() );
+
+	return packageHash.result();
 }
