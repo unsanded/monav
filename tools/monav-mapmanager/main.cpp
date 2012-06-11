@@ -283,7 +283,7 @@ bool addPackage( QDomDocument* list, QString path )
 		QString type = packageAttributes[0];
 		QString name = packageAttributes[1].replace( ".mmm", "" );
 
-		if( !findPackageElement( *list, type, name, map ).isNull() )
+		if( !findPackageElement( *list, "module", name, map ).isNull() )
 		{
 			printf( "package already in list\n" );
 			return false;
