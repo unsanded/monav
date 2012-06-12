@@ -9,11 +9,13 @@
 
 const int VERSION = 2;
 
-enum OPERATION { CREATE_LIST, DELETE_LIST, ADD_PACKAGE, DELETE_PACKAGE, AUTOMATIC, DEFAULT };
+enum OPERATION { CREATE_LIST, DELETE_LIST, ADD_PACKAGE, DELETE_PACKAGE, AUTO_CREATE, AUTO_UPDATE, DEFAULT };
 
 QString computePackageHash( const QString &path );
 
 QDomElement findPackageElement( const QDomDocument& list, QString type, QString name, QString map = "" );
+
+QStringList parseForPackages( QDir directory );
 QString findMapInDir( const QString &path );
 
 bool createList( QDomDocument* list, QFile* file, QString serverPath );
@@ -48,7 +50,11 @@ int main( int argc, char *argv[] )
 				packagePath = optarg;
 				break;
 			case 'p':
-				listOperation = AUTOMATIC;
+				listOperation = AUTO_CREATE;
+				serverPath = optarg;
+				break;
+			case 'u':
+				listOperation = AUTO_UPDATE;
 				serverPath = optarg;
 				break;
 			default:
@@ -61,6 +67,7 @@ int main( int argc, char *argv[] )
 	{
 		printf( "usage:\n" );
 		printf( "-p server_url: create list automatically by recursively parsing mapmanager directory\n" );
+		printf( "-u server_url: update list automatically by recursively parsing mapmanager directory\n" );
 		printf( "-c server_url : create list\n" );
 		printf( "-d server_url : delete list\n" );
 		printf( "-a package_path_and_name : add package to list\n" );
@@ -88,35 +95,15 @@ int main( int argc, char *argv[] )
 	if( listOperation == CREATE_LIST )
 		return createList( &list, &listFile, serverPath );
 
-	if( listOperation == AUTOMATIC )
+	if( listOperation == AUTO_CREATE )
 	{
 		if( !createList( &list, &listFile, serverPath ) )
 			return 0;
 
-		QDir dir = QDir();
-		QStringList dirList = QStringList( dir.entryList( QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name ) );
+		QStringList localPackages = parseForPackages( QDir() );
 
-		for( int i=0; i < dirList.size(); i++)
-		{
-			dir.setPath( dirList[i] );
-			QStringList subDirs = dir.entryList( QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name );
-
-			for( int j=0; j < subDirs.size(); j++ )
-				dirList.append( dir.path() + '/' + subDirs[j] );
-
-			QString mapName = findMapInDir( dir.path() + '/' + "Monav.ini" );
-
-			if( !mapName.isEmpty() )
-				addPackage( &list, dir.path() + '/' + "MoNav.ini" );
-			else
-//				mapName = dir.dirName();
-				continue;
-
-			QStringList modules = dir.entryList( QDir::Files, QDir::Type ).filter( ".mmm" );
-
-			for( int j=0; j < modules.size(); j++ )
-				addPackage( &list, dir.path() + '/' + modules[j] );
-		}
+		foreach( QString packagePath, localPackages )
+			addPackage( &list, packagePath );
 	}
 
 	else
@@ -165,6 +152,11 @@ int main( int argc, char *argv[] )
 	{
 		if ( !addPackage( &list, packagePath ) )
 			return 0;
+	}
+
+	if( listOperation == AUTO_UPDATE )
+	{
+		QStringList localPackages = parseForPackages( QDir() );
 	}
 
 	if (!listFile.open(QIODevice::ReadWrite | QIODevice::Truncate)) return 1;
@@ -377,6 +369,37 @@ bool deletePackage( QDomDocument *list, QString path )
 	}
 
 	return true;
+}
+
+
+QStringList parseForPackages( QDir directory )
+{
+	QStringList dirList = QStringList( directory.entryList( QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name ) );
+	QStringList packageList;
+
+	for( int i=0; i < dirList.size(); i++)
+	{
+		directory.setPath( dirList[i] );
+		QStringList subDirs = directory.entryList( QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name );
+
+		for( int j=0; j < subDirs.size(); j++ )
+			dirList.append( directory.path() + '/' + subDirs[j] );
+
+		QString mapName = findMapInDir( directory.path() + '/' + "Monav.ini" );
+
+		if( !mapName.isEmpty() )
+			packageList.append( directory.path() + '/' + "MoNav.ini" );
+		else
+//				mapName = dir.dirName();
+			continue;
+
+		QStringList modules = directory.entryList( QDir::Files, QDir::Type ).filter( ".mmm" );
+
+		for( int j=0; j < modules.size(); j++ )
+			packageList.append( directory.path() + '/' + modules[j] );
+	}
+
+	return packageList;
 }
 
 QString computePackageHash( const QString &path )
