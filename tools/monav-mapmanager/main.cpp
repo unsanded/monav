@@ -22,6 +22,7 @@ bool createList( QDomDocument* list, QFile* file, QString serverPath );
 bool addPackage( QDomDocument* list, QString path );
 bool deletePackage( QDomDocument *list, QString path );
 void addMap( QDomDocument* list, QString name, QString path );
+void updateMap( QDomDocument* list, QDomElement* mapElement );
 
 int main( int argc, char *argv[] )
 {
@@ -30,7 +31,7 @@ int main( int argc, char *argv[] )
 	OPERATION listOperation = DEFAULT;
 
 	int c;
-	while ( ( c = getopt( argc, argv, "c:r:a:p:d" ) ) != -1 )
+	while ( ( c = getopt( argc, argv, "c:r:a:p:d:u" ) ) != -1 )
 	{
 		switch(c)
 		{
@@ -157,6 +158,9 @@ int main( int argc, char *argv[] )
 	if( listOperation == AUTO_UPDATE )
 	{
 		QStringList localPackages = parseForPackages( QDir() );
+
+		foreach( QString packagePath, localPackages )
+			addPackage( &list, packagePath );
 	}
 
 	if (!listFile.open(QIODevice::ReadWrite | QIODevice::Truncate)) return 1;
@@ -244,6 +248,20 @@ void addMap( QDomDocument* list, QString name, QString path )
 	printf( "added "  + name.toUtf8() + " map entry: " + path.toUtf8() + "\n" );
 }
 
+void updateMap( QDomDocument* list, QDomElement* mapElement )
+{
+	int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
+	list->documentElement().setAttribute( "timestamp", timestamp );
+
+	QString name = mapElement->attribute( "name" );
+	QString path = mapElement->attribute( "path" );
+
+	mapElement->setAttribute( "timestamp", timestamp );
+	mapElement->setAttribute( "size", QFile( path ).size() );
+
+	printf( "updated "  + name.toUtf8() + " map entry: " + path.toUtf8() + "\n" );
+}
+
 
 bool addPackage( QDomDocument* list, QString path )
 {
@@ -262,7 +280,14 @@ bool addPackage( QDomDocument* list, QString path )
 	{
 		if( !mapElement.isNull() )
 		{
-			printf( "map already in list\n" );
+			QString pHash = computePackageHash( path );
+			if( mapElement.attribute( "hash" ) != pHash )
+			{
+				updateMap( list, &mapElement );
+				mapElement.setAttribute( "hash", pHash );
+			}
+			else
+				printf( "map already in list\n" );
 			return false;
 		}
 
@@ -279,9 +304,24 @@ bool addPackage( QDomDocument* list, QString path )
 		QString type = packageAttributes[0];
 		QString name = packageAttributes[1].replace( ".mmm", "" );
 
-		if( !findPackageElement( *list, "module", name, map ).isNull() )
+		QDomElement packageElement = findPackageElement( *list, "module", name, map );
+		if( !packageElement.isNull() )
 		{
-			printf( "package already in list\n" );
+			QString pHash = computePackageHash( path );
+			if( packageElement.attribute( "hash" ) != pHash )
+			{
+				int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
+				list->documentElement().setAttribute( "timestamp", timestamp );
+				mapElement.setAttribute( "timestamp", timestamp );
+
+				packageElement.setAttribute( "timestamp", timestamp );
+				packageElement.setAttribute( "size", QFile( path ).size() );
+				packageElement.setAttribute( "hash", pHash );
+
+				printf( "updated " + map.toUtf8() + " module entry: " + path.toUtf8() + "\n" );
+			}
+			else
+				printf( "package already in list\n" );
 			return false;
 		}
 
