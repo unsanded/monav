@@ -7,6 +7,8 @@
 #include <QtXml/QDomDocument>
 #include <QCryptographicHash>
 
+#include <limits>
+
 const int VERSION = 2;
 
 enum OPERATION { CREATE_LIST, DELETE_LIST, ADD_PACKAGE, DELETE_PACKAGE, AUTO_CREATE, AUTO_UPDATE, DEFAULT };
@@ -452,7 +454,7 @@ QString computePackageHash( const QString &path )
 	QCryptographicHash packageHash( QCryptographicHash::Md5 );
 
 	while ( !packageFile.atEnd() )
-		packageHash.addData( packageFile.read( sizeof( quint16 ) ) );
+		packageHash.addData( packageFile.read( std::numeric_limits<int>::max() ) );
 
 	packageFile.close();
 
