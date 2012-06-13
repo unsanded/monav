@@ -21,10 +21,13 @@ QStringList parseForPackages( QDir directory );
 QString findMapInDir( const QString &path );
 
 bool createList( QDomDocument* list, QFile* file, QString serverPath );
-bool addPackage( QDomDocument* list, QString path );
+bool processPackage( QDomDocument* list, QString path );
 bool deletePackage( QDomDocument *list, QString path );
+
 void addMap( QDomDocument* list, QString name, QString path );
 void updateMap( QDomDocument* list, QDomElement* mapElement );
+void addModule( QDomDocument* list, QDomElement* mapElement, QString name, QString type, QString path );
+void updateModule( QDomDocument* list, QDomElement* moduleElement );
 
 int main( int argc, char *argv[] )
 {
@@ -69,8 +72,8 @@ int main( int argc, char *argv[] )
 	if( argc < 2 || ( argc != 3 && listOperation != DELETE_LIST ) )
 	{
 		printf( "usage:\n" );
-		printf( "-p server_url: create list automatically by recursively parsing mapmanager directory\n" );
-		printf( "-u server_url: update list automatically by recursively parsing mapmanager directory\n" );
+		printf( "-p server_url : create list automatically by recursively parsing mapmanager directory\n" );
+		printf( "-u server_url : update list automatically by recursively parsing mapmanager directory\n" );
 		printf( "-c server_url : create list\n" );
 		printf( "-d server_url : delete list\n" );
 		printf( "-a package_path_and_name : add package to list\n" );
@@ -106,7 +109,7 @@ int main( int argc, char *argv[] )
 		QStringList localPackages = parseForPackages( QDir() );
 
 		foreach( QString packagePath, localPackages )
-			addPackage( &list, packagePath );
+			processPackage( &list, packagePath );
 	}
 
 	else
@@ -153,7 +156,7 @@ int main( int argc, char *argv[] )
 
 	if( listOperation == ADD_PACKAGE )
 	{
-		if ( !addPackage( &list, packagePath ) )
+		if ( !processPackage( &list, packagePath ) )
 			return 0;
 	}
 
@@ -162,7 +165,7 @@ int main( int argc, char *argv[] )
 		QStringList localPackages = parseForPackages( QDir() );
 
 		foreach( QString packagePath, localPackages )
-			addPackage( &list, packagePath );
+			processPackage( &list, packagePath );
 	}
 
 	if (!listFile.open(QIODevice::ReadWrite | QIODevice::Truncate)) return 1;
@@ -233,39 +236,7 @@ bool createList( QDomDocument* list, QFile* listFile, QString serverPath )
 	return true;
 }
 
-
-void addMap( QDomDocument* list, QString name, QString path )
-{
-	int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
-	list->documentElement().setAttribute( "timestamp", timestamp );
-
-	QDomElement mapElement = list->createElement( "map" );
-	mapElement.setAttribute( "timestamp", timestamp );
-	mapElement.setAttribute( "size", QFile( path ).size() );
-	mapElement.setAttribute( "hash", computePackageHash( path ) );
-	mapElement.setAttribute( "path", path );
-	mapElement.setAttribute( "name", name );
-	list->documentElement().appendChild( mapElement );
-
-	printf( "added "  + name.toUtf8() + " map entry: " + path.toUtf8() + "\n" );
-}
-
-void updateMap( QDomDocument* list, QDomElement* mapElement )
-{
-	int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
-	list->documentElement().setAttribute( "timestamp", timestamp );
-
-	QString name = mapElement->attribute( "name" );
-	QString path = mapElement->attribute( "path" );
-
-	mapElement->setAttribute( "timestamp", timestamp );
-	mapElement->setAttribute( "size", QFile( path ).size() );
-
-	printf( "updated "  + name.toUtf8() + " map entry: " + path.toUtf8() + "\n" );
-}
-
-
-bool addPackage( QDomDocument* list, QString path )
+bool processPackage( QDomDocument* list, QString path )
 {
 	QString map = findMapInDir( path );
 
@@ -312,44 +283,15 @@ bool addPackage( QDomDocument* list, QString path )
 			QString pHash = computePackageHash( path );
 			if( packageElement.attribute( "hash" ) != pHash )
 			{
-				int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
-				list->documentElement().setAttribute( "timestamp", timestamp );
-				mapElement.setAttribute( "timestamp", timestamp );
-
-				packageElement.setAttribute( "timestamp", timestamp );
-				packageElement.setAttribute( "size", QFile( path ).size() );
+				updateModule( list, &packageElement );
 				packageElement.setAttribute( "hash", pHash );
-
-				printf( "updated " + map.toUtf8() + " module entry: " + path.toUtf8() + "\n" );
 			}
 			else
 				printf( "package already in list\n" );
 			return false;
 		}
 
-		int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
-		list->documentElement().setAttribute( "timestamp", timestamp );
-		mapElement.setAttribute( "timestamp", timestamp );
-
-		QDomElement typeElement = mapElement.firstChildElement( type );
-		if( typeElement.isNull() )
-		{
-			typeElement = list->createElement( type );
-			mapElement.appendChild(typeElement);
-		}
-		typeElement.setAttribute( "timestamp", timestamp );
-
-		QDomElement moduleElement = list->createElement( "module" );
-		moduleElement.setAttribute( "timestamp", timestamp );
-		moduleElement.setAttribute( "size", QFile( path ).size() );
-		moduleElement.setAttribute( "hash", computePackageHash( path ) );
-		moduleElement.setAttribute( "name" , name );
-		typeElement.appendChild( moduleElement );
-
-		QDomText pathNode = list->createTextNode( path );
-		moduleElement.appendChild(pathNode);
-
-		printf( "added " + map.toUtf8() + " module entry: " + path.toUtf8() + "\n" );
+		addModule( list, &mapElement, name, type, path );
 	}
 
 	else
@@ -411,6 +353,80 @@ bool deletePackage( QDomDocument *list, QString path )
 	}
 
 	return true;
+}
+
+void addMap( QDomDocument* list, QString name, QString path )
+{
+	int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
+	list->documentElement().setAttribute( "timestamp", timestamp );
+
+	QDomElement mapElement = list->createElement( "map" );
+	mapElement.setAttribute( "timestamp", timestamp );
+	mapElement.setAttribute( "size", QFile( path ).size() );
+	mapElement.setAttribute( "hash", computePackageHash( path ) );
+	mapElement.setAttribute( "path", path );
+	mapElement.setAttribute( "name", name );
+	list->documentElement().appendChild( mapElement );
+
+	printf( "added "  + name.toUtf8() + " map entry: " + path.toUtf8() + "\n" );
+}
+
+void updateMap( QDomDocument* list, QDomElement* mapElement )
+{
+	int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
+	list->documentElement().setAttribute( "timestamp", timestamp );
+
+	QString name = mapElement->attribute( "name" );
+	QString path = mapElement->attribute( "path" );
+
+	mapElement->setAttribute( "timestamp", timestamp );
+	mapElement->setAttribute( "size", QFile( path ).size() );
+
+	printf( "updated "  + name.toUtf8() + " map entry: " + path.toUtf8() + "\n" );
+}
+
+void addModule( QDomDocument* list, QDomElement* mapElement, QString name, QString type, QString path )
+{
+	int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
+	list->documentElement().setAttribute( "timestamp", timestamp );
+	mapElement->setAttribute( "timestamp", timestamp );
+
+	QDomElement typeElement = mapElement->firstChildElement( type );
+	if( typeElement.isNull() )
+	{
+		typeElement = list->createElement( type );
+		mapElement->appendChild(typeElement);
+	}
+	typeElement.setAttribute( "timestamp", timestamp );
+
+	QDomElement moduleElement = list->createElement( "module" );
+	moduleElement.setAttribute( "timestamp", timestamp );
+	moduleElement.setAttribute( "size", QFile( path ).size() );
+	moduleElement.setAttribute( "hash", computePackageHash( path ) );
+	moduleElement.setAttribute( "name" , name );
+	typeElement.appendChild( moduleElement );
+
+	QDomText pathNode = list->createTextNode( path );
+	moduleElement.appendChild(pathNode);
+
+	printf( "added " + mapElement->attribute("name").toUtf8() + " module entry: " + path.toUtf8() + "\n" );
+}
+
+void updateModule( QDomDocument* list, QDomElement* moduleElement )
+{
+	int timestamp = list->documentElement().attribute( "timestamp" ).toInt() + 1;
+	list->documentElement().setAttribute( "timestamp", timestamp );
+
+	QDomElement mapElement = moduleElement->parentNode().parentNode().toElement();
+	mapElement.setAttribute( "timestamp", timestamp );
+
+	QString map = mapElement.attribute( "name" );
+	QString path = moduleElement->attribute( "path" );
+
+	moduleElement->setAttribute( "timestamp", timestamp );
+	moduleElement->setAttribute( "size", QFile( path ).size() );
+
+	printf( "updated " + map.toUtf8() + " module entry: " + path.toUtf8() + "\n" );
 }
 
 
