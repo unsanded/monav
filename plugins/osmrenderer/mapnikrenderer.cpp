@@ -30,6 +30,9 @@ along with MoNav.  If not, see <http://www.gnu.org/licenses/>.
 #include <mapnik/agg_renderer.hpp>
 #include <mapnik/image_util.hpp>
 #include <mapnik/load_map.hpp>
+#include <mapnik/graphics.hpp>
+#include <mapnik/image_view.hpp>
+#include <mapnik/config_error.hpp>
 #include <omp.h>
 #include <QFile>
 #include <QTemporaryFile>
