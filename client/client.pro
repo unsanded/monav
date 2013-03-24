@@ -29,15 +29,11 @@ SOURCES += main.cpp \
     placechooser.cpp \
     globalsettings.cpp \
     streetchooser.cpp \
-<<<<<<< local
-    worldmapchooser.cpp \
-    serverinputdialog.cpp \
-    serverlogic.cpp
-=======
-	 gpsdpositioninfosource.cpp \
+         gpsdpositioninfosource.cpp \
 	 json.cpp \
+    serverinputdialog.cpp \
+    serverlogic.cpp \
     worldmapchooser.cpp
->>>>>>> other
 
 HEADERS += \
 	paintwidget.h \
@@ -67,15 +63,11 @@ HEADERS += \
     placechooser.h \
     globalsettings.h \
     streetchooser.h \
-<<<<<<< local
-    worldmapchooser.h \
-    serverinputdialog.h \
-    serverlogic.h
-=======
 	 json.h \
 	 gpsdpositioninfosource.h \
+    serverinputdialog.h \
+    serverlogic.h \
     worldmapchooser.h
->>>>>>> other
 
 FORMS += \
 	paintwidget.ui \
