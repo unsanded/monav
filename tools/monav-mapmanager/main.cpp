@@ -8,6 +8,7 @@
 #include <QCryptographicHash>
 
 #include <limits>
+#include <getopt.h>
 
 const int VERSION = 2;
 
