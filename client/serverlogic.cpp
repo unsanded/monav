@@ -112,7 +112,7 @@ bool ServerLogic::loadPackage()
 		return false;
 
 	ServerLogic::PackageInfo package = m_packagesToLoad.first();
-	QUrl url( package.server + package.path );
+    QUrl url( package.server + package.path );
 
 	m_localDir = package.dir;
 
@@ -282,7 +282,7 @@ void ServerLogic::finished( QNetworkReply* reply )
 		QDir dir( m_localDir );
 		if( !dir.exists() && !dir.mkpath( m_localDir ) )
 		{
-			emit error( ServerLogic::FILE_ERROR, "Unable to create target file:\n" + dir.path() + '\n');
+            emit error( ServerLogic::FILE_ERROR, "Unable to create target directory:\n" + dir.path() + '\n');
 			return;
 		}
 
