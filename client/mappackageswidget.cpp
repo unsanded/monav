@@ -253,7 +253,7 @@ void MapPackagesWidget::check()
 	ServerLogic::PackageInfo package;
 	for( int i=0; i < d->maps.size(); i++ )
 	{
-		QDir dir( d->maps.at( i ).path );
+        QDir dir( QDir::cleanPath( d->maps.at( i ).path ) );
 
 		QSettings mapInfo( dir.filePath( "MoNav.ini" ), QSettings::IniFormat );
 		QString mapName = mapInfo.value( "name" ).toString();
@@ -261,7 +261,7 @@ void MapPackagesWidget::check()
 		QSettings serverInfo( dir.filePath( "Server.ini" ), QSettings::IniFormat );
 		package.server = serverInfo.value( "server" ).toString();
 		package.timestamp = serverInfo.value( "timestamp").toUInt();
-		package.dir = dir.path() + '/' + "MoNav.ini";
+        package.dir = dir.path() + '/' + "MoNav.ini";
 		package.path = mapName;
 
 		if( !package.server.isEmpty() )
@@ -275,7 +275,7 @@ void MapPackagesWidget::check()
 			QSettings moduleInfo( dir.filePath( "Server.ini" ), QSettings::IniFormat );
 			package.server = moduleInfo.value( "server" ).toString();
 			package.timestamp = moduleInfo.value( "timestamp").toUInt();
-			package.dir = dir.path();
+            package.dir = dir.path();
 			package.path = mapName;
 
 			if( !package.server.isEmpty() )
@@ -383,7 +383,8 @@ void MapPackagesWidget::downloadPackages()
 			map = map.parentNode().toElement();
 		QString mapName = map.attribute( "name" );
 
-		QString localDir = d->path + "/" + serverName + '/' + mapName +'/';
+        QString baseDir = d->path.isEmpty() ? "" : d->path + '/';
+        QString localDir = baseDir + serverName + '/' + mapName + '/';
 
 		ServerLogic::PackageInfo pInfo;
 		pInfo.server = serverPath;
